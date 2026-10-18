@@ -31,7 +31,8 @@ tags: action potential, ion channels, ODEs
 ## Math
 
 LaTeX everywhere: inline `$\tau = RC$`, display `$$ ... $$`. Inside YAML blocks, put LaTeX in **single quotes** or a `|` block,
-so backslashes are kept as typed.
+so backslashes are kept as typed. Never "double quotes": there YAML reads `\m` as an error and `\tau` as a tab
+followed by "au". `node packages/ai/validate.mjs <file>` flags it, and `--fix` rewrites it.
 
 ## Callouts
 
