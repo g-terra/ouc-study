@@ -25,8 +25,14 @@ import { buildPrompt, chatSystem, listActions, prepPath, weeksWithoutNotes } fro
 import { currentSemesterId, loadData, read } from "./context.mjs";
 import { runAgentTurn, runChatTurn } from "./stream.mjs";
 
-// The background app starts with a minimal PATH; add the usual install places of the agent CLIs.
-const EXTRA_PATH = [join(homedir(), ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin", join(homedir(), ".npm-global/bin"), join(homedir(), ".opencode/bin"), join(homedir(), ".bun/bin")];
+// The background app starts with a minimal PATH; add the usual install places of the agent CLIs
+// (on Windows: npm's global folder, Claude's native installer in ~/.local/bin, Ollama, LM Studio).
+const WIN_PATH = () => {
+  const appData = process.env.APPDATA ?? join(homedir(), "AppData/Roaming");
+  const local = process.env.LOCALAPPDATA ?? join(homedir(), "AppData/Local");
+  return [join(appData, "npm"), join(local, "Programs/Ollama"), join(homedir(), ".lmstudio/bin")];
+};
+const EXTRA_PATH = [join(homedir(), ".local/bin"), ...(process.platform === "win32" ? WIN_PATH() : ["/opt/homebrew/bin", "/usr/local/bin"]), join(homedir(), ".npm-global/bin"), join(homedir(), ".opencode/bin"), join(homedir(), ".bun/bin")];
 export function widenPath(env = process.env) {
   const have = (env.PATH ?? "").split(delimiter);
   env.PATH = [...have, ...EXTRA_PATH.filter((p) => !have.includes(p) && existsSync(p))].filter(Boolean).join(delimiter);

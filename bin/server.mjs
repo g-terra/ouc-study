@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
- * Background app server, started at login by the `ouc` LaunchAgent (or `ouc start`).
+ * Background app server, started at login by the `ouc` LaunchAgent on macOS or the Startup-folder
+ * launcher on Windows (or `ouc start`).
  *  1. builds the app data from semesters/   2. runs the Vite server on http://localhost:5173
  *  3. runs the eClass sync every few hours while it's up (if a key exists).
  * No npm needed at runtime: everything is launched with this same Node binary.
  */
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,6 +24,11 @@ if (!existsSync(vite) || !existsSync(tsx)) {
   say(`Dependencies missing. Run "npm install" in ${ROOT} first.`);
   process.exit(78); // EX_CONFIG: launchd will retry later (ThrottleInterval)
 }
+
+// `ouc stop` on Windows and Linux finds the app by this pid
+const pidFile = join(ROOT, ".ouc/app.pid");
+try { mkdirSync(dirname(pidFile), { recursive: true }); writeFileSync(pidFile, String(process.pid)); } catch {}
+process.on("exit", () => { try { rmSync(pidFile, { force: true }); } catch {} });
 
 const run = (args, opts = {}) => new Promise((ok) => {
   const p = spawn(NODE, args, { cwd: ROOT, stdio: "inherit", ...opts });
