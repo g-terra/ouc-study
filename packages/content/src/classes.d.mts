@@ -7,7 +7,7 @@ export interface ClassesConfig {
   groups?: Record<string, { day?: string | number; time?: string; minutes?: number }>;
   group?: string;
   joinUrl?: string;
-  changes?: { date: string; to?: string; cancelled?: boolean; note?: string }[];
+  changes?: { date: string; to?: string; cancelled?: boolean; note?: string; group?: string }[];
 }
 
 export function weekday(v: string | number | undefined): number;
@@ -23,3 +23,5 @@ export function buildClasses(o: {
   general?: { title: string; href?: string; ext?: string }[];
   timeZone?: string;
 }): ClassSession[];
+export function findTime(s: string): string | undefined;
+export function detectClasses(meta: unknown): (ClassesConfig & { source?: string }) | undefined;

@@ -87,6 +87,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
             <div>
               <SectionTitle>Next live class</SectionTitle>
               <ClassCard c={nextClass} data={data} now={now} showCourse={false} />
+              {c.classTimeFrom && <p className="mt-1.5 px-1 text-[11px] leading-snug text-muted" title="Change it in semester.json (&quot;classes&quot;) if it's wrong">Time from {c.classTimeFrom}</p>}
             </div>
           )}
           <div>

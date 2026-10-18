@@ -51,10 +51,11 @@ export interface Course {
   color: string;
   eclassUrl: string;
   joinUrl?: string;       // the course's Webconference link on eClass
+  classTimeFrom?: string; // where the live-class time came from (the eClass sentence, or semester.json)
   weeks: Week[];
 }
 
-/** A live class (webconference); times from semester.json "classes", see packages/content/src/classes.mjs. */
+/** A live class (webconference); time read from eClass or semester.json "classes", see packages/content/src/classes.mjs. */
 export interface ClassSession {
   code: string;
   n: number;              // week / meeting number (0 for an extra class)

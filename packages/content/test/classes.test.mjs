@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildClasses, pickGroup, weekday, zoned } from "../src/classes.mjs";
+import { buildClasses, detectClasses, findTime, pickGroup, weekday, zoned } from "../src/classes.mjs";
 
 // made-up course: three dated weeks (Mon–Sun) plus the undated General section
 const weeks = [
@@ -83,4 +83,49 @@ test("meeting agendas in the General section attach to the matching class", () =
   const out = buildClasses({ code: "X1", cfg: { day: "Tue" }, weeks, general });
   assert.deepEqual(out[1].extras, [{ title: "Webconference 2 Meeting Agenda", href: "/files/s/a2.pdf", ext: "pdf" }]);
   assert.deepEqual(out[0].extras, []);
+});
+
+test("findTime reads 6pm, 6 pm and 20:00–21:00", () => {
+  assert.equal(findTime("this Monday at 6pm (Cyprus time)"), "18:00");
+  assert.equal(findTime("starts at 9 am"), "09:00");
+  assert.equal(findTime("F.02 20:00–21:00"), "20:00");
+  assert.equal(findTime("no time here"), undefined);
+});
+
+// made-up eClass course structure, shaped like eclass-meta.json
+const post = (text, at = "Tuesday, 8 September 2026, 9:00 AM") => ({ by: "Tutor", at, text });
+const forum = (...posts) => ({ type: "forum", name: "Announcements", threads: [{ t: "News", posts }] });
+
+test("detectClasses reads the weekly slot from a tutor's post", () => {
+  const meta = { secs: [{ acts: [forum(
+    post("Office hours are on Tuesdays, 6 to 8 pm."),
+    post("Welcome! Our meeting will be on Thursdays and 6pm is a typical hour."),
+  )] }] };
+  const d = detectClasses(meta);
+  assert.equal(d?.day, "thu");
+  assert.equal(d?.time, "18:00");
+  assert.match(d?.source ?? "", /Thursdays/);
+});
+
+test("detectClasses reads a teaching-group table from the Webconference description", () => {
+  const desc = "Weekly online lectures\nEvery Tuesday, all times are Cyprus local time\nGroup\nTime\n2026_X1_F.02\nDr. A\n20:00–21:00\n2026_X1_F.03\nDr. B\n19:00–20:00\nJoin the online lecture";
+  const d = detectClasses({ secs: [{ acts: [{ type: "lti", name: "Webconference", desc }] }] });
+  assert.deepEqual({ day: d?.day, groups: d?.groups }, { day: "tue", groups: { "F.02": { time: "20:00" }, "F.03": { time: "19:00" } } });
+});
+
+test("detectClasses turns a reschedule post into a change for that group, once", () => {
+  const moved = post("Today's lecture will not take place. My F.02 lecture has been rescheduled for Thursday, 1 October, at 20:00 (Cyprus local time).", "Tuesday, 29 September 2026, 4:18 AM");
+  const meta = { secs: [{ acts: [forum(post("Our first live session is this Tuesday at 7pm."), moved, moved)] }] };
+  const d = detectClasses(meta);
+  assert.deepEqual(d?.changes?.map(({ date, to, group }) => ({ date, to, group })), [{ date: "2026-09-29", to: "2026-10-01T20:00", group: "F.02" }]);
+  // only group F.02 sees the move
+  const cfg = { ...d, groups: { "F.02": {}, "F.03": {} } };
+  const f02 = buildClasses({ code: "X1", cfg: { ...cfg, group: "F.02" }, weeks: [{ index: 4, name: "Week 4", start: "2026-09-28", end: "2026-10-04" }] });
+  const f03 = buildClasses({ code: "X1", cfg: { ...cfg, group: "F.03" }, weeks: [{ index: 4, name: "Week 4", start: "2026-09-28", end: "2026-10-04" }] });
+  assert.equal(f02[0].status, "moved");
+  assert.equal(f03[0].status, "scheduled");
+});
+
+test("detectClasses finds nothing without a weekday and a time", () => {
+  assert.equal(detectClasses({ secs: [{ acts: [forum(post("We will start tomorrow at 6pm."))] }] }), undefined);
 });

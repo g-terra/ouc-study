@@ -15,7 +15,7 @@
  *   updates/status.json         last run time, success or error
  *   _meta/sync-state.json       snapshot used to detect changes next time
  *   _meta/live.json             latest grades / submission status / feedback / due dates, and per course the
- *                               Webconference join link and your teaching groups (merged into the app)
+ *                               Webconference join link, your teaching groups and recent forum posts (merged into the app)
  * Zero dependencies: plain Node 18+.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, appendFileSync, statSync } from "node:fs";
@@ -191,8 +191,12 @@ async function gather() {
     const forums = await call("mod_forum_get_forums_by_courses", { courseids });
     for (const f of forums ?? []) {
       await soft(`forum ${f.name}`, async () => {
-        const d = await call("mod_forum_get_forum_discussions", { forumid: f.id, sortorder: -1, page: 0, perpage: 15 });
-        for (const x of d.discussions ?? []) {
+        const d = await call("mod_forum_get_forum_discussions", { forumid: f.id, sortorder: -1, page: 0, perpage: 40 });
+        for (const [n, x] of (d.discussions ?? []).entries()) {
+          // full first posts: the content build reads the live-class times from them (packages/content/src/classes.mjs)
+          const code = byId[f.course];
+          if (code) ((snap.courses[code] ??= {}).posts ??= []).push({ at: localIso(x.created ?? x.timemodified), text: strip(x.message ?? "").slice(0, 3000) });
+          if (n >= 15) continue; // the change feed watches the newest 15, as before
           snap.discussions[x.discussion ?? x.id] = {
             code: byId[f.course], forum: strip(f.name), subject: strip(x.subject ?? x.name), by: x.userfullname,
             text: short(strip(x.message ?? "")), modified: x.timemodified ?? x.modified, url: `${SITE}/mod/forum/discuss.php?d=${x.discussion ?? x.id}`,

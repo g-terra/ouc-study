@@ -215,10 +215,7 @@ async function main() {
     }
     if (lectures >= 2) label = "lecture";
     else if (dated >= 2 && names.some((n) => /^Week \d+\./.test(n))) label = "firstResource";
-    // eClass has no dated schedule for the live classes (webconferences), only the tutor's announcement
-    const slot = await ask(`${short}: weekly live class, e.g. "Mon 18:00" (Cyprus time; Enter to skip)`, { validate: (v) => (!v || /^[a-z]{3}\w*\s+\d{1,2}:\d{2}$/i.test(v) ? "" : "Like Mon 18:00, or leave empty") });
-    const [cday, ctime] = slot.split(/\s+/);
-    cfg.courses.push({ code, title, short, color: PALETTE[cfg.courses.length % PALETTE.length], eclassId: k.id, dir: `${code}-${slug(short, 40)}`, dating, label, ...(slot ? { classes: { day: cday.slice(0, 3), time: ctime } } : {}) });
+    cfg.courses.push({ code, title, short, color: PALETTE[cfg.courses.length % PALETTE.length], eclassId: k.id, dir: `${code}-${slug(short, 40)}`, dating, label });
   }
   ui.say();
   for (const k of cfg.courses) ui.say(`    ${c.hex(k.color)("■")} ${c.bold(k.short)} ${c.gray(`${k.code} · ${k.dating.mode === "weekly" ? `week 1 = ${k.dating.first}` : "dates from eClass"}`)}`);
