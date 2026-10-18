@@ -1,7 +1,7 @@
 /**
  * Content builder: turns every semesters/<id>/ folder into JSON for the web app.
  *
- *   semesters/<id>/semester.json        course registry (codes, names, colours, how weeks are dated)
+ *   semesters/<id>/semester.json        course registry (codes, names, colours, how weeks are dated, class times)
  *   semesters/<id>/_meta/*.json         eClass scrape, submissions, exams, study resources
  *   semesters/<id>/notes/<CODE>/*.md    visual notes (docs/NOTE_FORMAT.md)
  *   semesters/<id>/plans/<YYYY>-W<NN>.md week plans (ai/skills/plan-week)
@@ -14,9 +14,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildClasses, detectClasses, type ClassesConfig } from "./classes.mjs";
 import { parsePlan } from "./plan.mjs";
 import type {
-  UpdatesFeed, GradeItem,
+  UpdatesFeed, GradeItem, ClassSession,
   Assignment, Prep, Course, Exam, FileRef, Note, Resource, SemesterData, SemesterIndex, SemesterSummary, Week, WeekItem,
 } from "./types.ts";
 
@@ -35,6 +36,7 @@ interface CourseConfig {
   dir: string;                               // folder under courses/
   dating: { mode: "title" } | { mode: "weekly"; first: string; pattern: string };
   label?: "firstResource" | "stripWeek" | "lecture" | "name";
+  classes?: ClassesConfig;                   // weekly live class (webconference), see classes.mjs
 }
 interface SemesterConfig {
   id?: string;
@@ -42,6 +44,7 @@ interface SemesterConfig {
   start: string;
   end: string;
   examTimetable?: string;
+  timezone?: string;                         // of the class times; default Europe/Nicosia
   courses: CourseConfig[];
 }
 
@@ -111,11 +114,12 @@ function buildSemester(id: string): SemesterData | undefined {
   const examsRaw = readJson<any[]>(join(dir, "_meta/exams.json"), []);
   const subByKey = new Map(subs.map((s) => [`${s.code}|${s.name}`, s]));
   // live data from the daily API sync (packages/eclass-sync), newer than the scrape
-  const live = readJson<{ updated?: string; assignments?: Record<string, any>; grades?: any[] }>(join(dir, "_meta/live.json"), {});
+  const live = readJson<{ updated?: string; assignments?: Record<string, any>; grades?: any[]; courses?: Record<string, { joinUrl?: string; groups?: string[]; posts?: { at?: string; text: string }[] }> }>(join(dir, "_meta/live.json"), {});
 
   const courses: Course[] = [];
   const assignments: Assignment[] = [];
   const notes: Note[] = [];
+  const classes: ClassSession[] = [];
 
   for (const cc of cfg.courses) {
     const m = meta.find((x) => x.code === cc.code) ?? { secs: [] };
@@ -263,8 +267,23 @@ function buildSemester(id: string): SemesterData | undefined {
 
     const grades: GradeItem[] = (live.grades ?? []).filter((g) => g.code === cc.code && g.grade)
       .map((g) => ({ item: g.item, grade: g.grade, feedback: g.feedback || undefined, graded: g.graded }));
+    // --- live classes: the Webconference activity on the course page is the join link
+    const conf = (m.secs as any[]).flatMap((s) => s.acts as any[]).find((a) => a.type === "lti" && /web\s*-?\s*confer|τηλεσυν/i.test(a.name ?? ""));
+    const joinUrl: string | undefined = cc.classes?.joinUrl || live.courses?.[cc.code]?.joinUrl || conf?.url || undefined;
+    // the weekly slot: read from eClass (Webconference description, tutors' posts); semester.json overrides
+    const livePosts = live.courses?.[cc.code]?.posts ?? [];
+    const found = detectClasses({ secs: [...m.secs, { acts: [{ type: "forum", threads: [{ posts: livePosts }] }] }] });
+    const slot: ClassesConfig | undefined = cc.classes || found
+      ? { ...found, ...cc.classes, changes: [...(found?.changes ?? []), ...(cc.classes?.changes ?? [])] } as ClassesConfig
+      : undefined;
+    classes.push(...buildClasses({
+      code: cc.code, cfg: slot, weeks, joinUrl, groups: live.courses?.[cc.code]?.groups ?? [],
+      general: (weeks.find((w) => w.index === 0)?.items ?? []).filter((x) => x.kind === "file"),
+      timeZone: cfg.timezone ?? "Europe/Nicosia",
+    }));
     courses.push({
-      code: cc.code, title: cc.title, short: cc.short, color: cc.color, weeks, grades,
+      code: cc.code, title: cc.title, short: cc.short, color: cc.color, weeks, grades, joinUrl,
+      classTimeFrom: cc.classes ? "your settings" : found?.source ? `eClass: “${found.source}”` : undefined,
       eclassUrl: cc.eclassId ? `https://eclass.ouc.ac.cy/course/view.php?id=${cc.eclassId}` : "",
     });
   }
@@ -292,7 +311,7 @@ function buildSemester(id: string): SemesterData | undefined {
 
   return {
     id, label: cfg.label, start: cfg.start, end: cfg.end, generated: new Date().toISOString(),
-    courses, assignments, exams, notes, updates, plans,
+    courses, assignments, exams, classes, notes, updates, plans, timezone: cfg.timezone ?? "Europe/Nicosia",
   };
 }
 
@@ -302,8 +321,12 @@ function deadlinesMarkdown(d: SemesterData): string {
   const fmt = (s: string) => new Date(s).toLocaleString("en-GB", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
   const rows = d.assignments.map((a) => `| ${a.due ? fmt(a.due) : "—"} | ${name[a.code]} | ${a.title} | ${a.submitted ? "✅ " : ""}${a.status} | assignments/${a.id}/ |`);
   const ex = d.exams.map((e) => `| ${e.noTime ? new Date(e.at).toDateString() : fmt(e.at)} | ${name[e.code]} | ${e.kind} |`);
+  const weekOf = (c: ClassSession) => d.courses.find((x) => x.code === c.code)?.weeks.find((w) => w.index === c.weekIndex);
+  const cl = d.classes.filter((c) => new Date(c.end) >= new Date()).map((c) =>
+    `| ${fmt(c.at)}${c.status === "cancelled" ? " (cancelled)" : c.status === "moved" ? " (moved)" : ""} | ${name[c.code]} | ${weekOf(c)?.label ?? ""} | ${c.joinUrl ?? ""} |`);
   return [`# Deadlines: ${d.label}`, "", `_Generated by \`npm run content\` on ${new Date().toISOString().slice(0, 16)}. Times as shown on eClass. Don't edit; change _meta/ instead._`, "",
-    "| Due | Course | Item | Status | Folder |", "|---|---|---|---|---|", ...rows, "", "## Exams", "", "| Date | Course | Exam |", "|---|---|---|", ...ex, ""].join("\n");
+    "| Due | Course | Item | Status | Folder |", "|---|---|---|---|---|", ...rows, "", "## Exams", "", "| Date | Course | Exam |", "|---|---|---|", ...ex, "",
+    ...(cl.length ? ["## Live classes (webconferences)", "", "_Times read from eClass announcements (or semester.json \"classes\"), shown in this computer's time zone._", "", "| When | Course | Week's topic | Join |", "|---|---|---|---|", ...cl, ""] : [])].join("\n");
 }
 
 function main() {
@@ -321,7 +344,7 @@ function main() {
       courses: data.courses.map((c) => ({ code: c.code, short: c.short, color: c.color })),
     };
     index.semesters.push(summary);
-    console.log(`✓ ${id}: ${data.courses.length} courses, ${data.assignments.length} assignments, ${data.notes.length} notes, ${data.exams.length} exams`);
+    console.log(`✓ ${id}: ${data.courses.length} courses, ${data.assignments.length} assignments, ${data.notes.length} notes, ${data.exams.length} exams, ${data.classes.length} classes`);
   }
   writeFileSync(join(OUT, "index.json"), JSON.stringify(index, null, 1));
 }

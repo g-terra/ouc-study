@@ -133,13 +133,27 @@ How it runs in the background: on macOS two LaunchAgents (`~/Library/LaunchAgent
 
 ## Pages
 
-- **Dashboard**: next deadline with a countdown, the final exams, what's new on eClass, the next 14 days, and progress per course.
-- **Timeline**: the semester at a glance, then week by week, with filters per course.
-- **Courses**: each course week by week (slides, videos, assignments, your notes) plus your grades.
+- **Dashboard**: next deadline with a countdown, the final exams, the next live class of each course, what's new on eClass, the next 14 days, and progress per course.
+- **Timeline**: the semester at a glance, then week by week (deadlines, live classes, exams), with filters per course.
+- **Courses**: each course week by week (slides, videos, assignments, your notes, the week's live class) plus your grades.
 - **Notes**: visual notes with diagrams, LaTeX formulas, comparison tables and flip-card self-tests.
 - **Assignments**: the question, files, PDF preview, study links, grade and feedback.
 - **Updates**: what changed on eClass each day, with a live 🟢 connection status, **Re-check** and **Sync now**.
 - **Ask AI** (button in the top bar, on every page): talk to your AI assistant from the app. See [Ask AI in the app](#ask-ai-in-the-app).
+
+### Live classes
+
+eClass has one **Webconference** link per course but no dated schedule. The sync reads the weekly class time from eClass itself: the Webconference description (for example a table of teaching groups and their times) and the tutors' announcements ("our meeting will be on Thursdays at 6pm"). It also picks up posts that move a class ("rescheduled for Thursday, 1 October, at 20:00"), and reads your teaching group, so you see your group's time. Each class has the join link and links to that week's notes, slides and readings (and the meeting agenda when the tutor posts one), so you can prepare. The course page shows which sentence the time came from.
+
+Times are Cyprus time (set `"timezone"` at the top of `semesters/<id>/semester.json` to change that); the app shows them in your computer's time zone. If a time is wrong or missing (for example a time agreed in class and never posted), press **Wrong time? Fix it** under the next class on the course page and type the time as it shows in your own calendar; the app converts it and saves it in `semester.json`, where it wins over what was read from eClass. You can also edit it there:
+
+```json
+"classes": {
+  "day": "Tue", "time": "19:00",
+  "groups": { "F.02": { "time": "20:00" }, "F.03": {} }, "group": "F.03",
+  "changes": [{ "date": "2026-12-08", "cancelled": true }]
+}
+```
 
 ## Daily updates
 

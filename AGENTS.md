@@ -11,7 +11,7 @@ Help them **understand the material, keep notes, remember what's been covered, p
 
 ## Semesters and courses
 
-Each semester is a folder `semesters/<id>/` (e.g. `2027-Spring`). Its course registry (codes, names, colours, eClass ids, how weeks are dated) is `semesters/<id>/semester.json`.
+Each semester is a folder `semesters/<id>/` (e.g. `2027-Spring`). Its course registry (codes, names, colours, eClass ids, how weeks are dated, weekly live-class times) is `semesters/<id>/semester.json`.
 The current one is named in `STUDENT.md`; otherwise use the semester whose dates include today.
 **A new semester or course = run `ouc setup`** (interactive, the student runs it in Terminal). The app picks it up automatically.
 

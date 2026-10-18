@@ -50,7 +50,24 @@ export interface Course {
   short: string;
   color: string;
   eclassUrl: string;
+  joinUrl?: string;       // the course's Webconference link on eClass
+  classTimeFrom?: string; // where the live-class time came from (the eClass sentence, or semester.json)
   weeks: Week[];
+}
+
+/** A live class (webconference); time read from eClass or semester.json "classes", see packages/content/src/classes.mjs. */
+export interface ClassSession {
+  code: string;
+  n: number;              // week / meeting number (0 for an extra class)
+  at: string;             // ISO datetime with offset
+  end: string;            // ISO datetime (UTC)
+  weekIndex?: number;     // eClass section with the material for this class
+  group?: string;         // teaching group, e.g. "F.03"
+  joinUrl?: string;
+  status: "scheduled" | "moved" | "cancelled" | "extra";
+  movedFrom?: string;
+  note?: string;
+  extras: { title: string; href?: string; ext?: string }[];   // e.g. the meeting agenda
 }
 
 export interface FileRef {
@@ -152,6 +169,8 @@ export interface SemesterData extends SemesterSummary {
   courses: Course[];
   assignments: Assignment[];
   exams: Exam[];
+  classes: ClassSession[];
+  timezone: string;       // of the class times on eClass (semester.json "timezone", default Europe/Nicosia)
   notes: Note[];
   plans: Plan[];          // newest first
 }
