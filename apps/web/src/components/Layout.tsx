@@ -5,6 +5,7 @@ import { cx } from "./ui";
 import { CONN_LABEL, useConnection } from "../lib/connection";
 import { TOOL_STATE, refreshAi, useAiStatus, usePrepStatus, workLabel } from "../lib/ai";
 import { useAssistant } from "./Assistant";
+import { THEMES, setTheme, useTheme, type ThemeChoice } from "../lib/theme";
 
 /** Footer status: eClass and the AI coding tool in one dot; click for the details. */
 function ConnectionDot({ to }: { to: string }) {
@@ -70,6 +71,61 @@ function ConnectionDot({ to }: { to: string }) {
             </ul>
           )}
           {aiKnown && !ai.chosen && <p className="mt-2 px-2 text-xs text-muted">Choose one in Terminal: <code>ouc ai setup</code></p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Three dots in a theme's background, text and accent colours. */
+function Swatch({ colors }: { colors: readonly string[] }) {
+  return (
+    <span aria-hidden className="flex size-5 shrink-0 overflow-hidden rounded-full border border-line">
+      {colors.map((c, i) => <span key={i} className="h-full flex-1" style={{ background: c }} />)}
+    </span>
+  );
+}
+
+const SYSTEM_SWATCH = [THEMES[0].swatch[0], THEMES[1].swatch[0]];
+
+/** Footer colour theme picker: System (follows the computer), Light, Dark and a few extras; remembered in this browser. */
+function ThemeSwitch() {
+  const { choice, theme } = useTheme();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const current = THEMES.find((t) => t.id === theme)!;
+  const options: { id: ThemeChoice; label: string; hint?: string; swatch: readonly string[] }[] = [
+    { id: "system", label: "System", hint: "Follows your computer", swatch: SYSTEM_SWATCH },
+    ...THEMES.map((t) => ({ id: t.id, label: t.label, swatch: t.swatch })),
+  ];
+  const label = choice === "system" ? `System (${current.label})` : current.label;
+  return (
+    <div ref={box} className="relative">
+      <button type="button" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={`Colour theme: ${label}`}
+        className="flex items-center gap-2 rounded-full border border-line bg-surface px-2.5 py-1.5 text-sm whitespace-nowrap text-ink hover:border-muted">
+        <Swatch colors={choice === "system" ? SYSTEM_SWATCH : current.swatch} />
+        <span className="hidden sm:inline">{label}</span>
+      </button>
+      {open && (
+        <div role="menu" aria-label="Colour theme" className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-2xl border border-line bg-surface p-2 text-sm shadow-xl">
+          <div className="mb-1 px-2 pt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Colour theme</div>
+          {options.map((o) => (
+            <button key={o.id} type="button" role="menuitemradio" aria-checked={choice === o.id}
+              onClick={() => { setTheme(o.id); setOpen(false); }}
+              className={cx("flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-ink hover:bg-surface-2", choice === o.id && "bg-surface-2 font-semibold")}>
+              <Swatch colors={o.swatch} />
+              <span className="flex-1">{o.label}{o.hint && <span className="block text-xs font-normal text-muted">{o.hint}</span>}</span>
+              {choice === o.id && <span aria-hidden className="text-accent">✓</span>}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -169,6 +225,7 @@ export function Layout({ sem, children }: { sem: string; children: ReactNode }) 
       <footer className="border-t border-line pb-20 sm:pb-0">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 text-xs text-muted">
           <ConnectionDot to={`${base}/updates`} />
+          <ThemeSwitch />
           <Link to={`${base}/ai-work`} className="hover:text-ink">AI background work</Link>
         </div>
       </footer>
