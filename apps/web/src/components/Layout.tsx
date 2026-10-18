@@ -6,6 +6,7 @@ import { CONN_LABEL, useConnection } from "../lib/connection";
 import { TOOL_STATE, refreshAi, useAiStatus, usePrepStatus, workLabel } from "../lib/ai";
 import { useAssistant } from "./Assistant";
 import { THEMES, setTheme, useTheme, type ThemeChoice } from "../lib/theme";
+import { releaseHighlights, useUpdate } from "../lib/update";
 
 /** eClass and the AI coding tools: one summary dot, plus the details shown in Settings. */
 function useConnectionSummary() {
@@ -178,6 +179,43 @@ function AiWorkBar({ sem }: { sem: string }) {
   );
 }
 
+/** A newer release is out: what's new, and a button that updates and restarts the app. */
+function UpdateBar() {
+  const { info, phase, start } = useUpdate();
+  const [open, setOpen] = useState(false);
+  // ✕ hides this release's bar for the rest of the browser session
+  const [dismissed, setDismissed] = useState(() => { try { return sessionStorage.getItem("ouc-update-hidden"); } catch { return null; } });
+  if (!info?.available || (dismissed === info.latest && phase === "idle")) return null;
+  const items = releaseHighlights(info.notes);
+  return (
+    <div className="border-t border-line bg-surface-2">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs">
+        <span className="font-semibold">⬆️ Update available: v{info.latest}</span>
+        <span className="text-muted">you have v{info.current}</span>
+        {items.length > 0 && <button type="button" className="text-muted underline hover:text-ink" onClick={() => setOpen(!open)}>{open ? "Hide" : "What's new"}</button>}
+        {info.url && <a href={info.url} target="_blank" rel="noreferrer" className="text-muted underline hover:text-ink">Release notes ↗</a>}
+        <span className="flex-1" />
+        {phase === "idle" && info.canUpdate && (
+          <button type="button" onClick={start} className="rounded-full bg-ink px-3 py-1 font-semibold text-bg hover:opacity-90">Update now</button>
+        )}
+        {phase === "idle" && !info.canUpdate && <span className="text-muted">In Terminal: <code>ouc update</code>, then restart the app</span>}
+        {phase === "idle" && (
+          <button type="button" aria-label="Hide until next time" className="px-1 text-muted hover:text-ink"
+            onClick={() => { setDismissed(info.latest ?? null); try { sessionStorage.setItem("ouc-update-hidden", info.latest ?? ""); } catch {} }}>✕</button>
+        )}
+        {phase === "updating" && <span className="flex items-center gap-1.5 font-semibold"><span className="size-1.5 animate-pulse rounded-full bg-accent" />Updating and restarting… this page reloads when it's done</span>}
+        {phase === "slow" && <span className="text-bad">Still not back. In Terminal: <code>ouc status</code>; details in <code>.ouc/update.log</code></span>}
+        {phase === "failed" && <span className="text-bad">{info.error}</span>}
+      </div>
+      {open && (
+        <ul className="mx-auto max-w-6xl list-disc px-8 pb-2 text-xs text-muted">
+          {items.map((t, i) => <li key={i}>{t}</li>)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const NAV = [
   ["", "Dashboard"],
   ["plan", "Plan"],
@@ -216,6 +254,7 @@ export function Layout({ sem, children }: { sem: string; children: ReactNode }) 
             {index.semesters.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </div>
+        <UpdateBar />
         <AiWorkBar sem={sem} />
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-12 pt-8">{children}</main>
