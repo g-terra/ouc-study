@@ -34,6 +34,7 @@ cd ouc-study
 npm ci
 npm run check      # lint, tests, typecheck and the public check
 npm run build      # builds the app; works without any eClass data
+npm run e2e        # Playwright smoke test: every page on a demo semester (npx playwright install chromium first)
 npm run dev        # runs the app at http://localhost:5173 (empty without a semester)
 ```
 
@@ -91,7 +92,8 @@ Add `BREAKING CHANGE: ...` in the body, or `!` after the type, for anything that
 ## Open a pull request
 
 - Fill in the [PR template](.github/pull_request_template.md): Before / After, how, the checklist.
-- CI runs on every PR: **lint, unit tests, typecheck and a build on Node 20 and 22**, the same on **Windows** plus a real `ouc install`/`uninstall`, the **public check**, and the **PR title** check. All must pass.
+- CI runs on every PR: **lint, unit tests, typecheck and a build on Node 20 and 22**, the same on **Windows** plus a real `ouc install`/`uninstall`, the **Playwright smoke test** (every page on the made-up semester in `e2e/demo/`), the **public check**, and the **PR title** check. All must pass.
+- Changed a page or added one? Extend `e2e/smoke.spec.mjs`, and the demo data in `e2e/demo/` if the page needs it (made-up data only).
 - Say if an AI agent helped, and confirm you read and tested its changes. You are responsible for every line you submit.
 - A maintainer reviews and squash-merges.
 
@@ -113,7 +115,7 @@ Prompt that works well with any agent:
 
 Releases are automated with [release-please](https://github.com/googleapis/release-please):
 
-1. Every merge to `main` updates an open **release PR** with the next version (from the commit types above) and the `CHANGELOG.md` entries.
+1. Every merge to `main` first runs the **smoke test** on that code; only if it passes does release-please update the open **release PR** with the next version (from the commit types above) and the `CHANGELOG.md` entries.
 2. Merging the release PR tags the version (`v0.2.0`), publishes a GitHub release and bumps `version` in `package.json`.
 
 While we are below 1.0, `feat` bumps the minor version and breaking changes bump the minor too. Installed copies see the new release within a day (the app's **Update available** bar, or `ouc update --check`) and move to its tag with `ouc update`, so only released code reaches students; a release whose lockfile changed is reinstalled with `npm ci`.

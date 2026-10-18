@@ -4,10 +4,13 @@ import { Link, enc } from "../lib/router";
 import { courseMap, stateOf } from "../lib/data";
 import { addDays, at, day, fmtFull, fmtShort, startOfWeek, weekRange } from "../lib/dates";
 import { Card, CourseDot, PageHeader, cx } from "../components/ui";
+import { JoinButton, isLive } from "../components/Classes";
+import type { ClassSession } from "@ouc/content/types";
 
 type Ev =
   | { kind: "due"; code: string; t: Date; title: string; href: string; done: boolean; state: string }
-  | { kind: "exam"; code: string; t: Date; title: string; noTime?: boolean; href?: string };
+  | { kind: "exam"; code: string; t: Date; title: string; noTime?: boolean; href?: string }
+  | { kind: "class"; code: string; t: Date; title: string; href: string; done: boolean; session: ClassSession };
 
 export function Timeline({ data }: { data: SemesterData }) {
   const now = new Date();
@@ -17,6 +20,7 @@ export function Timeline({ data }: { data: SemesterData }) {
   const [topics, setTopics] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [showPast, setShowPast] = useState(false);
+  const [showClasses, setShowClasses] = useState(true);
 
   const events: Ev[] = useMemo(() => [
     ...data.assignments.filter((a) => a.due).map((a) => ({
@@ -24,13 +28,19 @@ export function Timeline({ data }: { data: SemesterData }) {
       href: `${base}/assignments/${a.id.split("/").map(enc).join("/")}`,
     })),
     ...data.exams.map((e) => ({ kind: "exam" as const, code: e.code, t: at(e.at), title: e.kind, noTime: e.noTime, href: e.source })),
+    ...(data.classes ?? []).map((c) => ({
+      kind: "class" as const, code: c.code, t: at(c.at), session: c, done: new Date(c.end) < now,
+      title: C[c.code]?.weeks.find((w) => w.index === c.weekIndex)?.label ?? "Live class",
+      href: `${base}/courses/${enc(c.code)}${c.weekIndex !== undefined ? `#w${c.weekIndex}` : ""}`,
+    })),
   ].sort((a, b) => a.t.getTime() - b.t.getTime()), [data]);
 
-  const visible = events.filter((e) => !hidden.has(e.code) && (showDone || e.kind === "exam" || !e.done));
+  const visible = events.filter((e) => !hidden.has(e.code) && (e.kind === "class" ? showClasses : showDone || e.kind === "exam" || !e.done));
 
-  // weeks from semester start to last event
+  // weeks from semester start to last deadline or exam
   const first = startOfWeek(day(data.start));
-  const last = startOfWeek(events.length ? events[events.length - 1].t : day(data.end));
+  const dated = events.filter((e) => e.kind !== "class");
+  const last = startOfWeek(dated.length ? dated[dated.length - 1].t : day(data.end));
   const weeks: Date[] = [];
   for (let w = first; w <= last; w = addDays(w, 7)) weeks.push(w);
   const thisWeek = startOfWeek(now).getTime();
@@ -54,7 +64,7 @@ export function Timeline({ data }: { data: SemesterData }) {
 
   return (
     <>
-      <PageHeader title="Timeline" eyebrow={data.label}>Deadlines and exams week by week. Turn on topics to see what each course covers.</PageHeader>
+      <PageHeader title="Timeline" eyebrow={data.label}>Deadlines, live classes and exams week by week. Turn on topics to see what each course covers.</PageHeader>
 
       {/* overview strip */}
       <Card className="mb-6 p-5 pb-8">
@@ -95,6 +105,7 @@ export function Timeline({ data }: { data: SemesterData }) {
         <span className="mx-1 hidden h-5 w-px bg-line sm:block" />
         <Toggle on={topics} set={setTopics}>Show topics</Toggle>
         <Toggle on={showDone} set={setShowDone}>Show submitted</Toggle>
+        {(data.classes ?? []).length > 0 && <Toggle on={showClasses} set={setShowClasses}>Show classes</Toggle>}
       </div>
 
       {pastWeeks.length > 0 && (
@@ -173,6 +184,7 @@ function Toggle({ on, set, children }: { on: boolean; set: (v: boolean) => void;
 }
 
 function EventChip({ e, color, course }: { e: Ev; color: string; course: string }) {
+  if (e.kind === "class") return <ClassChip e={e} color={color} course={course} />;
   const when = e.kind === "exam" && e.noTime ? e.t.toLocaleDateString("en-GB", { weekday: "short", day: "numeric" }) : fmtFull(e.t);
   const finalExam = e.kind === "exam" && e.title === "Final exam";
   const body = (
@@ -188,6 +200,23 @@ function EventChip({ e, color, course }: { e: Ev; color: string; course: string 
   );
   if (e.kind === "due") return <Link to={e.href}>{body}</Link>;
   return e.href ? <a href={e.href} target="_blank" rel="noreferrer">{body}</a> : body;
+}
+
+function ClassChip({ e, color, course }: { e: Extract<Ev, { kind: "class" }>; color: string; course: string }) {
+  const c = e.session;
+  const live = isLive(c);
+  return (
+    <span className={cx("flex items-center gap-3 rounded-xl border border-dashed px-3 py-2 transition hover:border-muted", live ? "border-accent bg-surface" : "border-line", (e.done || c.status === "cancelled") && "opacity-60")}>
+      <span className="grid size-8 shrink-0 place-items-center rounded-full text-sm" style={{ background: `${color}1f` }}>🎥</span>
+      <Link to={e.href} className="min-w-0 flex-1">
+        <span className={cx("block truncate text-sm font-semibold", c.status === "cancelled" && "line-through")}>{e.title}</span>
+        <span className="block text-xs text-muted">
+          {course} · live class · {fmtFull(e.t)}{live ? " · live now" : c.status === "cancelled" ? " · cancelled" : c.status === "moved" ? " · moved" : c.status === "extra" ? " · extra" : ""}
+        </span>
+      </Link>
+      {!e.done && <JoinButton c={c} />}
+    </span>
+  );
 }
 
 /** Groups consecutive weeks for which busy(w) is false into arrays (rendered as one compact row). */

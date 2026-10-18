@@ -6,13 +6,14 @@ import { extname, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 // @ts-ignore: plain JS module shared with the `ouc` command line
-import { createAiApi } from "../../packages/ai/api.mjs";
+import { createAiApi } from "../../packages/ai/src/api.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
-import { checkForUpdate, restartDetached } from "../../bin/lib/update.mjs";
+import { checkForUpdate, restartDetached } from "../../packages/cli/src/update.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 
-const SEMESTERS = resolve(HERE, "../../semesters");
+// OUC_SEMESTERS / OUC_PUBLIC: another data folder, e.g. the demo semester of the smoke tests (e2e/)
+const SEMESTERS = process.env.OUC_SEMESTERS ? resolve(process.env.OUC_SEMESTERS) : resolve(HERE, "../../semesters");
 const MIME: Record<string, string> = {
   ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
   ".svg": "image/svg+xml", ".md": "text/markdown; charset=utf-8", ".txt": "text/plain; charset=utf-8",
@@ -180,4 +181,5 @@ function semesterFiles(): Plugin {
 export default defineConfig({
   plugins: [react(), tailwindcss(), semesterFiles(), eclassApi(), aiApi(), updateApi()],
   server: { port: 5173 },
+  ...(process.env.OUC_PUBLIC ? { publicDir: resolve(process.env.OUC_PUBLIC) } : {}),
 });
