@@ -141,6 +141,10 @@ This repository holds **only code**. Everything personal is git-ignored: `semest
 Course materials belong to OUC and their authors, so don't commit or redistribute them; everyone downloads their own copy through their own enrolment.
 Run `ouc check-public` before you push.
 
+## Contributing
+
+Bug reports, ideas and pull requests are welcome, including ones made with an AI coding agent (Claude Code, Codex, opencode, Cursor...). Start with [CONTRIBUTING.md](CONTRIBUTING.md): setup, the checks (`npm run check`), Conventional Commits and how releases work. Report security problems privately ([SECURITY.md](SECURITY.md)). Changes are listed in [CHANGELOG.md](CHANGELOG.md) once the first release is out.
+
 ## Troubleshooting
 
 | Problem | Fix |

@@ -1,0 +1,66 @@
+name: Bug report
+description: Something in the app, the `ouc` command, setup or the AI tools doesn't work as it should.
+title: "fix: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Never paste your eClass key, grades, submissions or course files.** Redact names and course content from logs and screenshots.
+        Issues are written so that a person *or* an AI coding agent can pick them up, so the more concrete, the better.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw instead.
+      placeholder: |
+        1. Ran `ouc sync`
+        2. Expected the new assignment on the dashboard
+        3. It isn't there; the Updates page shows ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - App (apps/web)
+        - Content build (packages/content)
+        - eClass sync (packages/eclass-sync)
+        - AI panel / study agents (packages/ai, ai/)
+        - Setup and the ouc command (bin/)
+        - Docs
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: ai
+    attributes:
+      label: AI tool (if relevant)
+      options:
+        - Not relevant
+        - Claude Code
+        - Codex
+        - opencode + Ollama
+        - opencode + LM Studio
+        - Local model directly
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Node version (`node -v`), app version or commit (`git rev-parse --short HEAD`).
+      placeholder: macOS 15.1, Node 22.11, v0.2.0
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (redacted)
+      description: "`ouc logs`, `ouc status`, or the browser console. Remove anything personal."
+      render: text
+  - type: textarea
+    id: done
+    attributes:
+      label: How we'll know it's fixed
+      description: One or two checks a reviewer (or an agent) can run to confirm the fix.
+      placeholder: "`ouc sync` on a semester with a new assignment shows it on the dashboard."

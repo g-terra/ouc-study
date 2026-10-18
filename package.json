@@ -1,6 +1,7 @@
 {
   "name": "ouc-study",
   "private": true,
+  "version": "0.1.0",
   "description": "OUC study workspace: course files, notes and a React study dashboard",
   "packageManager": "npm@10.9.0",
   "workspaces": [
@@ -22,9 +23,12 @@
     "ouc": "bash bin/ouc",
     "install:background": "bash bin/ouc install",
     "check:public": "node bin/check-public.mjs",
-    "test": "node --test packages/ai/test/*.test.mjs",
+    "test": "node --test packages/*/test/*.test.mjs",
     "notes": "node bin/ai.mjs notes",
-    "ai": "node bin/ai.mjs"
+    "ai": "node bin/ai.mjs",
+    "typecheck": "turbo run typecheck",
+    "lint": "node bin/lint.mjs",
+    "check": "npm run lint && npm test && npm run typecheck && npm run check:public"
   },
   "devDependencies": {
     "turbo": "^2.3.3"
