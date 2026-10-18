@@ -1,6 +1,6 @@
 // ouc: control the OUC Study app and the eClass sync from a terminal (macOS, Windows, Linux).
 //   ouc setup | start | stop | restart | update | status | open | sync | pull | logs [app|sync] | install | uninstall | help
-// Started through bin/ouc (macOS/Linux) or bin/ouc.cmd (Windows). Background details: lib/background.mjs.
+// Started through bin/ouc (macOS/Linux) or bin/ouc.cmd (Windows). Background details: background.ts.
 import { spawn, spawnSync, type SpawnSyncOptions } from "node:child_process";
 import { accessSync, appendFileSync, chmodSync, closeSync, constants, existsSync, lstatSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, unwatchFile, watchFile } from "node:fs";
 import { homedir } from "node:os";

@@ -1,4 +1,4 @@
-// Updates from GitHub releases (lib/update.mjs), tested against a throwaway git "GitHub" on disk.
+// Updates from GitHub releases (src/update.ts), tested against a throwaway git "GitHub" on disk.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
