@@ -61,7 +61,8 @@ The code is TypeScript. Node runs it through [tsx](https://tsx.is), so there is 
 
 - Each package has its own `tsconfig.json` (strict, `noEmit`). Import local files with their `.ts` extension.
 - Use only syntax Node can strip (`erasableSyntaxOnly`): no `enum`, `namespace` or constructor parameter properties, and `import type` for types. That keeps the door open to running on Node's own type stripping later.
-- A few files are still plain JavaScript (`daily.mjs`, some `packages/content/src/*.mjs` helpers, `e2e/`); they move over in later PRs.
+- The only JavaScript left is the launchers (`bin/*.mjs`, `packages/eclass-sync/*.mjs`, `packages/ai/validate.mjs`), `ai/install.mjs` (dependency-free, so any AI tool can run it with plain `node`) and test fixtures that stand in for other programs. Write new code in TypeScript.
+- The smoke tests (`e2e/`) are TypeScript too; Playwright reads `e2e/playwright.config.ts`.
 
 ## Make a change
 
@@ -102,7 +103,7 @@ Add `BREAKING CHANGE: ...` in the body, or `!` after the type, for anything that
 
 - Fill in the [PR template](.github/pull_request_template.md): Before / After, how, the checklist.
 - CI runs on every PR: **lint, unit tests, typecheck and a build on Node 20 and 22**, the same on **Windows** plus a real `ouc install`/`uninstall`, the **Playwright smoke test** (every page on the made-up semester in `e2e/demo/`), the **public check**, and the **PR title** check. All must pass.
-- Changed a page or added one? Extend `e2e/smoke.spec.mjs`, and the demo data in `e2e/demo/` if the page needs it (made-up data only).
+- Changed a page or added one? Extend `e2e/smoke.spec.ts`, and the demo data in `e2e/demo/` if the page needs it (made-up data only).
 - Say if an AI agent helped, and confirm you read and tested its changes. You are responsible for every line you submit.
 - A maintainer reviews and squash-merges.
 

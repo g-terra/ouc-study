@@ -1,13 +1,14 @@
 // Week plans (semesters/<id>/plans/<YYYY>-W<NN>.md, written by the plan-week skill) → data the app shows.
-// Plain JS so the app server (packages/ai/src/api.ts) and the tests can use it without a TypeScript step.
+// Also used by the app server (packages/ai/src/api.ts) to tick a task.
+import type { Plan, PlanDay, PlanPart, PlanSection } from "./types.ts";
 
 const TASK = /^(\s*[-*+]\s+)\[([ xX])\]\s+(.*)$/;
 
 /** Monday and Sunday (YYYY-MM-DD) of an ISO week. */
-export function isoWeekRange(year, week) {
+export function isoWeekRange(year: number, week: number): { start: string; end: string } {
   const jan4 = new Date(Date.UTC(year, 0, 4));
   const monday = new Date(jan4.getTime() - ((jan4.getUTCDay() + 6) % 7) * 86_400_000 + (week - 1) * 7 * 86_400_000);
-  const day = (d) => d.toISOString().slice(0, 10);
+  const day = (d: Date) => d.toISOString().slice(0, 10);
   return { start: day(monday), end: day(new Date(monday.getTime() + 6 * 86_400_000)) };
 }
 
@@ -16,12 +17,12 @@ export function isoWeekRange(year, week) {
  * inside each, Markdown chunks and checkable tasks (`- [ ] …`). Task lines keep their 1-based line
  * number in the file, so a tick in the app can be written back (see setTask).
  */
-export function parsePlan(src, file) {
+export function parsePlan(src: string, file: string): Plan {
   const week = file.replace(/\.md$/, "");
   const m = week.match(/^(\d{4})-W(\d{1,2})$/);
   const lines = src.replace(/\r\n?/g, "\n").split("\n");
   let i = 0;
-  const fm = {};
+  const fm: Record<string, string> = {};
   if (lines[0] === "---") {
     const close = lines.indexOf("---", 1);
     if (close > 0) {
@@ -29,12 +30,12 @@ export function parsePlan(src, file) {
       i = close + 1;
     }
   }
-  const plan = {
+  const plan: Plan = {
     week, file, title: fm.title || "", ...(m ? isoWeekRange(Number(m[1]), Number(m[2])) : {}),
     updated: fm.updated || undefined, intro: [], sections: [], done: 0, total: 0,
   };
-  let section, sub, md = [], inFence = false;
-  const target = () => (sub ?? section)?.parts ?? plan.intro;
+  let section: PlanSection | undefined, sub: PlanDay | undefined, md: string[] = [], inFence = false;
+  const target = (): PlanPart[] => (sub ?? section)?.parts ?? plan.intro;
   const flush = () => { const t = md.join("\n").trim(); if (t) target().push({ md: t }); md = []; };
   for (; i < lines.length; i++) {
     const l = lines[i];
@@ -58,7 +59,7 @@ export function parsePlan(src, file) {
 }
 
 /** Ticks or unticks the task on `line` (1-based). Returns the new text, or null when that line isn't a task. */
-export function setTask(src, line, done) {
+export function setTask(src: string, line: number, done: boolean): string | null {
   const lines = src.split("\n");
   const l = lines[line - 1];
   const t = l?.match(TASK);

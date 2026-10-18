@@ -1,7 +1,7 @@
 // Week plans: parsing the plan file into sections and tasks, and ticking a task in the file.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isoWeekRange, parsePlan, setTask } from "../src/plan.mjs";
+import { isoWeekRange, parsePlan, setTask } from "../src/plan.ts";
 
 const SRC = `---
 week: 2026-W42
@@ -48,22 +48,22 @@ test("a plan becomes sections, days and tasks with their line numbers", () => {
   assert.deepEqual(p.intro, [{ md: "Two submissions cluster at the end of the month." }]);
   assert.deepEqual(p.sections.map((s) => s.title), ["Next actions", "Due soon", "Day by day", "Risks"]);
   const [first, second] = p.sections[0].parts;
-  assert.equal(first.task.line, 10);
-  assert.match(first.task.text, /^Draft both answers/);
-  assert.equal(first.task.done, false);
-  assert.equal(second.task.done, true);
+  assert.equal(first.task!.line, 10);
+  assert.match(first.task!.text, /^Draft both answers/);
+  assert.equal(first.task!.done, false);
+  assert.equal(second.task!.done, true);
   assert.deepEqual(p.sections[2].days.map((d) => d.title), ["Mon 19 Oct", "Tue 20 Oct"]);
-  assert.equal(p.sections[2].days[0].parts[0].task.line, 20);
+  assert.equal(p.sections[2].days[0].parts[0].task!.line, 20);
   assert.deepEqual(p.sections[2].days[1].parts, [{ md: "Rest day." }]);
-  assert.match(p.sections[3].parts.at(-1).md, /not a task inside a code block/);   // fenced code stays text
+  assert.match(p.sections[3].parts.at(-1)!.md!, /not a task inside a code block/);   // fenced code stays text
   assert.deepEqual([p.done, p.total], [1, 3]);
 });
 
 test("ticking a task rewrites only that line", () => {
-  const ticked = setTask(SRC, 10, true);
+  const ticked = setTask(SRC, 10, true)!;
   assert.match(ticked.split("\n")[9], /^- \[x\] Draft both answers/);
   assert.equal(ticked.split("\n").filter((l, i) => l !== SRC.split("\n")[i]).length, 1);
-  assert.match(setTask(ticked, 10, false).split("\n")[9], /^- \[ \] Draft/);
+  assert.match(setTask(ticked, 10, false)!.split("\n")[9], /^- \[ \] Draft/);
   assert.equal(setTask(SRC, 5, true), null);   // a heading, not a task
   assert.equal(setTask(SRC, 999, true), null);
 });

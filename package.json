@@ -6,7 +6,8 @@
   "packageManager": "npm@10.9.0",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "e2e"
   ],
   "scripts": {
     "setup": "node bin/setup.mjs",
@@ -29,7 +30,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "node --import tsx packages/cli/scripts/lint.ts",
     "check": "npm run lint && npm test && npm run typecheck && npm run check:public",
-    "e2e": "playwright test"
+    "e2e": "playwright test -c e2e"
   },
   "dependencies": {
     "tsx": "^4.19.2"

@@ -55,7 +55,7 @@ export interface Course {
   weeks: Week[];
 }
 
-/** A live class (webconference); time read from eClass or semester.json "classes", see packages/content/src/classes.mjs. */
+/** A live class (webconference); time read from eClass or semester.json "classes", see packages/content/src/classes.ts. */
 export interface ClassSession {
   code: string;
   n: number;              // week / meeting number (0 for an extra class)
@@ -145,7 +145,7 @@ export interface UpdatesFeed {
   days: { date: string; items: UpdateItem[] }[];
 }
 
-/** A week plan (semesters/<id>/plans/<YYYY>-W<NN>.md), parsed by src/plan.mjs. */
+/** A week plan (semesters/<id>/plans/<YYYY>-W<NN>.md), parsed by src/plan.ts. */
 export interface PlanTask { line: number; text: string; done: boolean }
 export type PlanPart = { md: string; task?: undefined } | { task: PlanTask; md?: undefined };
 export interface PlanDay { title: string; parts: PlanPart[] }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildClasses, detectClasses, findTime, pickGroup, setClassTime, weekday, zoned } from "../src/classes.mjs";
+import { buildClasses, detectClasses, findTime, pickGroup, setClassTime, weekday, zoned } from "../src/classes.ts";
 
 // made-up course: three dated weeks (Mon–Sun) plus the undated General section
 const weeks = [
@@ -93,8 +93,8 @@ test("findTime reads 6pm, 6 pm and 20:00–21:00", () => {
 });
 
 // made-up eClass course structure, shaped like eclass-meta.json
-const post = (text, at = "Tuesday, 8 September 2026, 9:00 AM") => ({ by: "Tutor", at, text });
-const forum = (...posts) => ({ type: "forum", name: "Announcements", threads: [{ t: "News", posts }] });
+const post = (text: string, at = "Tuesday, 8 September 2026, 9:00 AM") => ({ by: "Tutor", at, text });
+const forum = (...posts: ReturnType<typeof post>[]) => ({ type: "forum", name: "Announcements", threads: [{ t: "News", posts }] });
 
 test("detectClasses reads the weekly slot from a tutor's post", () => {
   const meta = { secs: [{ acts: [forum(

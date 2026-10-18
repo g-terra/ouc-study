@@ -14,8 +14,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildClasses, detectClasses, type ClassesConfig } from "./classes.mjs";
-import { parsePlan } from "./plan.mjs";
+import { buildClasses, detectClasses, type ClassesConfig } from "./classes.ts";
+import { parsePlan } from "./plan.ts";
 import type {
   UpdatesFeed, GradeItem, ClassSession,
   Assignment, Prep, Course, Exam, FileRef, Note, Resource, SemesterData, SemesterIndex, SemesterSummary, Week, WeekItem,
@@ -36,7 +36,7 @@ interface CourseConfig {
   dir: string;                               // folder under courses/
   dating: { mode: "title" } | { mode: "weekly"; first: string; pattern: string };
   label?: "firstResource" | "stripWeek" | "lecture" | "name";
-  classes?: ClassesConfig;                   // weekly live class (webconference), see classes.mjs
+  classes?: ClassesConfig;                   // weekly live class (webconference), see classes.ts
 }
 interface SemesterConfig {
   id?: string;
