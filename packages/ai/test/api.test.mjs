@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -113,12 +113,13 @@ test("prep packs: prepared on their own, then reviewed by another AI with the hi
     assignments: [assignment("AAA/open", { due: "2999-01-01T23:59:00" }), assignment("AAA/late", { due: "2000-01-01T23:59:00" }), assignment("AAA/done", { submitted: true })],
   }));
 
-  // only the open one needs a pack, and once tried it isn't retried straight away
-  assert.deepEqual(needsPrep(root, "S", JSON.parse(readFileSync(join(root, "apps/web/public/data/S.json"), "utf8"))).map((a) => a.id), ["AAA/open"]);
+  // every assignment not submitted yet needs a pack (even past the deadline)
+  assert.deepEqual(needsPrep(root, "S", JSON.parse(readFileSync(join(root, "apps/web/public/data/S.json"), "utf8"))).map((a) => a.id), ["AAA/open", "AAA/late"]);
 
   const mw = createAiApi(root, { bin: join(HERE, "fixtures/fake-agent.mjs"), status: async () => ({ ready: true }) });
   mw.autoPrep();
   while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
+  assert.ok(existsSync(join(sem, "assignments/AAA/late/PREP.md")));  // both made (in parallel)
   const file = join(sem, "assignments/AAA/open/PREP.md");
   let meta = readPrepMeta(readFileSync(file, "utf8"));
   assert.equal(meta.log.length, 1);

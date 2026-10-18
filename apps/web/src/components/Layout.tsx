@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useRouter, enc } from "../lib/router";
-import { useIndex } from "../lib/data";
+import { useIndex, useSemester } from "../lib/data";
 import { cx } from "./ui";
 import { CONN_LABEL, useConnection } from "../lib/connection";
-import { TOOL_STATE, refreshAi, useAiStatus } from "../lib/ai";
+import { TOOL_STATE, refreshAi, useAiStatus, usePrepStatus } from "../lib/ai";
 import { useAssistant } from "./Assistant";
 
 /** Header status: eClass and the AI coding tool in one dot; click for the details. */
@@ -89,6 +89,41 @@ function AskAiHeaderButton() {
   );
 }
 
+/** While the AI makes missing notes and prep packs in the background: a progress bar and what's running. */
+function AiWorkBar({ sem }: { sem: string }) {
+  const st = usePrepStatus();
+  const data = useSemester(sem);
+  const { load, setOpen } = useAssistant();
+  if (!st?.busy || !st.total) return st?.error && !st.busy && st.total ? (
+    <div className="border-t border-line bg-bad-bg px-4 py-1.5 text-center text-xs text-bad">The AI stopped making notes and prep packs: {st.error}</div>
+  ) : null;
+  const label = (id: string) => {
+    if (id.startsWith("notes:")) { const c = data?.courses.find((x) => x.code === id.slice(6)); return `Notes · ${c?.short ?? id.slice(6)}`; }
+    const a = data?.assignments.find((x) => x.id === id);
+    return `Prep · ${a ? `${a.code} ${a.title}` : id.split("/").pop()}`;
+  };
+  const pct = Math.round((st.done / st.total) * 100);
+  return (
+    <div className="border-t border-line">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs">
+        <span className="font-semibold">✨ AI is making notes and prep packs</span>
+        <span className="text-muted">{st.done} of {st.total} done{st.queue.length ? ` · ${st.queue.length} waiting` : ""}</span>
+        <span className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+          {st.running.map((r) => (
+            <button key={r.id} type="button" onClick={() => { setOpen(true); load(r.chatId); }} title="Watch it work"
+              className="flex max-w-[16rem] items-center gap-1.5 rounded-full border border-line bg-surface px-2 py-0.5 hover:border-muted">
+              <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-accent" /><span className="truncate">{label(r.id)}</span>
+            </button>
+          ))}
+        </span>
+      </div>
+      <div className="h-1 bg-surface-2" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="AI progress">
+        <div className="h-full bg-accent transition-[width] duration-500" style={{ width: `${Math.max(pct, 3)}%` }} />
+      </div>
+    </div>
+  );
+}
+
 const NAV = [
   ["", "Dashboard"],
   ["timeline", "Timeline"],
@@ -130,6 +165,7 @@ export function Layout({ sem, children }: { sem: string; children: ReactNode }) 
             {index.semesters.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </div>
+        <AiWorkBar sem={sem} />
       </header>
       <main className="mx-auto max-w-6xl px-4 pb-28 pt-8">{children}</main>
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">

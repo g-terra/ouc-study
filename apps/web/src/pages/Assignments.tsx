@@ -33,7 +33,6 @@ export function AssignmentsPage({ data }: { data: SemesterData }) {
           </button>
         ))}
       </div>
-      <PrepProgress data={data} />
       <div className="grid gap-2">
         {list.length === 0 && <Empty>Nothing here.</Empty>}
         {list.map((a) => (
@@ -137,30 +136,14 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
   );
 }
 
-/** While the AI works through the prep packs: which one now, how many left. */
-function PrepProgress({ data }: { data: SemesterData }) {
-  const status = usePrepStatus();
-  const { load, setOpen } = useAssistant();
-  if (!status?.running) return null;
-  const now = data.assignments.find((a) => a.id === status.running);
-  return (
-    <div className="mb-4 flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm">
-      <span aria-hidden className="size-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-      <span className="flex-1">Preparing prep packs: working on <b>{now ? `${now.code} ${now.title}` : "one"}</b>{status.queue.length ? `, ${status.queue.length} more queued` : ""}.</span>
-      {status.chatId && <button type="button" className="underline" onClick={() => { setOpen(true); load(status.chatId!); }}>Watch</button>}
-    </div>
-  );
-}
-
 /** Why an assignment has no prep pack yet, in the student's terms. */
 function prepWhy(a: Assignment, status: PrepStatus | null) {
   const n = status?.queue.indexOf(a.id) ?? -1;
-  if (n >= 0) return `Queued: your AI prepares packs one at a time${status!.running ? ", and is working on another one now" : ""}${n ? ` (${n} more before this one)` : ""}.`;
+  if (n >= 0) return `Queued: your AI is working through the missing notes and prep packs${n ? ` (${n} more before this one)` : ""}.`;
   if (a.submitted) return "Submitted, so it isn't prepared on its own. You can still ask for one.";
-  if (a.due && at(a.due) < new Date()) return "The deadline has passed, so it isn't prepared on its own. You can still ask for one.";
   if (!status?.enabled) return "No prep pack yet. Ask your AI for hints and extra material for this assignment.";
-  if (status.error) return `Automatic prep paused after an error (${status.error}). It tries again after the next sync, or prepare it now.`;
-  return "Not prepared yet. Your AI prepares open assignments on its own after each sync, or prepare it now.";
+  if (status.error) return `Automatic prep stopped after an error (${status.error}). Press Sync now on the Updates page to try again, or prepare it now.`;
+  return "Not prepared yet. Your AI prepares assignments on its own, and Sync now fills in any that are missing. Or prepare it now.";
 }
 
 const PREP_ASK = [
@@ -181,7 +164,8 @@ function PrepSection({ a, color }: { a: Assignment; color: string }) {
   const [pick, setPick] = useState<string>();
   const tool = pick ?? (agents.find((t) => t !== author) ?? agents[0])?.id;
   if (ai.state === "unavailable" && !a.prep) return null; // a static build without an app server
-  const running = status?.running === a.id;
+  const run = status?.running.find((x) => x.id === a.id);
+  const running = !!run;
   const ask = (mode: string) => start("assignment-prep", { course: a.code, assignment: a.id, mode }, tool);
   const picker = agents.length > 1 && (
     <select aria-label="Which AI" value={tool} onChange={(e) => setPick(e.target.value)} className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm">
@@ -196,7 +180,7 @@ function PrepSection({ a, color }: { a: Assignment; color: string }) {
         <Card className="mb-3 flex items-center gap-3 p-4 text-sm">
           <span aria-hidden className="size-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           <span className="flex-1">{a.prep ? "Updating" : "Preparing"} hints and extra material for this assignment…</span>
-          {status?.chatId && <button type="button" className="underline" onClick={() => { setOpen(true); load(status.chatId!); }}>Watch</button>}
+          {run && <button type="button" className="underline" onClick={() => { setOpen(true); load(run.chatId); }}>Watch</button>}
         </Card>
       )}
       {a.prep ? (

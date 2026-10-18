@@ -7,20 +7,21 @@
 //   POST /api/ai/stop          { chatId }
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
 //   GET  /api/ai/view?path=…  a visual the AI saved (HTML, SVG or image), sandboxed, for the chat to show inline
-//   GET  /api/ai/prep          the automatic assignment prep: { enabled, running, chatId, queue, error }
+//   GET  /api/ai/prep          background notes/prep work: { enabled, busy, running: [{ id, chatId }], queue, total, done, error }
 //
 // Agents run on the student's own computer with their subscription login (no API keys).
 // Chats are saved in .ouc/chats/ (git-ignored).
 //
-// Automatic prep: when the app data is rebuilt (a sync found something) or the app starts, every
-// open assignment without a PREP.md gets one, one at a time, from the AI chosen with `ouc ai setup`.
-// Turn it off with "autoPrep": false in .ouc/ai.json.
+// Background work: when the app data is rebuilt (a sync found something) or the app starts, every
+// assignment not submitted yet without a PREP.md gets one, one at a time, from the AI chosen with
+// `ouc ai setup` ("autoPrep": false in .ouc/ai.json turns that off). Sync now also makes the
+// missing notes, for every week with files. Up to "parallel" (default 3) runs at once.
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
 import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, loadConfig, loginStatusAsync, serverUp } from "./providers.mjs";
-import { buildPrompt, chatSystem, listActions, prepPath } from "./actions.mjs";
+import { buildPrompt, chatSystem, listActions, prepPath, weeksWithoutNotes } from "./actions.mjs";
 import { currentSemesterId, loadData, read } from "./context.mjs";
 import { runAgentTurn, runChatTurn } from "./stream.mjs";
 
@@ -110,10 +111,9 @@ export function stampPrep(abs, { assignment, by, mode, log = [], at = new Date()
   writeFileSync(abs, `---\nassignment: ${assignment}\nby: ${by}\nupdated: ${at.toISOString()}\nlog:\n${all.map((l) => `  - ${l}`).join("\n")}\n---\n\n${body}`);
   return true;
 }
-/** Open assignments with something to prepare from and no PREP.md yet (skipping ones tried recently). */
+/** Assignments not submitted yet (including ones not open yet) with no PREP.md, skipping ones tried recently. */
 export function needsPrep(root, semId, data, tried = {}, now = new Date()) {
-  return data.assignments.filter((a) => !a.submitted && (!a.due || new Date(a.due) > now) && (a.briefs?.length || a.question)
-    && !existsSync(join(root, prepPath(semId, a)))
+  return data.assignments.filter((a) => !a.submitted && !existsSync(join(root, prepPath(semId, a)))
     && !(tried[a.id] && now - new Date(tried[a.id]) < 12 * 3600_000));
 }
 
@@ -245,46 +245,69 @@ export function createAiApi(root, opts = {}) {
 
   // ----- automatic prep: one assignment at a time, in the background -----
   const prepState = join(root, ".ouc", "prep-state.json");
-  const prep = { busy: false, again: false, running: null, chatId: null, queue: [], error: null };
+  const prep = { busy: false, again: false, notes: false, force: false, running: [], queue: [], total: 0, done: 0, error: null };
   async function status(fresh = false) {
     if (!cache || Date.now() - cache.at > 5 * 60_000 || fresh) cache = { at: Date.now(), body: await aiStatus(root) };
     return cache.body;
   }
   const prepEnabled = (cfg = loadConfig(root)) => !!cfg && cfg.autoPrep !== false && AGENTIC.has(ALIASES[cfg.tool] ?? cfg.tool);
-  async function autoPrep() {
-    if (prep.busy) { prep.again = true; return; }
+  /**
+   * Background work, one AI run at a time: prep packs for assignments without one (on its own when the
+   * app starts and after each rebuild) and, when asked (Sync now), notes for every week that has files
+   * and no note (one run per course). An explicit request ignores "autoPrep": false and recent attempts.
+   */
+  async function catchUp({ notes = false, force = false } = {}) {
+    if (prep.busy) { prep.again = true; prep.notes ||= notes; prep.force ||= force; return; }
     prep.busy = true;
     try {
       do {
-        prep.again = false;
-        if (!prepEnabled()) break;
+        const wantNotes = notes || prep.notes, forced = force || prep.force;
+        prep.again = false; prep.notes = false; prep.force = false; notes = false; force = false;
+        if (!forced && !prepEnabled()) break;
+        const cfg = loadConfig(root);
+        if (!cfg || !AGENTIC.has(ALIASES[cfg.tool] ?? cfg.tool)) break;
         const st = await (opts.status ?? status)();
-        if (!st.ready) break;   // not signed in: try again on the next rebuild
+        if (!st.ready) { prep.error = st.reason || "Your AI isn't signed in."; break; }   // try again on the next rebuild
         const semId = currentSemesterId(root);
         if (!semId) break;
         let tried = {};
         try { tried = JSON.parse(read(prepState, "{}")); } catch { /* start fresh */ }
-        const todo = needsPrep(root, semId, loadData(root, semId), tried);
-        prep.queue = todo.map((a) => a.id);
-        for (const a of todo) {
-          prep.queue = prep.queue.filter((id) => id !== a.id);
-          tried[a.id] = new Date().toISOString();
-          mkdirSync(join(root, ".ouc"), { recursive: true });
-          writeFileSync(prepState, JSON.stringify(tried, null, 1));
-          const t = startTurn({ sem: semId, action: "assignment-prep", params: { assignment: a.id, mode: "new" }, auto: true });
-          if (t.error) break;
-          prep.running = a.id; prep.chatId = t.chat.id;
-          const r = await t.done;
-          prep.running = null; prep.chatId = null;
-          // a failure (usage limit, sign-in) would fail for the rest too: stop until the next sync or restart
-          if (!r?.ok) { prep.error = t.chat.messages.at(-1)?.error ?? "The AI stopped with an error."; break; }
-          prep.error = null;
-        }
+        const data = loadData(root, semId);
+        const jobs = [
+          ...(wantNotes ? data.courses.filter((c) => weeksWithoutNotes(data, [c]).length)
+            .map((c) => ({ id: `notes:${c.code}`, body: { action: "make-notes", params: { course: c.code } } })) : []),
+          ...needsPrep(root, semId, data, forced ? {} : tried)
+            .map((a) => ({ id: a.id, body: { action: "assignment-prep", params: { assignment: a.id, mode: "new" }, auto: true } })),
+        ];
+        prep.queue = jobs.map((j) => j.id);
+        prep.total = jobs.length; prep.done = 0; prep.error = null;
+        // a few at a time ("parallel" in .ouc/ai.json, default 3); a failure (usage limit, sign-in)
+        // would fail for the rest too, so nothing new starts after one
+        let stop = false;
+        const worker = async () => {
+          while (!stop && prep.queue.length) {
+            const job = jobs.find((j) => j.id === prep.queue[0]);
+            prep.queue = prep.queue.slice(1);
+            tried[job.id] = new Date().toISOString();
+            mkdirSync(join(root, ".ouc"), { recursive: true });
+            writeFileSync(prepState, JSON.stringify(tried, null, 1));
+            const t = startTurn({ sem: semId, ...job.body });
+            if (t.error) { prep.done++; continue; }   // e.g. that course has nothing left after all
+            const slot = { id: job.id, chatId: t.chat.id };
+            prep.running = [...prep.running, slot];
+            const r = await t.done;
+            prep.running = prep.running.filter((x) => x !== slot);
+            prep.done++;
+            if (!r?.ok) { stop = true; prep.queue = []; prep.error = t.chat.messages.at(-1)?.error ?? "The AI stopped with an error."; }
+          }
+        };
+        const n = Math.max(1, Math.min(8, Number(cfg.parallel) || 3));
+        await Promise.all(Array.from({ length: n }, worker));
       } while (prep.again);
     } catch (e) {
-      console.error(`[ai] automatic prep: ${e.message}`);
+      console.error(`[ai] background work: ${e.message}`);
     } finally {
-      prep.busy = false; prep.running = null; prep.chatId = null; prep.queue = [];
+      prep.busy = false; prep.running = []; prep.queue = [];
     }
   }
 
@@ -298,7 +321,7 @@ export function createAiApi(root, opts = {}) {
     try {
       const p = url.pathname;
       if (p === "/api/ai/status") return json(res, { ...(await status(url.searchParams.has("fresh"))), token });
-      if (p === "/api/ai/prep") return json(res, { enabled: prepEnabled(), running: prep.running, chatId: prep.chatId, queue: prep.queue, error: prep.error });
+      if (p === "/api/ai/prep") return json(res, { enabled: prepEnabled(), busy: prep.busy, running: prep.running, queue: prep.queue, total: prep.total, done: prep.done, error: prep.error });
       if (p === "/api/ai/view") {
         const abs = viewablePath(root, url.searchParams.get("path"));
         if (!abs) return json(res, { error: "Not found" }, 404);
@@ -329,7 +352,18 @@ export function createAiApi(root, opts = {}) {
     }
   };
   /** Call when the app data was rebuilt (a sync, new files): prepares assignments that need it. */
-  handler.autoPrep = () => { if (!opts.noAutoPrep) autoPrep(); };
+  handler.autoPrep = () => { if (!opts.noAutoPrep) catchUp(); };
+  /** Sync now: make the missing notes and prep packs (returns how many it will make). */
+  handler.catchUp = () => {
+    const semId = currentSemesterId(root);
+    let todo = { notes: 0, prep: 0 };
+    try {
+      const data = loadData(root, semId);
+      todo = { notes: weeksWithoutNotes(data, data.courses).length, prep: needsPrep(root, semId, data).length };
+    } catch { /* no data yet */ }
+    catchUp({ notes: true, force: true });
+    return todo;
+  };
   handler.prepIdle = () => !prep.busy;
   return handler;
 }

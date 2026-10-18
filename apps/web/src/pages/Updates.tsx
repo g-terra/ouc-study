@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { SemesterData, UpdateItem, UpdateType } from "@ouc/content/types";
-import { courseMap } from "../lib/data";
+import { courseMap, refreshData } from "../lib/data";
+import { refreshPrep } from "../lib/ai";
 import { day, fmtFull, relative } from "../lib/dates";
 import { Card, CourseBadge, Empty, PageHeader, cx } from "../components/ui";
 import { CONN_LABEL, refreshConnection, syncNow, useConnection } from "../lib/connection";
@@ -118,7 +119,13 @@ function ConnectionCard() {
   const run = async () => {
     setMsg(undefined);
     const r = await syncNow();
-    if (r.ok) { setMsg(r.found ? `Found ${r.found} new update${r.found > 1 ? "s" : ""}. Refreshing…` : "All up to date. Nothing new on eClass."); if (r.found) setTimeout(() => window.location.reload(), 900); }
+    if (r.ok) {
+      const ai = r.ai && (r.ai.notes || r.ai.prep)
+        ? ` Your AI is now making ${[r.ai.notes && `${r.ai.notes} missing note${r.ai.notes > 1 ? "s" : ""}`, r.ai.prep && `${r.ai.prep} prep pack${r.ai.prep > 1 ? "s" : ""}`].filter(Boolean).join(" and ")}: see the progress bar at the top.`
+        : "";
+      setMsg(`${r.found ? `Found ${r.found} new update${r.found > 1 ? "s" : ""}.` : "All up to date. Nothing new on eClass."}${ai}`);
+      refreshData(); refreshPrep();
+    }
     else setMsg(r.error ?? "Sync failed.");
   };
   return (
