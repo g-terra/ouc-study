@@ -15,7 +15,7 @@ import * as ui from "./tui.ts";
 import { createClient, readToken, slug, strip, TOKEN_RE, isoDay, SITE, type MoodleClient, type MoodleCourse, type MoodleSection, type SiteInfo } from "../../eclass-sync/src/moodle.ts";
 import { pull, reportMarkdown, type PullReport } from "../../eclass-sync/src/pull.ts";
 import { chooseAssistant, installSkills } from "./ai.ts";
-import { describe as describeAI, loadConfig as loadAI } from "../../ai/providers.mjs";
+import { describe as describeAI, loadConfig as loadAI } from "../../ai/src/providers.ts";
 
 const { c } = ui;
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");

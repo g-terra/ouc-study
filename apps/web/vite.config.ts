@@ -77,7 +77,7 @@ function eclassApi(): Plugin {
   return { name: "eclass-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
 }
 
-/** /api/ai/*: the Ask AI panel talks to the agent chosen with `ouc ai setup` (see packages/ai/api.mjs). */
+/** /api/ai/*: the Ask AI panel talks to the agent chosen with `ouc ai setup` (see packages/ai/src/api.ts). */
 let aiHandler: ReturnType<typeof createAiApi> | undefined;
 function aiApi(): Plugin {
   const use = (s: { middlewares: Connect.Server }) => { aiHandler ??= createAiApi(resolve(HERE, "../..")); s.middlewares.use(aiHandler); };

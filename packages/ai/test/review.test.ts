@@ -10,15 +10,17 @@ import { deflateRawSync } from "node:zlib";
 import { createAiApi } from "../src/api.ts";
 import { docxText, isDocx, wordCount } from "../src/docx.ts";
 import { approve, findConverter, safeBase } from "../src/review.ts";
+import type { AiApiOptions } from "../src/api.ts";
+import { json, portOf, type Ev } from "./helpers.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "../../..");
 
 // ---------- a tiny zip writer, to make a .docx without any library ----------
 const CRC = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
-const crc32 = (b) => { let c = 0xffffffff; for (const x of b) c = CRC[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
-function zip(files) {
-  const local = [], central = [];
+const crc32 = (b: Buffer): number => { let c = 0xffffffff; for (const x of b) c = CRC[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+function zip(files: Record<string, string>): Buffer {
+  const local: Buffer[] = [], central: Buffer[] = [];
   let off = 0;
   for (const [name, text] of Object.entries(files)) {
     const raw = Buffer.from(text), data = deflateRawSync(raw), n = Buffer.from(name);
@@ -33,8 +35,8 @@ function zip(files) {
   return Buffer.concat([...local, cd, end]);
 }
 const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
-const p = (text, style) => `<w:p>${style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : ""}<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
-const docx = (body) => zip({
+const p = (text: string, style?: string) => `<w:p>${style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : ""}<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+const docx = (body: string) => zip({
   "[Content_Types].xml": '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
   "_rels/.rels": '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
   "word/document.xml": `<?xml version="1.0" encoding="UTF-8"?><w:document ${W}><w:body>${body}</w:body></w:document>`,
@@ -51,7 +53,7 @@ test("docx text: headings, entities and tables", () => {
   assert.equal(safeBase("../My answers: final?.docx"), "My answers_ final_");
 });
 
-async function setup(opts = {}) {
+async function setup(opts: AiApiOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "ouc-review-"));
   cpSync(join(REPO, "ai/skills"), join(root, "ai/skills"), { recursive: true });
   mkdirSync(join(root, ".ouc"));
@@ -60,7 +62,7 @@ async function setup(opts = {}) {
   mkdirSync(join(sem, "assignments/AAA/a1"), { recursive: true });
   writeFileSync(join(sem, "semester.json"), JSON.stringify({ start: "2000-01-01", end: "2999-01-01", courses: [] }));
   mkdirSync(join(root, "apps/web/public/data"), { recursive: true });
-  const file = (name) => ({ kind: "file", title: name, href: `/files/S/courses/AAA/02-Week-1/${encodeURIComponent(name)}` });
+  const file = (name: string) => ({ kind: "file", title: name, href: `/files/S/courses/AAA/02-Week-1/${encodeURIComponent(name)}` });
   writeFileSync(join(root, "apps/web/public/data/S.json"), JSON.stringify({
     courses: [{ code: "AAA", short: "AAA", title: "AAA course", weeks: [{ index: 0, name: "General", items: [file("Marking rubric.pdf")] }, { index: 1, name: "Week 1", items: [file("Slides 1.pdf")] }] }],
     notes: [{ code: "AAA", slug: "week-01-attention", weekIndex: 1 }],
@@ -68,11 +70,11 @@ async function setup(opts = {}) {
   }));
   const mw = createAiApi(root, { bin: join(HERE, "fixtures/fake-agent.mjs"), noAutoPrep: true, ...opts });
   const server = http.createServer((req, res) => mw(req, res, () => { res.statusCode = 404; res.end(); }));
-  await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
-  const base = `http://127.0.0.1:${server.address().port}`;
-  const { token } = await (await fetch(`${base}/api/ai/status`)).json();
-  const upload = (buf, name = "My answers.docx", t = token) => fetch(`${base}/api/ai/review/upload?sem=S&assignment=AAA%2Fa1&name=${encodeURIComponent(name)}`, { method: "POST", headers: { "X-OUC-AI": t }, body: buf });
-  const post = (path, body) => fetch(`${base}${path}`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
+  await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok));
+  const base = `http://127.0.0.1:${portOf(server)}`;
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const upload = (buf: Buffer, name = "My answers.docx", t: string = token) => fetch(`${base}/api/ai/review/upload?sem=S&assignment=AAA%2Fa1&name=${encodeURIComponent(name)}`, { method: "POST", headers: { "X-OUC-AI": t }, body: buf });
+  const post = (path: string, body: object) => fetch(`${base}${path}`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
   return { root, sem, server, base, upload, post };
 }
 
@@ -85,13 +87,13 @@ test("review rounds: upload, review with context, a second round, approve", asyn
   assert.equal((await upload(SAMPLE, "x.docx", "wrong")).status, 403);
   const bad = await upload(Buffer.from("plain text"), "notes.txt");
   assert.equal(bad.status, 400);
-  assert.match((await bad.json()).error, /\.docx/);
+  assert.match((await json(bad)).error, /\.docx/);
 
   // reviewing before any upload says what to do
   const early = await post("/api/ai/run", { sem: "S", action: "assignment-review", params: { assignment: "AAA/a1" } });
-  assert.match((await early.json()).error, /Upload your \.docx/);
+  assert.match((await json(early)).error, /Upload your \.docx/);
 
-  const up = await (await upload(SAMPLE)).json();
+  const up = await json(upload(SAMPLE));
   assert.equal(up.version.v, 1);
   assert.equal(up.version.name, "My answers.docx");
   assert.ok(readFileSync(join(dir, "v1.docx")).equals(SAMPLE));
@@ -102,7 +104,7 @@ test("review rounds: upload, review with context, a second round, approve", asyn
   const chat = JSON.parse(readFileSync(join(root, ".ouc/chats", `${JSON.parse(readFileSync(join(dir, "review.json"), "utf8")).versions[0].review.chatId}.json`), "utf8"));
   const prompt = chat.messages[0].prompt;
   for (const want of ["assignment-review skill", "review/v1.md", "assignments/AAA/a1/brief.pdf", "Marking rubric.pdf", "Slides 1.pdf", "notes/AAA/week-01-attention.md", "never write replacement answers"]) assert.ok(prompt.includes(want), want);
-  let st = await (await fetch(`${base}/api/ai/review?sem=S&assignment=AAA%2Fa1`)).json();
+  let st = await json(fetch(`${base}/api/ai/review?sem=S&assignment=AAA%2Fa1`));
   assert.equal(st.versions[0].review.verdict, "almost");
   assert.match(st.versions[0].review.body, /Nearly there/);
   assert.equal(st.versions[0].review.ok, true);
@@ -112,18 +114,18 @@ test("review rounds: upload, review with context, a second round, approve", asyn
   // round 2 compares with round 1
   await upload(SAMPLE, "My answers v2.docx");
   await (await post("/api/ai/run", { sem: "S", action: "assignment-review", params: { assignment: "AAA/a1" } })).text();
-  st = await (await fetch(`${base}/api/ai/review?sem=S&assignment=AAA%2Fa1`)).json();
-  assert.deepEqual(st.versions.map((v) => v.v), [1, 2]);
+  st = await json(fetch(`${base}/api/ai/review?sem=S&assignment=AAA%2Fa1`));
+  assert.deepEqual(st.versions.map((v: Ev) => v.v), [1, 2]);
   assert.ok(existsSync(join(dir, "REVIEW-v2.md")));
 
   // no converter: a clear message, nothing approved
   const no = await post("/api/ai/review/approve", { sem: "S", assignment: "AAA/a1" });
   assert.equal(no.status, 400);
-  assert.match((await no.json()).error, /LibreOffice/);
+  assert.match((await json(no)).error, /LibreOffice/);
   assert.equal(st.approved, undefined);
 });
 
-test("approve converts the student's .docx to a PDF", { skip: !findConverter() || findConverter().kind !== "libreoffice" ? "LibreOffice isn't installed" : false }, async (t) => {
+test("approve converts the student's .docx to a PDF", { skip: !findConverter() || findConverter()?.kind !== "libreoffice" ? "LibreOffice isn't installed" : false }, async (t) => {
   const { root, sem, server, upload } = await setup();
   t.after(() => server.close());
   await upload(SAMPLE, "Final answers.docx");

@@ -5,9 +5,17 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { findCourse, noteFileName, read, weekNumber } from "./context.ts";
 import { loadReview, reviewDir, reviewFile } from "./review.ts";
+import type { Assignment, Course, SemesterData, Week } from "../../content/src/types.ts";
+
+/** An input an action asks for in the app. */
+export interface Field { key: string; kind: "course" | "text" | "assignment"; label: string; required?: boolean; placeholder?: string }
+export interface Action { id: string; title: string; icon: string; description: string; fields: Field[]; agentOnly: boolean }
+/** What the app sends with an action: the field values (and a week from a shortcut button). */
+export type Params = { course?: string; week?: string | number; topic?: string; assignment?: string; mode?: string; version?: string | number; [key: string]: unknown };
+export interface PromptInput { root: string; semId: string; data: SemesterData; action?: string | null; params?: Params; message?: string; first?: boolean }
 
 // The inputs each known skill asks for in the app; other skills just take a free-text request.
-const FIELDS = {
+const FIELDS: Record<string, Field[]> = {
   // a week can still come from a shortcut button (e.g. "Make notes" on a course week)
   "make-notes": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }],
   "quiz-me": [{ key: "course", kind: "course", label: "Course", required: true }],
@@ -19,22 +27,22 @@ const FIELDS = {
   "assignment-review": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "sync-eclass": [],
 };
-const TITLE = {
+const TITLE: Record<string, string> = {
   "make-notes": "Make notes", "quiz-me": "Quiz me", "plan-week": "Plan my week", "research-topic": "Research a topic",
   "find-material": "Find material", "assignment-helper": "Assignment help", "assignment-prep": "Prep an assignment",
   "assignment-review": "Review my draft", "sync-eclass": "Sync eClass",
 };
-const ICON = { "make-notes": "📒", "quiz-me": "❓", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄" };
+const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄" };
 // What a plain local model (no file or web tools) can do from the app.
 const CHAT_OK = new Set(["quiz-me"]);
 
-const frontMatter = (md) => Object.fromEntries((md.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "").split("\n")
-  .map((l) => l.match(/^(\w+):\s*(.*)$/)).filter(Boolean).map((m) => [m[1], m[2].replace(/^["']|["']$/g, "")]));
-const titleCase = (s) => s.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
-export const skillBody = (root, name) => read(join(root, "ai/skills", name, "SKILL.md")).replace(/^---[\s\S]*?---\n/, "");
+const frontMatter = (md: string): Record<string, string> => Object.fromEntries((md.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "").split("\n")
+  .map((l) => l.match(/^(\w+):\s*(.*)$/)).filter((m) => m !== null).map((m) => [m[1], m[2]!.replace(/^["']|["']$/g, "")]));
+const titleCase = (s: string) => s.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+export const skillBody = (root: string, name: string) => read(join(root, "ai/skills", name, "SKILL.md")).replace(/^---[\s\S]*?---\n/, "");
 
 /** [{ id, title, icon, description, fields, agentOnly }] from ai/skills/. */
-export function listActions(root) {
+export function listActions(root: string): Action[] {
   const dir = join(root, "ai/skills");
   const ids = existsSync(dir) ? readdirSync(dir).filter((d) => existsSync(join(dir, d, "SKILL.md"))) : [];
   const order = Object.keys(TITLE);
@@ -49,9 +57,9 @@ export function listActions(root) {
   });
 }
 
-const hasFiles = (w) => w.items.some((i) => i.kind === "file");
+const hasFiles = (w: Week) => w.items.some((i) => i.kind === "file");
 // the sections notes are made for: the weekly ones with files, else (all files in General) the General one
-const noteSections = (course) => {
+const noteSections = (course: Course) => {
   const weekly = course.weeks.filter((w) => w.index > 0 && hasFiles(w));
   return weekly.length ? weekly : course.weeks.filter((w) => w.index === 0 && hasFiles(w));
 };
@@ -59,21 +67,21 @@ const noteSections = (course) => {
  * Weeks that have files and no note yet (started or not), oldest first. A course that keeps all its
  * files in the General section (no weekly sections with files) gets that section instead.
  */
-export function weeksWithoutNotes(data, courses) {
+export function weeksWithoutNotes(data: Pick<SemesterData, "notes">, courses: Course[]): { course: Course; week: Week }[] {
   return courses.flatMap((course) => noteSections(course)
     .filter((w) => !data.notes.some((n) => n.code === course.code && n.weekIndex === w.index))
     .map((week) => ({ course, week })));
 }
 
 /** Why a course has nothing left to make notes for, in a few words (for the "nothing to do" message). */
-export function notesCoverage(data, course) {
+export function notesCoverage(_data: unknown, course: Course): string {
   const withFiles = noteSections(course);
   if (!withFiles.length) return `${course.short}: no downloaded files yet (run ouc pull)`;
   return `${course.short}: all ${withFiles.length} week${withFiles.length === 1 ? "" : "s"} with files have notes`;
 }
 
 /** The prompt `ouc notes` and the app use for an agent tool. */
-export function notesPrompt(semId, course, week) {
+export function notesPrompt(semId: string, course: Course, week: Week): { rel: string; prompt: string } {
   const rel = `semesters/${semId}/notes/${course.code}/${noteFileName(course, week)}`;
   return {
     rel,
@@ -84,15 +92,15 @@ export function notesPrompt(semId, course, week) {
 }
 
 /** Where an assignment's prep pack lives (repo-relative). */
-export const prepPath = (semId, a) => `semesters/${semId}/assignments/${a.id}/PREP.md`;
-export const PREP_MODES = {
+export const prepPath = (semId: string, a: Pick<Assignment, "id">) => `semesters/${semId}/assignments/${a.id}/PREP.md`;
+export const PREP_MODES: Record<string, string> = {
   new: "Write it from scratch.",
   redo: "Start over: don't read the existing PREP.md, write a new one from scratch and replace it.",
   review: "Review the existing PREP.md critically (another AI wrote it): fix mistakes, sharpen vague hints, fill gaps, remove anything that gives answers away. Keep what's good and edit the file in place.",
   more: "Keep everything in the existing PREP.md and add depth: more hints, practice questions on the same ideas, more sources, a worked example on a different problem.",
 };
 /** The prompt for an assignment's prep pack (also used by the app's automatic prep after a sync). */
-export function prepPrompt(semId, a, mode = "new") {
+export function prepPrompt(semId: string, a: Assignment, mode = "new"): string {
   const rel = prepPath(semId, a);
   return `Use the assignment-prep skill (ai/skills/assignment-prep/SKILL.md). Prepare the study pack for ${a.fullTitle} (${a.code}${a.due ? `, due ${a.due}` : ""}). ` +
     `Its folder is semesters/${semId}/assignments/${a.id}/; save the pack as ${rel}. Mode: ${PREP_MODES[mode] ? mode : "new"}. ${PREP_MODES[mode] ?? PREP_MODES.new} ` +
@@ -104,7 +112,7 @@ export function prepPrompt(semId, a, mode = "new") {
  * The prompt for reviewing the student's uploaded draft (version `v`, default the latest), with the
  * paths of everything about the subject the reviewer should read first.
  */
-export function reviewPrompt(root, semId, data, a, v) {
+export function reviewPrompt(root: string, semId: string, data: SemesterData, a: Assignment, v?: string | number): string {
   const { versions } = loadReview(root, semId, a);
   const ver = v ? versions.find((x) => String(x.v) === String(v)) : versions.at(-1);
   if (!ver) throw new Error("Upload your .docx on the assignment page first.");
@@ -112,15 +120,15 @@ export function reviewPrompt(root, semId, data, a, v) {
   const sem = `semesters/${semId}`;
   const course = data.courses.find((c) => c.code === a.code);
   const week = course?.weeks.find((w) => w.index === a.weekIndex);
-  const fromHref = (h) => `${sem}/${decodeURIComponent(h.split("/").slice(3).join("/"))}`;
+  const fromHref = (h: string) => `${sem}/${decodeURIComponent(h.split("/").slice(3).join("/"))}`;
   const briefs = a.briefs.map((f) => fromHref(f.href));
-  const rubric = [...briefs, ...(course?.weeks.find((w) => w.index === 0)?.items ?? []).filter((i) => i.href?.startsWith("/files/")).map((i) => fromHref(i.href))]
-    .filter((p) => /rubric|marking|criteria|grading|assessment|αξιολόγ/i.test(p.split("/").pop()));
-  const weekFiles = (week?.items ?? []).filter((i) => i.kind === "file" && i.href?.startsWith("/files/")).map((i) => fromHref(i.href));
+  const rubric = [...briefs, ...(course?.weeks.find((w) => w.index === 0)?.items ?? []).filter((i) => i.href?.startsWith("/files/")).map((i) => fromHref(i.href!))]
+    .filter((p) => /rubric|marking|criteria|grading|assessment|αξιολόγ/i.test(p.split("/").pop() ?? ""));
+  const weekFiles = (week?.items ?? []).filter((i) => i.kind === "file" && i.href?.startsWith("/files/")).map((i) => fromHref(i.href!));
   const notes = data.notes.filter((n) => n.code === a.code).sort((x, y) => Math.abs(x.weekIndex - a.weekIndex) - Math.abs(y.weekIndex - a.weekIndex)).slice(0, 4)
     .map((n) => `${sem}/notes/${n.code}/${n.slug}.md`);
   const prep = a.prep ? `${sem}/assignments/${a.id}/PREP.md` : null;
-  const list = (label, xs) => (xs.length ? `\n- ${label}: ${xs.map((x) => `\`${x}\``).join(", ")}` : "");
+  const list = (label: string, xs: string[]) => (xs.length ? `\n- ${label}: ${xs.map((x) => `\`${x}\``).join(", ")}` : "");
   return "Use the assignment-review skill (ai/skills/assignment-review/SKILL.md) and act as the assignment reviewer (ai/agents/assignment-reviewer.md). " +
     "Do the review yourself in this conversation: the student will discuss it with you next. " +
     `Review version ${ver.v} of the student's own work for ${a.fullTitle} (${a.code}${a.due ? `, due ${a.due}` : ""}), uploaded as "${ver.name}" (${ver.words} words). ` +
@@ -141,21 +149,21 @@ export const APP_PREAMBLE = "You are running from the OUC Study app, one turn at
  * The text sent for one turn. action/params come from the app's action picker (first turn only);
  * message is what the student typed. Throws Error with a readable message when an input is missing.
  */
-export function buildPrompt({ root, semId, data, action, params = {}, message = "", first = true }) {
+export function buildPrompt({ root, semId, data, action, params = {}, message = "", first = true }: PromptInput): string {
   const msg = String(message ?? "").trim();
   const course = params.course ? findCourse(data, params.course) : null;
   if (params.course && !course) throw new Error(`No course matches "${params.course}".`);
   const week = course && params.week !== undefined && params.week !== "" ? course.weeks.find((w) => String(w.index) === String(params.week)) : null;
   const extra = msg ? `\n\nThe student adds: ${msg}` : "";
-  const field = (FIELDS[action] ?? []).find((f) => f.required && !params[f.key]);
+  const field = (FIELDS[action ?? ""] ?? []).find((f) => f.required && !params[f.key]);
   if (field) throw new Error(`Choose ${field.label.toLowerCase().replace(/\?$/, "")} first.`);
-  let body;
+  let body: string;
   switch (action) {
     case undefined: case null: case "":
       if (!msg) throw new Error("Type a message first.");
       body = msg; break;
     case "make-notes": {
-      if (week) { body = notesPrompt(semId, course, week).prompt + extra; break; }
+      if (week && course) { body = notesPrompt(semId, course, week).prompt + extra; break; }
       const todo = weeksWithoutNotes(data, course ? [course] : data.courses);
       if (!todo.length) throw new Error(`Nothing to make notes for. ${(course ? [course] : data.courses).map((c) => notesCoverage(data, c)).join("; ")}.`);
       if (todo.length === 1) { body = notesPrompt(semId, todo[0].course, todo[0].week).prompt + extra; break; }
@@ -166,6 +174,7 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       break;
     }
     case "quiz-me":
+      if (!course) throw new Error("Choose a course first.");
       body = `Use the quiz-me skill: quiz me on ${course.short}${week ? `, ${week.label}` : ""} (${course.code}${week ? `, eClass section ${week.index}` : ""}). Ask one question, then stop and wait for my answer in the next message.${extra}`; break;
     case "plan-week":
       body = `Use the plan-week skill: plan my study week.${extra}`; break;
@@ -198,7 +207,7 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
 }
 
 /** System prompt for a plain local model chatting from the app (it has no tools). */
-export function chatSystem({ root, semId, data, action, params = {} }) {
+export function chatSystem({ root, semId, data, action, params = {} }: Omit<PromptInput, "message" | "first">): string {
   const parts = [read(join(root, "AGENTS.md")), "", "# About the student", read(join(root, "STUDENT.md")).trim()];
   if (semId) parts.push("", "# Deadlines", read(join(root, "semesters", semId, "DEADLINES.md")));
   if (action === "quiz-me" && params.course) {

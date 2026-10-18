@@ -7,10 +7,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const AI = resolve(dirname(fileURLToPath(import.meta.url)), "../../../ai");
-const frontMatter = (file) => {
+const frontMatter = (file: string): Record<string, string> => {
   const m = readFileSync(file, "utf8").match(/^---\n([\s\S]*?)\n---\n/);
   assert.ok(m, `${file} starts with --- front matter ---`);
-  return Object.fromEntries(m[1].split("\n").map((l) => l.match(/^(\w+):\s*(.*)$/)).filter(Boolean).map((m) => [m[1], m[2]]));
+  return Object.fromEntries(m[1].split("\n").map((l) => l.match(/^(\w+):\s*(.*)$/)).filter((x) => x !== null).map((x) => [x[1], x[2]]));
 };
 
 for (const dir of readdirSync(join(AI, "skills"))) {
