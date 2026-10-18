@@ -164,6 +164,10 @@ async function main() {
   }
   const nowS = Date.now() / 1000;
   const current = (k) => (k.startdate || 0) <= nowS + 45 * 86400 && (!k.enddate || k.enddate >= nowS - 14 * 86400);
+  // eClass also enrols you in pages that aren't courses (faculty, library, training): keep only coded courses like COS511
+  const CODE_RE = /\b[A-Z]{2,5}\s?\d{3,4}[A-Z]?\b/;
+  const coded = enrolled.filter((k) => CODE_RE.test(`${strip(k.shortname)} ${strip(k.fullname)}`));
+  if (coded.length && coded.length < enrolled.length) { ui.info(`Leaving out ${enrolled.length - coded.length} eClass pages that aren't courses`); enrolled = coded; }
   enrolled.sort((a, b) => Number(current(b)) - Number(current(a)) || (b.startdate || 0) - (a.startdate || 0));
   const picked = YES ? enrolled.filter(current) : await ui.multiselect("Which courses do you want in your study app?", enrolled.map((k) => ({
     label: strip(k.fullname), hint: `${fmtMonth(k.startdate)}${k.enddate ? ` – ${fmtMonth(k.enddate)}` : ""}`, value: k, checked: current(k),
