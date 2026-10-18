@@ -5,9 +5,9 @@
  */
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { SemesterData } from "@ouc/content/types";
-import { Link } from "../lib/router";
+import { Link, useRouter } from "../lib/router";
 import { mdToHtml } from "../lib/markdown";
-import { TOOL_STATE, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
+import { TOOL_STATE, fileLink, linkPaths, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
 import { refreshData } from "../lib/data";
 import { cx } from "./ui";
 
@@ -271,7 +271,7 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
           </>
         ) : (
           <div className="flex flex-col gap-4">
-            {a.chat.messages.map((m, i) => <Message key={i} msg={m} live={a.busy && i === a.chat!.messages.length - 1} />)}
+            {a.chat.messages.map((m, i) => <Message key={i} msg={m} sem={a.chat!.sem ?? data.id} live={a.busy && i === a.chat!.messages.length - 1} />)}
           </div>
         )}
         {a.error && <p className="mt-4 rounded-xl bg-bad-bg px-3 py-2 text-sm text-bad">{a.error}</p>}
@@ -396,8 +396,21 @@ function ActionForm({ data, action, params, onChange }: { data: SemesterData; ac
   );
 }
 
-function Markdown({ text, className }: { text: string; className?: string }) {
-  return <div className={cx("text-sm leading-relaxed [&_a]:underline [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_ul]:list-disc", className)} dangerouslySetInnerHTML={{ __html: mdToHtml(text) }} />;
+/** A reply in Markdown; file paths in it link to the app's pages (notes, assignments) or open the file. */
+function Markdown({ text, className, sem }: { text: string; className?: string; sem?: string }) {
+  const { navigate } = useRouter();
+  const { setOpen } = useAssistant();
+  return (
+    <div className={cx("text-sm leading-relaxed [&_a]:underline [&_a_code]:text-accent [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:break-all [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_ul]:list-disc", className)}
+      onClick={(e) => {
+        const a = (e.target as HTMLElement).closest("a[data-internal]");
+        if (!a || e.metaKey || e.ctrlKey) return;
+        e.preventDefault();
+        navigate(a.getAttribute("href")!);
+        if (!window.matchMedia("(min-width: 1024px)").matches) setOpen(false); // on small screens the panel covers the page
+      }}
+      dangerouslySetInnerHTML={{ __html: linkPaths(mdToHtml(text), sem) }} />
+  );
 }
 
 const PREP_MODE: Record<string, string> = {
@@ -441,7 +454,7 @@ function FileLinks({ files, className }: { files: string[]; className?: string }
     </div>
   );
 }
-function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
+function Message({ msg, live, sem }: { msg: ChatMessage; live: boolean; sem?: string }) {
   if (msg.role === "user") {
     return <div className="ml-10 self-end whitespace-pre-wrap rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-sm text-bg">{msg.text}</div>;
   }
@@ -464,7 +477,7 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
           {!steps.length && !msg.text && <p className="pl-6">Reading your request and the study files to work out what to do.</p>}
           {steps.length > LIVE_STEPS && <div className="pl-6">… {steps.length - LIVE_STEPS} earlier</div>}
           <ul className="flex flex-col gap-0.5 pl-6">{steps.slice(-LIVE_STEPS).map((s, i, a) => <li key={steps.length - LIVE_STEPS + i} className={cx("truncate", i === a.length - 1 && "font-medium text-ink")}>{s}</li>)}</ul>
-          {msg.text && <div className="mt-2 flex max-h-36 flex-col justify-end overflow-hidden border-t border-line pt-1 [mask-image:linear-gradient(to_bottom,transparent,black_2.5rem)]"><Markdown text={msg.text} className="text-ink" /></div>}
+          {msg.text && <div className="mt-2 flex max-h-36 flex-col justify-end overflow-hidden border-t border-line pt-1 [mask-image:linear-gradient(to_bottom,transparent,black_2.5rem)]"><Markdown text={msg.text} sem={sem} className="text-ink" /></div>}
         </div>
       ) : (
         <>
@@ -472,10 +485,10 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
             <details className="text-xs text-muted">
               <summary className="cursor-pointer select-none">{[steps.length && plural(steps.length, "step"), updates.length && plural(updates.length, "progress update")].filter(Boolean).join(" · ")}</summary>
               <ul className="mt-1 flex flex-col gap-0.5 border-l border-line pl-3">{steps.map((s, i) => <li key={i}>{s}</li>)}</ul>
-              {updates.map((u, i) => <Markdown key={i} text={u} className="mt-2 border-l border-line pl-3 text-xs text-muted" />)}
+              {updates.map((u, i) => <Markdown key={i} text={u} sem={sem} className="mt-2 border-l border-line pl-3 text-xs text-muted" />)}
             </details>
           )}
-          {msg.text && <Markdown text={msg.text} />}
+          {msg.text && <Markdown text={msg.text} sem={sem} />}
           {visuals.map((v) => <Visual key={v} path={v} />)}
         </>
       )}

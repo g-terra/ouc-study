@@ -124,13 +124,44 @@ export async function runTurn(body: { sem: string; tool?: string; chatId?: strin
   }
 }
 
-/** Where a file the agent wrote opens in the app: a note page, a course file, or nowhere. */
-export function fileLink(path: string): { to: string; internal: boolean } | null {
-  const m = path.match(/^semesters\/([^/]+)\/(.+)$/);
+const enc = (s: string) => s.split("/").map(encodeURIComponent).join("/");
+const TOP = /^(notes|courses|assignments|text|plans|research|updates|_meta|visuals)\//;
+/**
+ * Where a path an agent wrote or named opens in the app: a note page, an assignment page, or the file
+ * itself (in a new tab). Takes repo-relative or absolute paths, and paths inside the semester folder
+ * when `sem` is given ("notes/COS514/x.md"). Null when the app can't open it.
+ */
+export function fileLink(path: string, sem?: string): { to: string; internal: boolean } | null {
+  let p = path.trim().replace(/^\.\//, "").replace(/[),.;:]+$/, "");
+  const at = p.indexOf("semesters/");
+  if (at > 0 && p[at - 1] === "/") p = p.slice(at);   // an absolute path inside the study folder
+  else if (sem && TOP.test(p)) p = `semesters/${sem}/${p}`;
+  const m = p.match(/^semesters\/([^/]+)\/(.+)$/);
   if (!m) return null;
-  const note = m[2].match(/^notes\/([^/]+)\/([^/]+)\.md$/);
-  if (note) return { to: `/${encodeURIComponent(m[1])}/notes/${encodeURIComponent(note[1])}/${encodeURIComponent(note[2])}`, internal: true };
-  return { to: `/files/${m[1]}/${m[2].split("/").map(encodeURIComponent).join("/")}`, internal: false };
+  const [, s, rest] = m;
+  const note = rest.match(/^notes\/([^/]+)\/([^/]+)\.md$/);
+  if (note) return { to: `/${encodeURIComponent(s)}/notes/${encodeURIComponent(note[1])}/${encodeURIComponent(note[2])}`, internal: true };
+  // an assignment's folder, its working notes or its prep pack open the assignment page; its files open as files
+  const asg = rest.match(/^assignments\/([^/]+)\/([^/]+)(?:\/(README\.md|PREP\.md)?)?$/);
+  if (asg) return { to: `/${encodeURIComponent(s)}/assignments/${encodeURIComponent(asg[1])}/${encodeURIComponent(asg[2])}`, internal: true };
+  if (!/\.\w{1,6}$/.test(rest)) return null;   // a folder
+  return { to: `/files/${s}/${enc(rest)}`, internal: false };
+}
+
+const unescape = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+const attr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+/** Turns `paths` in a reply's HTML (and links to paths) into links to the app's pages and files. */
+export function linkPaths(html: string, sem?: string): string {
+  return html
+    .replace(/<a href="([^"]+)"/g, (all, href) => {
+      const l = /^[a-z]+:/i.test(href) || href.startsWith("/files/") ? null : fileLink(decodeURIComponent(unescape(href)), sem);
+      return l ? `<a href="${attr(l.to)}"${l.internal ? " data-internal" : ' target="_blank" rel="noreferrer"'}` : all;
+    })
+    .replace(/(<a [^>]*>[\s\S]*?<\/a>)|<code>([^<]+)<\/code>/g, (all, link, code) => {
+      if (link) return all;   // already a link
+      const l = fileLink(unescape(code), sem);
+      return l ? `<a href="${attr(l.to)}"${l.internal ? " data-internal" : ' target="_blank" rel="noreferrer"'} title="${l.internal ? "Open in the app" : "Open the file"}"><code>${code}</code></a>` : all;
+    });
 }
 
 const VISUAL = /\.(html?|svg|png|jpe?g|gif|webp)$/i;
