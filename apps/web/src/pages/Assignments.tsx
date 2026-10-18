@@ -8,6 +8,7 @@ import { AskAiButton, useAssistant } from "../components/Assistant";
 import { useAiStatus, usePrepStatus, type PrepStatus } from "../lib/ai";
 import { NoteBody, useNoteBlocks } from "../notes/NoteRenderer";
 import { mdToHtml } from "../lib/markdown";
+import { ReviewSection } from "./Review";
 
 export function AssignmentsPage({ data }: { data: SemesterData }) {
   const base = `/${enc(data.id)}`;
@@ -104,6 +105,7 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
       )}
 
       <PrepSection a={a} color={course?.color ?? "#555"} />
+      <ReviewSection sem={data.id} a={a} color={course?.color ?? "#555"} />
 
       {a.resources && (
         <>

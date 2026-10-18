@@ -8,6 +8,9 @@
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
 //   GET  /api/ai/view?path=…  a visual the AI saved (HTML, SVG or image), sandboxed, for the chat to show inline
 //   GET  /api/ai/prep          background notes/prep work: { enabled, busy, running/finished: [{ id, chatId, ok? }], queue, total, done, error }
+//   GET  /api/ai/review?sem=…&assignment=…          pre-submission review rounds of an assignment (see review.mjs)
+//   POST /api/ai/review/upload?sem=…&assignment=…&name=…   the student's .docx as the body → the next version
+//   POST /api/ai/review/approve { sem, assignment, v }      the approved .docx → PDF on this computer
 //
 // Agents run on the student's own computer with their subscription login (no API keys).
 // Chats are saved in .ouc/chats/ (git-ignored).
@@ -24,6 +27,7 @@ import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, loadConfi
 import { buildPrompt, chatSystem, listActions, prepPath, weeksWithoutNotes } from "./actions.mjs";
 import { currentSemesterId, loadData, read } from "./context.mjs";
 import { runAgentTurn, runChatTurn } from "./stream.mjs";
+import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview, reviewState } from "./review.mjs";
 
 // The background app starts with a minimal PATH; add the usual install places of the agent CLIs
 // (on Windows: npm's global folder, Claude's native installer in ~/.local/bin, Ollama, LM Studio).
@@ -144,6 +148,16 @@ function readBody(req, max = 100_000) {
   });
 }
 
+function readRaw(req, max) {
+  return new Promise((ok, fail) => {
+    const parts = [];
+    let n = 0;
+    req.on("data", (d) => { n += d.length; if (n > max) { fail(new Error("That file is over 25 MB.")); req.destroy(); } else parts.push(d); });
+    req.on("end", () => ok(Buffer.concat(parts)));
+    req.on("error", fail);
+  });
+}
+
 /** Connect-style middleware. opts.bin overrides the agent binary and opts.status the sign-in check (tests). */
 export function createAiApi(root, opts = {}) {
   widenPath();
@@ -196,6 +210,9 @@ export function createAiApi(root, opts = {}) {
     const prepAbs = action === "assignment-prep" && assignment ? join(root, prepPath(semId, assignment)) : null;
     const prepLog = prepAbs ? readPrepMeta(read(prepAbs)).log : [];
     const prepMode = body.auto ? "auto" : params.mode;
+    // a review round remembers which chat (and AI) reviewed it, so the page can open the discussion
+    const reviewV = action === "assignment-review" && assignment ? (Number(params.version) || loadReview(root, semId, assignment).versions.at(-1)?.v) : null;
+    if (reviewV) markReview(root, semId, assignment, reviewV, { chatId: chat.id, by, started: now });
 
     const live = { chat, stop: () => {}, listeners: new Set() };
     runs.set(chat.id, live);
@@ -223,6 +240,7 @@ export function createAiApi(root, opts = {}) {
         ...chat.messages.slice(0, -1).map((m) => ({ role: m.role, content: m.role === "user" ? m.prompt ?? m.text : m.text }))], { onEvent, onStart }))
       .then((r) => {
         if (r?.ok && prepAbs) stampPrep(prepAbs, { assignment: assignment.id, by, mode: prepMode, log: prepLog });
+        if (reviewV) markReview(root, semId, assignment, reviewV, { finished: new Date().toISOString(), ok: !!r?.ok });
         return r;
       })
       .finally(() => {
@@ -318,6 +336,18 @@ export function createAiApi(root, opts = {}) {
     }
   }
 
+  // ----- pre-submission review -----
+  let conv = { at: 0, found: null };
+  // looked up again after a minute, so installing LibreOffice works without restarting the app
+  const converter = (fresh = false) => { if (fresh || Date.now() - conv.at > 60_000) conv = { at: Date.now(), found: findConverter() }; return conv.found; };
+  const assignmentOf = (sem, id) => {
+    const semId = /^[\w-]+$/.test(String(sem ?? "")) && existsSync(join(root, "semesters", String(sem))) ? String(sem) : currentSemesterId(root);
+    const a = semId ? loadData(root, semId).assignments.find((x) => x.id === id) : null;
+    if (!a) throw Object.assign(new Error("That assignment isn't in the app data."), { code: 404 });
+    return { semId, a };
+  };
+  const reviewBody = (semId, a) => ({ ...reviewState(root, semId, a, (id) => runs.has(id)), converter: converter()?.label ?? null });
+
   const handler = async (req, res, next) => {
     if (!req.url?.startsWith("/api/ai/")) return next();
     const url = new URL(req.url, "http://x");
@@ -339,6 +369,21 @@ export function createAiApi(root, opts = {}) {
         res.setHeader("X-Content-Type-Options", "nosniff");
         return res.end(readFileSync(abs));
       }
+      if (p.startsWith("/api/ai/review")) {
+        const q = url.searchParams;
+        if (p === "/api/ai/review") { const { semId, a } = assignmentOf(q.get("sem"), q.get("assignment")); return json(res, reviewBody(semId, a)); }
+        if (p === "/api/ai/review/upload" && req.method === "POST") {
+          const { semId, a } = assignmentOf(q.get("sem"), q.get("assignment"));
+          const version = addVersion(root, semId, a, q.get("name") ?? "submission.docx", await readRaw(req, MAX_UPLOAD));
+          return json(res, { version, ...reviewBody(semId, a) });
+        }
+        if (p === "/api/ai/review/approve" && req.method === "POST") {
+          const b = await readBody(req);
+          const { semId, a } = assignmentOf(b.sem, b.assignment);
+          await approve(root, semId, a, b.v, { converter: "converter" in opts ? opts.converter : converter(true) });
+          return json(res, reviewBody(semId, a));
+        }
+      }
       if (p === "/api/ai/actions") return json(res, { actions: listActions(root) });
       if (p === "/api/ai/chats") return json(res, { chats: listChats(root) });
       if (p.startsWith("/api/ai/chats/")) {
@@ -354,7 +399,7 @@ export function createAiApi(root, opts = {}) {
       }
       return json(res, { error: "Not found" }, 404);
     } catch (e) {
-      if (!res.headersSent) json(res, { error: e.message }, 500);
+      if (!res.headersSent) json(res, { error: e.message }, e.code === 404 ? 404 : url.pathname.startsWith("/api/ai/review/") ? 400 : 500);
       else res.end();
     }
   };
