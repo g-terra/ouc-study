@@ -191,7 +191,7 @@ function buildSemester(id: string): SemesterData | undefined {
     }
 
     // --- assignments
-    // PREP.md: the study pack the AI prepares for an assignment (front matter written by packages/ai/api.mjs)
+    // PREP.md: the study pack the AI prepares for an assignment (front matter written by packages/ai/src/api.ts)
     const readPrep = (abs: string): Prep | undefined => {
       if (!existsSync(abs)) return undefined;
       const text = readFileSync(abs, "utf8");

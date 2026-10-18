@@ -1,5 +1,5 @@
 // Week plans (semesters/<id>/plans/<YYYY>-W<NN>.md, written by the plan-week skill) → data the app shows.
-// Plain JS so the app server (packages/ai/api.mjs) and the tests can use it without a TypeScript step.
+// Plain JS so the app server (packages/ai/src/api.ts) and the tests can use it without a TypeScript step.
 
 const TASK = /^(\s*[-*+]\s+)\[([ xX])\]\s+(.*)$/;
 

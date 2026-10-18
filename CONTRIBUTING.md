@@ -46,20 +46,29 @@ You don't need an OUC account to work on most of the code. To try it with real d
 |---|---|---|
 | `apps/web/` | React + Vite + Tailwind study app | `npm run typecheck`, `npm run build` |
 | `packages/content/` | turns `semesters/` into the app's JSON | `npm run typecheck` |
-| `packages/eclass-sync/` | eClass (Moodle web service) client | `npm run lint` |
+| `packages/eclass-sync/` | eClass (Moodle web service) client | `npm run typecheck`, `npm test` |
 | `packages/ai/` | AI backends, study actions, `/api/ai` | `npm test` |
 | `ai/` | **the single source** of the study skills and agents | `npm test` (front matter) |
-| `bin/` | `ouc` command, installer, background server | `npm run lint` |
+| `packages/cli/` | `ouc` command, installer, background server, updates | `npm run typecheck`, `npm test` |
+| `bin/` | small launchers that start `packages/cli` (their paths are used by installed copies, so keep them) | `npm run lint` |
 | `docs/` | note format and examples | |
 
 `AGENTS.md` explains the workspace to AI tools; `README.md` explains it to students.
+
+### TypeScript
+
+The code is TypeScript. Node runs it through [tsx](https://tsx.is), so there is no build step for the command line or the app server: `bin/*.mjs` are small launchers that register tsx and import `packages/cli/src/*.ts` (on a fresh clone they run `npm install` first). Keep those launcher paths: installed copies, login items and older `ouc update` code start them by name.
+
+- Each package has its own `tsconfig.json` (strict, `noEmit`). Import local files with their `.ts` extension.
+- Use only syntax Node can strip (`erasableSyntaxOnly`): no `enum`, `namespace` or constructor parameter properties, and `import type` for types. That keeps the door open to running on Node's own type stripping later.
+- A few files are still plain JavaScript (`daily.mjs`, some `packages/content/src/*.mjs` helpers, `e2e/`); they move over in later PRs.
 
 ## Make a change
 
 1. Branch from `main`: `git switch -c feat/timeline-filter`.
 2. Keep the change focused: one PR, one purpose. Match the style of the code around it.
-3. Add or update tests for behaviour you change (`node:test`, in `packages/<pkg>/test/*.test.mjs`, or `bin/test/*.test.mjs` for the `ouc` command).
-4. It runs on **macOS and Windows** (and Linux). Start programs with Node, not a shell script: `bin/ouc.mjs` is the `ouc` command, `bin/lib/background.mjs` the per-OS background service, and `spawnCli` in `packages/ai/providers.mjs` starts the agent CLIs (npm installs them as `.cmd` files on Windows).
+3. Add or update tests for behaviour you change (`node:test`, in `packages/<pkg>/test/*.test.ts`).
+4. It runs on **macOS and Windows** (and Linux). Start programs with Node, not a shell script: `packages/cli/src/ouc.ts` is the `ouc` command, `packages/cli/src/background.ts` the per-OS background service, and `spawnCli` in `packages/ai/src/providers.ts` starts the agent CLIs (npm installs them as `.cmd` files on Windows).
 5. **Skills and agents:** edit `ai/skills/<name>/SKILL.md` or `ai/agents/<name>.md`, then `ouc ai install` to try them. The copies in `.claude/`, `.agents/` and `.opencode/` are generated. A new skill appears as an action in the Ask AI panel automatically, so give it a clear `description`.
 6. Update the docs people will read: README for students, AGENTS.md for AI tools, this file for contributors.
 7. Run `npm run check` and `npm run build` before pushing.

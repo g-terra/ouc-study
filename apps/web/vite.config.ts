@@ -6,9 +6,9 @@ import { extname, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 // @ts-ignore: plain JS module shared with the `ouc` command line
-import { createAiApi } from "../../packages/ai/api.mjs";
+import { createAiApi } from "../../packages/ai/src/api.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
-import { checkForUpdate, restartDetached } from "../../bin/lib/update.mjs";
+import { checkForUpdate, restartDetached } from "../../packages/cli/src/update.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 
@@ -77,7 +77,7 @@ function eclassApi(): Plugin {
   return { name: "eclass-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
 }
 
-/** /api/ai/*: the Ask AI panel talks to the agent chosen with `ouc ai setup` (see packages/ai/api.mjs). */
+/** /api/ai/*: the Ask AI panel talks to the agent chosen with `ouc ai setup` (see packages/ai/src/api.ts). */
 let aiHandler: ReturnType<typeof createAiApi> | undefined;
 function aiApi(): Plugin {
   const use = (s: { middlewares: Connect.Server }) => { aiHandler ??= createAiApi(resolve(HERE, "../..")); s.middlewares.use(aiHandler); };

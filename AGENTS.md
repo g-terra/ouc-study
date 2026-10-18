@@ -20,9 +20,10 @@ The current one is named in `STUDENT.md`; otherwise use the semester whose dates
 ```
 apps/web/             React + Vite + Tailwind study app (dashboard, timeline, courses, notes, assignments, updates)
 packages/content/     builds apps/web/public/data/*.json from semesters/ (npm run content)
-packages/eclass-sync/ eClass web-service client: daily.mjs (what changed), pull.mjs (download files), moodle.mjs
-packages/ai/          AI backends (providers.mjs), study actions (actions.mjs), /api/ai for the app's Ask AI panel (api.mjs, stream.mjs)
-bin/                  ouc.mjs (command line, macOS/Windows/Linux; lib/background.mjs), setup.mjs (installer), server.mjs (background app)
+packages/eclass-sync/ eClass web-service client: daily.mjs (what changed), src/pull.ts (download files), src/moodle.ts
+packages/ai/src/      AI backends (providers.ts), study actions (actions.ts), /api/ai for the app's Ask AI panel (api.ts, stream.ts)
+packages/cli/src/     the `ouc` command (ouc.ts, ai.ts), setup.ts (installer), server.ts (background app), background.ts, update.ts
+bin/                  small .mjs launchers (ouc.mjs, setup.mjs, server.mjs, ai.mjs) that start the TypeScript in packages/cli with tsx
 semesters/<id>/       ← personal, git-ignored
   semester.json       course registry
   _meta/              eclass-meta.json (course structure), submissions.json, live.json, exams.json, resources.json (study links)
@@ -83,7 +84,7 @@ When the task is to change this repo's code, docs, skills or agents (not to help
 - **Verify with one command:** `npm run check` (lint, `node:test` unit tests, typecheck, public check), plus `npm run build` and, for UI changes, `npm run e2e` (Playwright smoke test on the demo semester in `e2e/demo/`). CI runs them all; run them before saying you're done.
 - **Never touch personal data:** don't read, print or commit `.eclass-token`, and don't commit anything from `semesters/`, `memory/`, `STUDENT.md`, `CLAUDE.local.md` or `.ouc/`. Tests use small made-up fixtures, never course material.
 - **Skills and agents:** edit `ai/` only, keep the `name`/`description` front matter (agents also `tools`); `npm test` checks it. Every skill becomes an Ask AI action in the app.
-- **Tests:** add or update `packages/<pkg>/test/*.test.mjs` for behaviour you change.
+- **Tests:** add or update `packages/<pkg>/test/*.test.ts` for behaviour you change.
 - **Docs:** README for students, this file for AI tools, `CONTRIBUTING.md` for contributors.
 - **Commits and PR titles:** Conventional Commits, lower-case subject, e.g. `feat(web): add a course filter to the timeline`, `fix(sync): ...`; scopes `web`, `content`, `sync`, `ai`, `cli`, `setup`, `docs`, `deps`; `!` for breaking changes. PRs are squash-merged and release-please turns the titles into versions and `CHANGELOG.md`.
 - **PRs:** fill in `.github/pull_request_template.md`, including which AI agent helped. Keep each PR to one purpose.

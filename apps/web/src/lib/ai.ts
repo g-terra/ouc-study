@@ -1,4 +1,4 @@
-/** Talks to /api/ai (packages/ai/api.mjs): AI tool status, study actions and chats. */
+/** Talks to /api/ai (packages/ai/src/api.ts): AI tool status, study actions and chats. */
 import { useEffect, useState } from "react";
 import type { SemesterData } from "@ouc/content/types";
 import { fileLink } from "./links";
@@ -157,7 +157,7 @@ export function visualsOf(msg: ChatMessage): string[] {
 }
 export const viewUrl = (path: string) => `/api/ai/view?path=${encodeURIComponent(path)}`;
 
-// ---------- pre-submission review (packages/ai/review.mjs) ----------
+// ---------- pre-submission review (packages/ai/src/review.ts) ----------
 export type Verdict = "ready" | "almost" | "needs-work";
 export interface ReviewVersion {
   v: number; name: string; size: number; words: number; uploaded: string; href: string; textPath: string;

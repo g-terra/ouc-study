@@ -1,0 +1,17 @@
+{
+  "name": "@ouc/ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AI backends (Claude Code, Codex, opencode, local models), study actions and /api/ai for the app's Ask AI panel",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}
