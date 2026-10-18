@@ -88,7 +88,7 @@ function Swatch({ colors }: { colors: readonly string[] }) {
 
 const SYSTEM_SWATCH = [THEMES[0].swatch[0], THEMES[1].swatch[0]];
 
-/** Footer colour theme picker: System (follows the computer), Light, Dark and a few extras; remembered in this browser. */
+/** Colour theme picker, a floating button at the bottom left (mirrors Ask AI on the right): System (follows the computer), Light, Dark and a few extras; remembered in this browser. */
 function ThemeSwitch() {
   const { choice, theme } = useTheme();
   const [open, setOpen] = useState(false);
@@ -108,11 +108,11 @@ function ThemeSwitch() {
   ];
   const label = choice === "system" ? `System (${current.label})` : current.label;
   return (
-    <div ref={box} className="relative">
-      <button type="button" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={`Colour theme: ${label}`}
-        className="flex items-center gap-2 rounded-full border border-line bg-surface px-2.5 py-1.5 text-sm whitespace-nowrap text-ink hover:border-muted">
-        <Swatch colors={choice === "system" ? SYSTEM_SWATCH : current.swatch} />
-        <span className="hidden sm:inline">{label}</span>
+    <div ref={box} className="fixed bottom-20 left-4 z-40 sm:bottom-6 sm:left-6">
+      <button type="button" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={`Colour theme: ${label}`} aria-label={`Colour theme: ${label}`}
+        className="flex items-center gap-2 rounded-full bg-ink py-3 pl-3.5 pr-4 text-sm font-semibold whitespace-nowrap text-bg shadow-xl transition hover:scale-105">
+        <span aria-hidden className="text-xl leading-none">🎨</span>
+        <span>{label}</span>
       </button>
       {open && (
         <div role="menu" aria-label="Colour theme" className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-2xl border border-line bg-surface p-2 text-sm shadow-xl">
@@ -222,13 +222,13 @@ export function Layout({ sem, children }: { sem: string; children: ReactNode }) 
         <AiWorkBar sem={sem} />
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-12 pt-8">{children}</main>
-      <footer className="border-t border-line pb-20 sm:pb-0">
+      <footer className="border-t border-line pb-20">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 text-xs text-muted">
           <ConnectionDot to={`${base}/updates`} />
-          <ThemeSwitch />
           <Link to={`${base}/ai-work`} className="hover:text-ink">AI background work</Link>
         </div>
       </footer>
+      <ThemeSwitch />
       <AskAiFab />
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
         {NAV.map(([seg, label], i) => (
