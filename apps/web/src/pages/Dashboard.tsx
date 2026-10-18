@@ -4,6 +4,7 @@ import { courseMap, currentWeek, stateOf } from "../lib/data";
 import { at, daysBetween, fmtFull, relative } from "../lib/dates";
 import { ORDER, SyncStatus, UpdateRow } from "./Updates";
 import { Card, CourseBadge, CourseDot, PageHeader, ProgressRing, SectionTitle, StatePill, cx } from "../components/ui";
+import { AskAiButton } from "../components/Assistant";
 
 export function Dashboard({ data }: { data: SemesterData }) {
   const now = new Date();
@@ -21,6 +22,7 @@ export function Dashboard({ data }: { data: SemesterData }) {
     <>
       <PageHeader eyebrow={<span>{data.label} · {now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</span>} title={`${greet}.`}>
         {next ? <>Next up: <b className="text-ink">{next.title}</b> for {C[next.code]?.short}, {relative(at(next.due!))}.</> : "Nothing due right now."}
+        <div className="mt-4"><AskAiButton action="plan-week">Plan my week</AskAiButton></div>
       </PageHeader>
 
       {/* hero strip: next deadline + exam countdown */}

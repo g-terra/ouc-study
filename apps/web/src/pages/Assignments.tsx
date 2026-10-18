@@ -4,6 +4,7 @@ import { Link, enc } from "../lib/router";
 import { courseMap, stateOf, type State } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { Card, CourseBadge, CourseDot, Empty, FileCard, PageHeader, SectionTitle, StatePill, cx } from "../components/ui";
+import { AskAiButton } from "../components/Assistant";
 import { mdToHtml } from "../lib/markdown";
 
 export function AssignmentsPage({ data }: { data: SemesterData }) {
@@ -76,6 +77,7 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
           {week && <Link to={`${base}/courses/${enc(a.code)}#w${week.index}`} className="underline decoration-line underline-offset-2 hover:text-ink">{week.name}</Link>}
           {a.eclassUrl && <a href={a.eclassUrl} target="_blank" rel="noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">eClass ↗</a>}
         </div>
+        <AskAiButton action="assignment-helper" params={{ assignment: a.id }} className="mt-4">Help me with this</AskAiButton>
       </PageHeader>
 
       <SectionTitle>Question</SectionTitle>

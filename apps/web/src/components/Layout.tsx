@@ -1,23 +1,90 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useRouter, enc } from "../lib/router";
 import { useIndex } from "../lib/data";
 import { cx } from "./ui";
 import { CONN_LABEL, useConnection } from "../lib/connection";
+import { TOOL_STATE, refreshAi, useAiStatus } from "../lib/ai";
+import { useAssistant } from "./Assistant";
 
+/** Header status: eClass and the AI coding tool in one dot; click for the details. */
 function ConnectionDot({ to }: { to: string }) {
   const c = useConnection();
+  const ai = useAiStatus();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
+  }, [open]);
   const l = CONN_LABEL[c.state];
-  const when = c.checkedAt ? new Date(c.checkedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "";
-  const tip = c.state === "connected" ? `Connected to eClass as ${c.user ?? "you"}${when ? ` · checked ${when}` : ""}` : `${l.text}${c.error ? `: ${c.error}` : ""}`;
+  const when = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "");
+  const eclassOk = c.state === "connected";
+  const aiKnown = ai.state === "ok";
+  const aiOk = aiKnown && !!ai.ready;
+  // green: everything works · amber: one of them needs attention · grey: still checking / not set up
+  const dot = c.state === "checking" || ai.state === "checking" ? "bg-muted animate-pulse"
+    : (eclassOk || c.state === "nokey" || c.state === "unavailable") && (aiOk || !aiKnown || !ai.chosen) ? (eclassOk || aiOk ? "bg-ok" : "bg-muted") : "bg-warn";
+  const word = c.syncing ? "Syncing…" : eclassOk && aiOk ? "Connected" : eclassOk ? (aiKnown && ai.chosen ? "AI not ready" : "Connected") : l.text;
+  const tip = `${eclassOk ? `eClass: ${c.user ?? "connected"}` : l.text}${aiKnown ? ` · AI: ${aiOk ? ai.label : ai.reason || "not set up"}` : ""}`;
   return (
-    <Link to={to} title={tip} aria-label={tip}
-      className="flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm whitespace-nowrap hover:border-muted">
-      <span className="relative flex size-2.5">
-        {c.state === "connected" && <span className="absolute inline-flex size-full animate-ping rounded-full bg-ok opacity-40" />}
-        <span className={cx("relative inline-flex size-2.5 rounded-full", l.dot)} />
-      </span>
-      <span className={cx("hidden lg:inline", l.tone)}>{c.syncing ? "Syncing…" : c.state === "connected" ? "Connected" : l.text}</span>
-    </Link>
+    <div ref={box} className="relative">
+      <button type="button" onClick={() => { setOpen(!open); if (!open) refreshAi(); }} title={tip} aria-label={tip} aria-expanded={open}
+        className="flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm whitespace-nowrap hover:border-muted">
+        <span className="relative flex size-2.5">
+          {eclassOk && aiOk && <span className="absolute inline-flex size-full animate-ping rounded-full bg-ok opacity-40" />}
+          <span className={cx("relative inline-flex size-2.5 rounded-full", dot)} />
+        </span>
+        <span className={cx("hidden lg:inline", eclassOk && (aiOk || !aiKnown) ? "text-ok" : l.tone)}>{word}</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-2xl border border-line bg-surface p-3 text-sm shadow-xl">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">eClass</div>
+          <Link to={to} onClick={() => setOpen(false)} className="mb-3 flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2">
+            <span className={cx("size-2 shrink-0 rounded-full", l.dot)} />
+            <span className="min-w-0 flex-1 truncate">{eclassOk ? `Connected as ${c.user ?? "you"}` : l.text}</span>
+            <span className="text-xs text-muted">{when(c.checkedAt)}</span>
+          </Link>
+          <div className="mb-1 flex items-center text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+            <span className="flex-1">AI coding tools</span>
+            {aiKnown && <button type="button" className="normal-case tracking-normal text-muted underline hover:text-ink" onClick={() => refreshAi(true)}>Check again</button>}
+          </div>
+          {ai.state === "checking" && <p className="px-2 py-1.5 text-muted">Checking…</p>}
+          {ai.state === "unavailable" && <p className="px-2 py-1.5 text-muted">Only shown when the app runs on your computer (npm run dev or ouc open).</p>}
+          {aiKnown && (
+            <ul className="flex flex-col">
+              {ai.tools.map((t) => (
+                <li key={t.id} className={cx("rounded-lg px-2 py-1.5", t.chosen && "bg-surface-2")}>
+                  <div className="flex items-center gap-2">
+                    <span className={cx("size-2 shrink-0 rounded-full", TOOL_STATE[t.state].dot)} />
+                    <span className="flex-1 font-semibold">{t.label}{t.chosen && <span className="ml-1.5 text-xs font-normal text-muted">in use</span>}</span>
+                    <span className="text-xs text-muted">{TOOL_STATE[t.state].text}</span>
+                  </div>
+                  {(t.detail || t.fix) && t.state !== "missing" && <div className="ml-4 text-xs text-muted">{t.detail}</div>}
+                  {t.fix && t.state !== "connected" && <code className="ml-4 mt-0.5 block truncate text-[11px] text-muted" title={t.fix}>{t.fix}</code>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {aiKnown && !ai.chosen && <p className="mt-2 px-2 text-xs text-muted">Choose one in Terminal: <code>ouc ai setup</code></p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AskAiHeaderButton() {
+  const { open, setOpen, busy } = useAssistant();
+  const ai = useAiStatus();
+  if (ai.state === "unavailable") return null;
+  return (
+    <button type="button" onClick={() => setOpen(!open)} aria-pressed={open}
+      className="flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-sm font-semibold whitespace-nowrap text-bg">
+      <span aria-hidden className={cx(busy && "animate-spin")}>{busy ? "◌" : "✨"}</span><span className="hidden sm:inline">Ask AI</span>
+    </button>
   );
 }
 
@@ -53,6 +120,7 @@ export function Layout({ sem, children }: { sem: string; children: ReactNode }) 
             ))}
           </nav>
           <span className="flex-1 sm:hidden" />
+          <AskAiHeaderButton />
           <ConnectionDot to={`${base}/updates`} />
           <select aria-label="Semester" value={sem} onChange={(e) => navigate(`/${enc(e.target.value)}`)}
             className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm">

@@ -60,6 +60,7 @@ Not on a Mac, or prefer no background service? `npm run dev` runs the app in the
 - **Notes**: visual notes with diagrams, LaTeX formulas, comparison tables and flip-card self-tests.
 - **Assignments**: the question, files, PDF preview, study links, grade and feedback.
 - **Updates**: what changed on eClass each day, with a live 🟢 connection status, **Re-check** and **Sync now**.
+- **Ask AI** (button in the top bar, on every page): talk to your AI assistant from the app. See [Ask AI in the app](#ask-ai-in-the-app).
 
 ## Daily updates
 
@@ -67,7 +68,7 @@ Every morning at 07:30 (and every 4 hours while the app runs) it asks eClass wha
 
 New files are downloaded into the right week folder. Existing files are never overwritten: a newer version is saved next to the old one as `name (updated YYYY-MM-DD).ext`.
 
-The dot in the top bar shows the connection: 🟢 connected, 🔴 key expired or wrong (run `ouc setup`), 🟠 offline, ⚪ not set up.
+The dot in the top bar shows the connection: 🟢 connected, 🔴 key expired or wrong (run `ouc setup`), 🟠 offline, ⚪ not set up. Click it to see eClass and your AI tools (Claude Code, Codex, opencode): installed or not, signed in or not, and the command that fixes each one.
 
 ## Using it with an AI assistant
 
@@ -108,12 +109,23 @@ Try: "plan my week" · "make notes on lecture 7" · "find material on signal det
 
 The assistant helps you understand, plan and review. It won't write answers for you to submit.
 
+### Ask AI in the app
+
+Press **✨ Ask AI** in the top bar. Pick an action (Make notes, Quiz me, Plan my week, Research a topic, Find material, Assignment help, Sync eClass) or just type a question. The app runs the AI you chose with `ouc ai setup` on your own computer, with your own login, and shows its reply as it works. Notes and plans it writes appear as links, and new notes show up in the app straight away. Shortcuts open the panel with the right action filled in: **Plan my week** on the dashboard, **Make notes** and **Quiz me** on a course week, **Quiz me on this** on a note, **Help me with this** on an assignment.
+
+- Every skill in `ai/skills/` becomes an action automatically.
+- The AI edits files in this folder without asking each time (like `ouc notes`), with the same limits as the command line. Claude Code and opencode are blocked from reading your eClass key, and every AI is told never to touch it.
+- With "a local model directly" you can chat and quiz; the other actions need Claude Code, Codex or opencode.
+- Chats are saved on your computer in `.ouc/chats/` (never committed). **History** in the panel reopens them.
+- It only works in the app running on your computer (`ouc open` or `npm run dev`), and only pages from that app can use it.
+
 ## How it's organised
 
 ```
 apps/web/             the React app (Vite + Tailwind)
 packages/content/     turns semesters/ into data for the app
 packages/eclass-sync/ eClass API: daily changes (daily.mjs), file downloads (pull.mjs)
+packages/ai/          AI backends, study actions and the /api/ai server behind the Ask AI panel
 bin/                  the ouc command, the installer, the background server
 semesters/<id>/       YOUR data for each semester: course files, notes, assignments (git-ignored)
 memory/               the assistant's memory of your progress (git-ignored)

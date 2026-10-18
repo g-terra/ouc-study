@@ -3,6 +3,7 @@ import type { SemesterData } from "@ouc/content/types";
 import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { Card, CourseBadge, CourseDot, Empty, PageHeader, cx } from "../components/ui";
+import { AskAiButton } from "../components/Assistant";
 import { NoteBody, useNoteBlocks } from "../notes/NoteRenderer";
 
 export function NotesIndex({ data }: { data: SemesterData }) {
@@ -77,6 +78,7 @@ export function NotePage({ data, code, slug }: { data: SemesterData; code: strin
           <Link to={`${base}/courses/${enc(code)}`}><CourseBadge course={course} size="md" /></Link>
           {week && <Link to={`${base}/courses/${enc(code)}#w${week.index}`} className="hover:text-ink">{week.name}</Link>}
           {note.source && <a href={note.source.href} target="_blank" rel="noreferrer" className="hover:text-ink">📄 Slides / reading ↗</a>}
+          <AskAiButton action="quiz-me" params={{ course: code, week: String(note.weekIndex) }} className="ml-auto">Quiz me on this</AskAiButton>
         </div>
         <h1 className="font-serif text-4xl font-semibold leading-tight tracking-tight">{note.title}</h1>
         {note.summary && <p className="mt-4 text-lg leading-8 text-muted">{note.summary}</p>}

@@ -22,6 +22,7 @@
     "ouc": "bash bin/ouc",
     "install:background": "bash bin/ouc install",
     "check:public": "node bin/check-public.mjs",
+    "test": "node --test packages/ai/test/*.test.mjs",
     "notes": "node bin/ai.mjs notes",
     "ai": "node bin/ai.mjs"
   },
