@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["STUDENT.md"],
+  "permission": {
+    "read": { "*": "allow", "*.eclass-token": "deny" },
+    "edit": { "*": "allow", "*.eclass-token": "deny" },
+    "bash": {
+      "*": "allow",
+      "*eclass-token*": "deny",
+      "rm *": "deny",
+      "git push*": "deny",
+      "curl *": "ask",
+      "wget *": "ask"
+    }
+  }
+}

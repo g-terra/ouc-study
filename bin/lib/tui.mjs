@@ -89,18 +89,23 @@ export const fmtBytes = (b) => (b > 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b > 1e6
 
 // ---------- prompts ----------
 let lineRl;
+const lineQueue = [], lineWaiters = [];
+let lineClosed = false;
 function lineReader() {
-  lineRl ??= readline.createInterface({ input: inp, terminal: false });
+  if (!lineRl) {
+    // buffer lines: piped answers arrive all at once, before the next question is asked
+    lineRl = readline.createInterface({ input: inp, terminal: false });
+    lineRl.on("line", (l) => (lineWaiters.length ? lineWaiters.shift()(l) : lineQueue.push(l)));
+    lineRl.on("close", () => { lineClosed = true; while (lineWaiters.length) lineWaiters.shift()(""); });
+  }
   return lineRl;
 }
 /** non-TTY: read one line from stdin (for piped answers / tests) */
 function readLine() {
-  return new Promise((res) => {
-    const rl = lineReader();
-    const onLine = (l) => { rl.off("close", onClose); res(l); };
-    const onClose = () => { rl.off("line", onLine); res(""); };
-    rl.once("line", onLine); rl.once("close", onClose);
-  });
+  lineReader();
+  if (lineQueue.length) return Promise.resolve(lineQueue.shift());
+  if (lineClosed) return Promise.resolve("");
+  return new Promise((res) => lineWaiters.push(res));
 }
 
 function raw(handler) {

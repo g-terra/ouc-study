@@ -30,7 +30,7 @@ semesters/<id>/       ← personal, git-ignored
   plans/, research/   weekly plans, research digests
   updates/            daily eClass change feed
 memory/               long-term memory, shared across semesters (personal, git-ignored)
-ai/                   agents and skills, the single source (installed into .claude/ and .agents/skills/ by setup or `ouc ai install`)
+ai/                   agents and skills, the single source (installed into .claude/, .agents/skills/ and .opencode/agents/ by setup or `ouc ai install`)
 tools/                Python helpers (extract_text.py, build_from_export.py)
 docs/NOTE_FORMAT.md   how to write visual notes
 ```
@@ -60,9 +60,9 @@ Never invent progress.
 ## Agents & skills
 
 Skills (`ai/skills/*/SKILL.md`, standard Agent Skills format): `sync-eclass`, `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `assignment-helper`.
-Agents (`ai/agents/*.md`): **note-taker**, **study-planner**, **researcher**, **tutor**. Tools with subagents (Claude Code) get them in `.claude/agents/`; others (Codex) get each one as a skill of the same name in `.agents/skills/`.
+Agents (`ai/agents/*.md`): **note-taker**, **study-planner**, **researcher**, **tutor**. Claude Code gets them as subagents in `.claude/agents/`, opencode in `.opencode/agents/`; Codex gets each one as a skill of the same name in `.agents/skills/` (where opencode also finds the skills).
 When a request matches a skill, follow its `SKILL.md`. If the installed copies are missing, run `ouc ai install` (or read them straight from `ai/`).
-**Edit skills in `ai/` only**; the copies in `.claude/` and `.agents/` are regenerated.
+**Edit skills in `ai/` only**; the copies in `.claude/`, `.agents/` and `.opencode/agents/` are regenerated.
 
 ## Rules
 

@@ -84,7 +84,7 @@ async function main() {
   ui.box([
     `${c.bold(c.violet("OUC Study"))}  ${c.gray("·")}  ${c.bold("setup")}${DRY ? c.yellow("  (dry run: nothing will change)") : ""}`,
     c.gray("Your eClass courses offline, a visual study app,"),
-    c.gray("daily grade & deadline alerts, and Claude study skills."),
+    c.gray("daily grade & deadline alerts, and AI study skills."),
   ]);
 
   // ---- 1. computer --------------------------------------------------------
@@ -247,7 +247,7 @@ async function main() {
   if (py && existsSync(join(ROOT, "tools/extract_text.py"))) {
     const sp = ui.spinner("Making searchable text copies of the slides…");
     const r = await sh(py, ["tools/extract_text.py", semId]);
-    r.code === 0 ? sp.succeed("Searchable text copies in text/ (Claude reads these)") : sp.warn("Text copies skipped (tools/extract_text.py failed)");
+    r.code === 0 ? sp.succeed("Searchable text copies in text/ (your AI assistant reads these)") : sp.warn("Text copies skipped (tools/extract_text.py failed)");
   }
   {
     const first = !existsSync(join(semDir, "_meta/sync-state.json"));
@@ -262,10 +262,10 @@ async function main() {
   }
 
   // ---- 7. AI assistant ------------------------------------------------------
-  ui.step(STEPS, "Your AI study assistant", "Claude Code, Codex or a local model");
+  ui.step(STEPS, "Your AI study assistant", "Claude Code, Codex or a local model with opencode");
   {
     const r = installSkills();
-    r.ok ? ui.ok("Study skills installed for Claude Code (.claude/) and Codex (.agents/skills/)") : ui.warn("Couldn't install the skills (run: ouc ai install)");
+    r.ok ? ui.ok("Study skills installed for Claude Code, Codex and opencode") : ui.warn("Couldn't install the skills (run: ouc ai install)");
   }
   // personal context for any AI tool (git-ignored)
   const local = join(ROOT, "STUDENT.md");

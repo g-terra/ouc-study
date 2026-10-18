@@ -1,6 +1,6 @@
 # OUC Study
 
-Your Open University of Cyprus **eClass courses offline**, in a visual study app: every slide and file, assignment questions, your own submissions and grades, a semester timeline, daily alerts for new grades, feedback and deadlines, and Claude study agents.
+Your Open University of Cyprus **eClass courses offline**, in a visual study app: every slide and file, assignment questions, your own submissions and grades, a semester timeline, daily alerts for new grades, feedback and deadlines, and AI study agents (Claude Code, Codex or a local model).
 
 Built by students for students. Works with **your own** eClass account: nothing is shared between users.
 
@@ -22,7 +22,7 @@ The installer walks you through everything:
 2. **Connects to eClass** with your personal key. It shows you where to get it, and you paste it hidden (or it reads it from the clipboard).
 3. **Lists your enrolled courses**. The current ones are already ticked.
 4. **Downloads everything**: weekly slides and files, assignment briefs and questions, your submitted files, grades and feedback.
-5. **Finishes the setup**: searchable text copies for Claude, daily updates, your preferences for Claude.
+5. **Finishes the setup**: searchable text copies for your AI assistant, daily updates, your preferences for the assistant.
 6. **Starts the app**, on a Mac automatically at every login. Open **http://localhost:5173**, or type `ouc open`.
 
 Want to see first what it would download? Run `npm run setup -- --dry-run`. It changes nothing.
@@ -69,9 +69,31 @@ New files are downloaded into the right week folder. Existing files are never ov
 
 The dot in the top bar shows the connection: 🟢 connected, 🔴 key expired or wrong (run `ouc setup`), 🟠 offline, ⚪ not set up.
 
-## Using it with Claude
+## Using it with an AI assistant
 
-Open this folder in the Claude app (Add folder) or run `claude` in it. `CLAUDE.md` explains the workspace. Your personal context (name, learning style, current semester) is in `CLAUDE.local.md`, which setup creates.
+The study tools work with **Claude Code**, **OpenAI Codex** or a **local model through opencode**. Choose one with `ouc ai setup` (setup asks too); change it any time.
+
+| AI | Runs on | Set up |
+|---|---|---|
+| Claude Code | your Claude Pro/Max subscription | `npm i -g @anthropic-ai/claude-code`, then `claude auth login` |
+| Codex | your ChatGPT subscription | `npm i -g @openai/codex`, then `codex login` |
+| opencode + local model | your computer, offline | `npm i -g opencode-ai`, plus [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai) |
+| a local model directly | your computer, offline | Ollama or LM Studio only; notes, plans and quizzes, works with smaller models |
+
+Claude Code and Codex are used with **your own subscription login, never API credits**: `ouc ai` checks that you're signed in with your account, and it ignores `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` when it starts them.
+
+**Local models.** opencode needs a model that can call tools: `gpt-oss:20b`, `qwen3:14b` or bigger. Give it a context window of 32k tokens or more (Ollama: `OLLAMA_CONTEXT_LENGTH=32768 ollama serve`; LM Studio: Context Length when you load the model). Your model choice is saved in `.opencode/opencode.json`; the shared `opencode.json` keeps your eClass key off limits. On a smaller machine, "a local model directly" still makes notes, plans and quizzes: `ouc` gives it the week's material and checks the note format for it.
+
+```
+ouc ai                 open your assistant in this folder
+ouc notes [course] [week]   visual notes for a week (default: the latest week without notes)
+ouc plan               plan this week
+ouc quiz [course] [week]    quiz yourself
+ouc ai status          what's installed and signed in
+--with claude|codex|opencode|local   use another one just this time
+```
+
+You can also just open the folder in the tool itself (`claude`, `codex` or `opencode`). `AGENTS.md` explains the workspace to all of them (Claude Code reads it through `CLAUDE.md`), and your personal context (name, learning style, current semester) is in `STUDENT.md`, which setup creates.
 
 | Agent | Does |
 |---|---|
@@ -80,11 +102,11 @@ Open this folder in the Claude app (Add folder) or run `claude` in it. `CLAUDE.m
 | researcher | finds and checks papers, chapters, videos and tutorials, with citations |
 | tutor | explains, quizzes, reviews drafts, and logs weak spots |
 
-Skills: `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `assignment-helper`, `sync-eclass`. They live in `ai/`; setup copies them into `.claude/` (`sh ai/install.sh` after editing them).
+Skills: `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `assignment-helper`, `sync-eclass`. They live in `ai/`; `ouc ai install` copies them to `.claude/` (Claude Code), `.agents/skills/` (Codex and opencode) and `.opencode/agents/` (opencode subagents). Run it again after editing them.
 
 Try: "plan my week" · "make notes on lecture 7" · "find material on signal detection theory" · "quiz me on Naive Bayes" · "help me approach the term project" · "what's new on eClass?"
 
-Claude helps you understand, plan and review. It won't write answers for you to submit.
+The assistant helps you understand, plan and review. It won't write answers for you to submit.
 
 ## How it's organised
 
@@ -94,13 +116,13 @@ packages/content/     turns semesters/ into data for the app
 packages/eclass-sync/ eClass API: daily changes (daily.mjs), file downloads (pull.mjs)
 bin/                  the ouc command, the installer, the background server
 semesters/<id>/       YOUR data for each semester: course files, notes, assignments (git-ignored)
-memory/               Claude's memory of your progress (git-ignored)
+memory/               the assistant's memory of your progress (git-ignored)
 ai/  tools/  docs/    agents & skills, helpers, the note format
 ```
 
 ## Privacy and sharing
 
-This repository holds **only code**. Everything personal is git-ignored: `semesters/` (OUC course materials, your submissions, grades and notes), `memory/`, `CLAUDE.local.md` and `.eclass-token`.
+This repository holds **only code**. Everything personal is git-ignored: `semesters/` (OUC course materials, your submissions, grades and notes), `memory/`, `STUDENT.md`, `.opencode/opencode.json` and `.eclass-token`.
 Course materials belong to OUC and their authors, so don't commit or redistribute them; everyone downloads their own copy through their own enrolment.
 Run `ouc check-public` before you push.
 

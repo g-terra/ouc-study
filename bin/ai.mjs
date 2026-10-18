@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 /**
- * ouc ai: the study tools with the AI of your choice: Claude Code, Codex, Codex on a local
- * model, or a local model directly (Ollama, LM Studio, any OpenAI-compatible server).
+ * ouc ai: the study tools with the AI of your choice: Claude Code or Codex (with your own
+ * subscription login), opencode on a local model, or a local model directly (Ollama, LM Studio,
+ * any OpenAI-compatible server).
  *
  *   ouc ai                     open your AI assistant in this folder
  *   ouc ai setup               choose the AI (saved in .ouc/ai.json)
  *   ouc ai status              what's installed and what's chosen
- *   ouc ai install             (re)install the skills for Claude Code and Codex
+ *   ouc ai install             (re)install the skills for Claude Code, Codex and opencode
  *   ouc notes [course] [week]  make visual notes for a week (default: the latest week without notes)
  *   ouc plan                   plan this week
  *   ouc quiz [course] [week]   quiz yourself
  *   ouc ai run <skill> "…"     any skill (agent tools)
- *   options: --with claude|codex|codex-oss|local   --model <name>   --force
+ *   options: --with claude|codex|opencode|local   --model <name>   --force
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -19,7 +20,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import readline from "node:readline";
 import * as ui from "./lib/tui.mjs";
-import { AGENTIC, TOOL_LABEL, chat, describe, detect, loadConfig, runAgent, saveConfig } from "../packages/ai/providers.mjs";
+import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, agentEnv, chat, describe, detect, loadConfig, login, loginStatus, runAgent, saveConfig, serverUp, writeOpencodeConfig } from "../packages/ai/providers.mjs";
 import { currentSemesterId, findCourse, findWeek, loadData, noteFileName, read, weekMaterial, weekNumber } from "../packages/ai/context.mjs";
 import { validateNote } from "../packages/ai/validate.mjs";
 
@@ -33,52 +34,76 @@ const agentBody = (name) => read(join(ROOT, "ai/agents", `${name}.md`)).replace(
 export async function chooseAssistant({ quiet = false } = {}) {
   const sp = ui.spinner("Looking for AI tools on this computer…");
   const d = await detect();
-  const found = [d.claude && "Claude Code", d.codex && "Codex", d.ollama && "Ollama", d.lmstudio && "LM Studio"].filter(Boolean);
+  const found = [d.claude && "Claude Code", d.codex && "Codex", d.opencode && "opencode", d.ollama && "Ollama", d.lmstudio && "LM Studio"].filter(Boolean);
   sp.succeed(found.length ? `Found: ${found.join(", ")}` : "No AI tools found yet (you can install one later and run `ouc ai setup`)");
   if (!quiet) {
     ui.say(c.gray("    Any of these can write your notes, plan your week and quiz you. Change it any time: ouc ai setup"));
   }
   const local = [d.ollama && "Ollama", d.lmstudio && "LM Studio"].filter(Boolean).join(" / ");
   const tool = await ui.select("Which AI do you want to use?", [
-    { label: "Claude Code", hint: d.claude ? "installed" : "not installed: npm i -g @anthropic-ai/claude-code", value: "claude" },
-    { label: "Codex (OpenAI)", hint: d.codex ? "installed" : "not installed: npm i -g @openai/codex", value: "codex" },
-    { label: "Codex with a local model", hint: `offline, all skills; needs gpt-oss:20b or bigger${local ? ` · ${local} running` : ""}`, value: "codex-oss" },
-    { label: "A local model directly", hint: `offline; notes, plans and quizzes${local ? ` · ${local} running` : " · start Ollama or LM Studio first"}`, value: "local" },
+    { label: "Claude Code", hint: `your Claude subscription · ${d.claude ? "installed" : `not installed: ${INSTALL_HINT.claude}`}`, value: "claude" },
+    { label: "Codex (OpenAI)", hint: `your ChatGPT subscription · ${d.codex ? "installed" : `not installed: ${INSTALL_HINT.codex}`}`, value: "codex" },
+    { label: "opencode with a local model", hint: `offline, all skills; needs a model with tool calling${local ? ` · ${local} running` : ""}`, value: "opencode" },
+    { label: "A local model directly", hint: `offline; notes, plans and quizzes, works with small models${local ? ` · ${local} running` : " · start Ollama or LM Studio first"}`, value: "local" },
     { label: "None for now", value: null },
-  ], { initial: d.claude ? 0 : d.codex ? 1 : (d.ollama || d.lmstudio) ? 3 : 0 });
+  ], { initial: d.claude ? 0 : d.codex ? 1 : d.opencode && (d.ollama || d.lmstudio) ? 2 : (d.ollama || d.lmstudio) ? 3 : 0 });
   if (!tool) return null;
   const cfg = { tool };
-  if (tool === "codex-oss") {
-    const provider = d.lmstudio && !d.ollama ? "lmstudio" : await ui.select("Which local server does Codex use?", [
-      { label: "Ollama", hint: d.ollama ? "running" : "https://ollama.com", value: "ollama" },
-      { label: "LM Studio", hint: d.lmstudio ? "running" : "https://lmstudio.ai", value: "lmstudio" },
-    ]);
-    const models = (provider === "ollama" ? d.ollama?.models : d.lmstudio?.models) ?? [];
-    cfg.oss = { provider, model: await pickModel(models, "gpt-oss:20b") };
-    ui.info("Codex needs a context window of 64k tokens or more (Ollama: set num_ctx; LM Studio: Context Length).");
-    if (!d.codex) ui.warn("Codex isn't installed yet: npm i -g @openai/codex");
-  } else if (tool === "local") {
-    const servers = [
-      d.ollama && { label: "Ollama", hint: `${d.ollama.models.length} models`, value: { kind: "ollama", ...d.ollama } },
-      d.lmstudio && { label: "LM Studio", hint: `${d.lmstudio.models.length} models`, value: { kind: "lmstudio", ...d.lmstudio } },
-      !d.ollama && { label: "Ollama (not running yet)", hint: "http://localhost:11434", value: { kind: "ollama", baseUrl: "http://localhost:11434", models: [] } },
-      !d.lmstudio && { label: "LM Studio (not running yet)", hint: "http://localhost:1234/v1", value: { kind: "lmstudio", baseUrl: "http://localhost:1234/v1", models: [] } },
-      { label: "Another OpenAI-compatible server", hint: "vLLM, llama.cpp, OpenRouter, OpenAI…", value: { kind: "openai" } },
-    ].filter(Boolean);
-    const s = await ui.select("Which server runs the model?", servers);
-    if (s.kind === "openai") {
-      s.baseUrl = await ui.ask("Server URL (ending in /v1)", { def: "http://localhost:8080/v1" });
-      s.apiKeyEnv = await ui.ask("Name of the environment variable with the API key (blank = none)", { def: "" }) || undefined;
-      s.models = [];
+  if (tool === "opencode" || tool === "local") {
+    const s = await pickServer(d);
+    const model = await pickModel(s.models, tool === "opencode" ? "gpt-oss:20b" : s.kind === "ollama" ? "qwen2.5:14b" : "");
+    const server = { kind: s.kind, baseUrl: s.baseUrl, model, ...(s.apiKeyEnv ? { apiKeyEnv: s.apiKeyEnv } : {}) };
+    if (tool === "local") {
+      cfg.local = s.kind === "ollama" ? { ...server, ctx: 32768 } : server;
+    } else {
+      cfg.opencode = server;
+      ui.ok(`opencode will use ${c.bold(writeOpencodeConfig(ROOT, { ...server, models: s.models }))} ${c.gray("(.opencode/opencode.json)")}`);
+      ui.info("opencode needs a model that can call tools (gpt-oss:20b, qwen3:14b or bigger) and a context window of 32k tokens or more.");
+      if (s.kind === "ollama") ui.info(`Ollama: start it with ${c.cyan("OLLAMA_CONTEXT_LENGTH=32768 ollama serve")} (or set Context length in the Ollama app).`);
+      if (s.kind === "lmstudio") ui.info("LM Studio: set Context Length to 32768 or more when you load the model.");
+      if (!d.opencode) ui.warn(`opencode isn't installed yet: ${INSTALL_HINT.opencode}`);
     }
-    cfg.local = { kind: s.kind, baseUrl: s.baseUrl, model: await pickModel(s.models, s.kind === "ollama" ? "qwen2.5:14b" : ""), ...(s.apiKeyEnv ? { apiKeyEnv: s.apiKeyEnv } : {}) };
-    if (s.kind === "ollama") cfg.local.ctx = 32768;
-  } else if (!(tool === "claude" ? d.claude : d.codex)) {
-    ui.warn(`${TOOL_LABEL[tool]} isn't installed yet: ${tool === "claude" ? "npm i -g @anthropic-ai/claude-code" : "npm i -g @openai/codex"}`);
+  } else if (!d[tool]) {
+    ui.warn(`${TOOL_LABEL[tool]} isn't installed yet: ${INSTALL_HINT[tool]}. Then run ouc ai setup again to sign in.`);
+  } else {
+    await ensureLogin(tool);
   }
   saveConfig(ROOT, cfg);
   ui.ok(`AI assistant: ${c.bold(describe(cfg))}`);
   return cfg;
+}
+async function pickServer(d) {
+  const servers = [
+    d.ollama && { label: "Ollama", hint: `${d.ollama.models.length} models`, value: { kind: "ollama", ...d.ollama } },
+    d.lmstudio && { label: "LM Studio", hint: `${d.lmstudio.models.length} models`, value: { kind: "lmstudio", ...d.lmstudio } },
+    !d.ollama && { label: "Ollama (not running yet)", hint: "http://localhost:11434", value: { kind: "ollama", baseUrl: "http://localhost:11434", models: [] } },
+    !d.lmstudio && { label: "LM Studio (not running yet)", hint: "http://localhost:1234/v1", value: { kind: "lmstudio", baseUrl: "http://localhost:1234/v1", models: [] } },
+    { label: "Another OpenAI-compatible server", hint: "vLLM, llama.cpp, OpenRouter…", value: { kind: "openai" } },
+  ].filter(Boolean);
+  const s = await ui.select("Which server runs the model?", servers);
+  if (s.kind === "openai") {
+    s.baseUrl = await ui.ask("Server URL (ending in /v1)", { def: "http://localhost:8080/v1" });
+    s.apiKeyEnv = await ui.ask("Name of the environment variable with the API key (blank = none)", { def: "" }) || undefined;
+    s.models = [];
+  }
+  return s;
+}
+/** Claude Code and Codex run on the student's subscription login, never on API credits. */
+async function ensureLogin(tool) {
+  const plan = tool === "claude" ? "Claude (Pro or Max)" : "ChatGPT (Plus, Pro, Business…)";
+  let st = loginStatus(tool);
+  if (st?.subscription) { ui.ok(`${TOOL_LABEL[tool]} is signed in with your ${plan.split(" ")[0]} account`); return true; }
+  if (st?.loggedIn) ui.warn(`${TOOL_LABEL[tool]} is signed in with an API key, which uses paid API credits. Sign in with your ${plan} account instead.`);
+  else ui.info(`${TOOL_LABEL[tool]} isn't signed in yet. It uses your ${plan} subscription, not API credits.`);
+  if (!ui.TTY || !(await ui.confirm(`Sign in to ${TOOL_LABEL[tool]} now? (opens your browser)`, true))) {
+    ui.info(`Later: ${tool === "claude" ? "claude auth login" : "codex login"}`);
+    return false;
+  }
+  if (st?.loggedIn) spawnSync(tool, tool === "claude" ? ["auth", "logout"] : ["logout"], { stdio: "inherit", env: agentEnv(tool) });
+  login(tool);
+  st = loginStatus(tool);
+  st?.subscription ? ui.ok(`Signed in to ${TOOL_LABEL[tool]}`) : ui.warn(`Not signed in yet. Try: ${tool === "claude" ? "claude auth login" : "codex login"}`);
+  return !!st?.subscription;
 }
 async function pickModel(models, def) {
   if (models.length) return ui.select("Which model?", models.slice(0, 15).map((m) => ({ label: m, value: m })), { initial: Math.max(0, models.indexOf(def)) });
@@ -104,10 +129,24 @@ function args() {
 async function config(o) {
   let cfg = loadConfig(ROOT);
   if (o.with) cfg = { ...(cfg ?? {}), tool: o.with };
+  if (cfg?.tool && ALIASES[cfg.tool]) cfg = { ...cfg, tool: ALIASES[cfg.tool] };
   if (!cfg?.tool) { ui.say(c.gray("  First, choose your AI (once):")); cfg = await chooseAssistant({ quiet: true }); if (!cfg) process.exit(0); }
-  if (!TOOL_LABEL[cfg.tool]) { ui.fail(`Unknown --with "${cfg.tool}" (claude, codex, codex-oss, local)`); process.exit(2); }
-  if (o.model) cfg.tool === "local" ? (cfg.local = { ...cfg.local, model: o.model }) : (cfg.oss = { ...cfg.oss, model: o.model });
-  if (cfg.tool === "local" && !cfg.local?.model) { ui.fail("No local model configured. Run: ouc ai setup"); process.exit(2); }
+  if (!TOOL_LABEL[cfg.tool]) { ui.fail(`Unknown --with "${cfg.tool}" (claude, codex, opencode, local)`); process.exit(2); }
+  if (cfg.tool === "local" || cfg.tool === "opencode") {
+    const server = cfg[cfg.tool] ?? (cfg.tool === "opencode" ? cfg.local : null);   // --with opencode can reuse the local model
+    if (!server?.model) { ui.fail(`No local model configured for ${TOOL_LABEL[cfg.tool]}. Run: ouc ai setup`); process.exit(2); }
+    cfg[cfg.tool] = { ...server, ...(o.model ? { model: o.model } : {}) };
+    if (cfg.tool === "opencode" && (o.model || !existsSync(join(ROOT, ".opencode/opencode.json")))) writeOpencodeConfig(ROOT, cfg.opencode);
+    if (!(await serverUp(cfg[cfg.tool]))) {
+      const s = cfg[cfg.tool];
+      ui.fail(`Can't reach ${s.kind === "ollama" ? "Ollama" : s.kind === "lmstudio" ? "LM Studio" : "the model server"} at ${s.baseUrl}. Start it first${s.kind === "ollama" ? " (ollama serve)" : s.kind === "lmstudio" ? " (LM Studio → Developer → Start server)" : ""}.`);
+      process.exit(2);
+    }
+  } else {
+    const st = loginStatus(cfg.tool);
+    if (!st) { ui.fail(`${TOOL_LABEL[cfg.tool]} isn't installed: ${INSTALL_HINT[cfg.tool]}`); process.exit(2); }
+    if (!st.subscription && !(await ensureLogin(cfg.tool))) process.exit(2);
+  }
   return cfg;
 }
 const studentContext = () => read(join(ROOT, "STUDENT.md")).trim();
@@ -275,8 +314,9 @@ async function main() {
     case "status": {
       const d = await detect(), cfg = loadConfig(ROOT);
       ui.say(`  ${c.bold("AI assistant:")} ${describe(cfg)}`);
-      ui.say(`  ${d.claude ? ui.sym.ok : ui.sym.off} Claude Code   ${d.codex ? ui.sym.ok : ui.sym.off} Codex   ${d.ollama ? ui.sym.ok : ui.sym.off} Ollama${d.ollama ? c.gray(` (${d.ollama.models.length} models)`) : ""}   ${d.lmstudio ? ui.sym.ok : ui.sym.off} LM Studio${d.lmstudio ? c.gray(` (${d.lmstudio.models.length} models)`) : ""}`);
-      ui.say(`  ${existsSync(join(ROOT, ".claude/skills")) ? ui.sym.ok : ui.sym.off} skills for Claude Code   ${existsSync(join(ROOT, ".agents/skills")) ? ui.sym.ok : ui.sym.off} skills for Codex`);
+      const signed = (t) => { if (!d[t]) return ""; const st = loginStatus(t); return c.gray(st?.subscription ? " (signed in)" : st?.loggedIn ? " (API key: use your subscription login)" : " (not signed in)"); };
+      ui.say(`  ${d.claude ? ui.sym.ok : ui.sym.off} Claude Code${signed("claude")}   ${d.codex ? ui.sym.ok : ui.sym.off} Codex${signed("codex")}   ${d.opencode ? ui.sym.ok : ui.sym.off} opencode   ${d.ollama ? ui.sym.ok : ui.sym.off} Ollama${d.ollama ? c.gray(` (${d.ollama.models.length} models)`) : ""}   ${d.lmstudio ? ui.sym.ok : ui.sym.off} LM Studio${d.lmstudio ? c.gray(` (${d.lmstudio.models.length} models)`) : ""}`);
+      ui.say(`  ${existsSync(join(ROOT, ".claude/skills")) ? ui.sym.ok : ui.sym.off} skills for Claude Code   ${existsSync(join(ROOT, ".agents/skills")) ? ui.sym.ok : ui.sym.off} skills for Codex and opencode   ${existsSync(join(ROOT, ".opencode/agents")) ? ui.sym.ok : ui.sym.off} opencode agents`);
       break;
     }
     case "notes": await notes(o); break;
@@ -294,7 +334,7 @@ async function main() {
       if (!skill || !existsSync(join(ROOT, "ai/skills", skill))) { ui.fail(`Usage: ouc ai run <skill> "request". Skills: plan-week, make-notes, research-topic, find-material, quiz-me, assignment-helper, sync-eclass`); process.exit(2); }
       if (!AGENTIC.has(cfg.tool)) {
         const alt = { "make-notes": "ouc notes", "plan-week": "ouc plan", "quiz-me": "ouc quiz" }[skill];
-        ui.fail(alt ? `With a local model, use: ${alt}` : `"${skill}" needs an AI that can use files and the web. Use --with codex-oss (local) or claude/codex.`);
+        ui.fail(alt ? `With a local model, use: ${alt}` : `"${skill}" needs an AI that can use files and the web. Use --with opencode (local) or claude/codex.`);
         process.exit(2);
       }
       process.exitCode = await runAgent(ROOT, cfg, `Use the ${skill} skill: ${rest.join(" ")}`, { interactive: true });
