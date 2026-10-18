@@ -13,17 +13,17 @@ import { cx } from "./ui";
 
 interface Draft { action: string; params: Record<string, string> }
 /** One tab in the panel: a chat (or a draft action), with its own run. */
-export interface Session { key: string; chat: Chat | null; busy: boolean; error?: string; draft: Draft | null }
+export interface Session { key: string; chat: Chat | null; busy: boolean; error?: string; draft: Draft | null; tool?: string }
 interface Ctx {
   open: boolean; setOpen: (o: boolean) => void;
   /** All open chats (tabs); several can run at the same time. */
   sessions: Session[]; activeKey: string; activate: (key: string) => void; close: (key: string) => void;
   // the active tab
   chat: Chat | null; busy: boolean; error?: string; draft: Draft | null; setDraft: (d: Draft | null) => void;
-  /** Opens the panel with an action picked (and its inputs filled in), in a free tab. */
-  start: (action: string, params?: Record<string, string>) => void;
+  /** Opens the panel with an action picked (and its inputs filled in), in a free tab; `tool` picks the AI for that tab only. */
+  start: (action: string, params?: Record<string, string>, tool?: string) => void;
   send: (sem: string, message: string, title?: string) => Promise<void>;
-  /** The coding tool picked in the panel (null = the one from `ouc ai setup`). */
+  /** The coding tool for the active tab: its own, else the one picked in the panel (null = the one from `ouc ai setup`). */
   tool: string | null; setTool: (t: string | null) => void;
   stop: () => void; reset: () => void; load: (id: string) => Promise<void>;
 }
@@ -68,11 +68,11 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     return n.key;
   };
 
-  const reset = () => { const key = freeTab(); update(key, (x) => ({ ...x, draft: null, error: undefined })); };
-  const start = (action: string, params: Record<string, string> = {}) => {
+  const reset = () => { const key = freeTab(); update(key, (x) => ({ ...x, draft: null, error: undefined, tool: undefined })); };
+  const start = (action: string, params: Record<string, string> = {}, tool?: string) => {
     setOpen(true);
     const key = freeTab();
-    update(key, (x) => ({ ...x, error: undefined, draft: { action, params } }));
+    update(key, (x) => ({ ...x, error: undefined, draft: { action, params }, tool }));
   };
   const close = (key: string) => {
     window.clearInterval(polls.current.get(key));
@@ -96,7 +96,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const openChat = async (key: string, id: string) => {
     const c = await getChat(id);
     if (!c) return false;
-    update(key, (x) => ({ ...x, chat: c, draft: null, error: undefined, busy: !!c.running }));
+    update(key, (x) => ({ ...x, chat: c, draft: null, error: undefined, busy: !!c.running, tool: c.tool }));
     if (c.running) follow(key, c.id);
     return true;
   };
@@ -125,8 +125,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const send = async (sem: string, message: string, title?: string) => {
     const key = active.key;
     const { chat, draft } = active;
+    const useTool = active.tool ?? tool ?? undefined;
     if (active.busy) return;
-    const body = { ...(chat ? { sem, chatId: chat.id, message } : { sem, action: draft?.action, params: draft?.params, message }), ...(tool ? { tool } : {}) };
+    const body = { ...(chat ? { sem, chatId: chat.id, message } : { sem, action: draft?.action, params: draft?.params, message }), ...(useTool ? { tool: useTool } : {}) };
     const user = message.trim() || null;
     let id = chat?.id, wrote = false;
     // show the message straight away; the reply fills in as events arrive
@@ -174,7 +175,10 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       open, setOpen, sessions, activeKey: active.key, activate: setActiveKey, close,
       chat: active.chat, busy: active.busy, error: active.error, draft: active.draft,
       setDraft: (d) => update(active.key, (x) => ({ ...x, draft: d })),
-      start, send, stop, reset, load, tool, setTool,
+      start, send, stop, reset, load,
+      tool: active.tool ?? tool,
+      // a tab started for a given AI keeps its own choice; otherwise this is the default for new chats
+      setTool: (t) => (active.tool ? update(active.key, (x) => ({ ...x, tool: t ?? undefined })) : setTool(t)),
     }}>{children}</AssistantCtx.Provider>
   );
 }
@@ -280,7 +284,7 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
             {needsAgent ?? blocked} <button type="button" className="underline" onClick={() => refreshAi(true)}>Check again</button>
           </p>
         )}
-        {meta?.id === "assignment-helper" && <p className="mb-2 text-xs text-muted">The AI explains, hints and reviews; it won't write answers for you to submit.</p>}
+        {(meta?.id === "assignment-helper" || meta?.id === "assignment-prep") && <p className="mb-2 text-xs text-muted">The AI explains, hints and reviews; it won't write answers for you to submit.</p>}
         <div className="flex items-end gap-2">
           <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={2}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
@@ -386,6 +390,7 @@ function ActionForm({ data, action, params, onChange }: { data: SemesterData; ac
           <button type="button" className="underline" onClick={() => set("week", "")}>{action.id === "make-notes" ? "all weeks without notes" : "whole course"}</button>
         </p>
       )}
+      {action.id === "assignment-prep" && params.mode && PREP_MODE[params.mode] && <p className="mt-3 text-xs text-muted">{PREP_MODE[params.mode]}</p>}
       {action.id === "make-notes" && !week && <p className="mt-3 text-xs text-muted">Makes notes for every week{course ? ` of ${course.short}` : ""} that has material and no notes yet.</p>}
     </div>
   );
@@ -395,6 +400,11 @@ function Markdown({ text, className }: { text: string; className?: string }) {
   return <div className={cx("text-sm leading-relaxed [&_a]:underline [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_ul]:list-disc", className)} dangerouslySetInnerHTML={{ __html: mdToHtml(text) }} />;
 }
 
+const PREP_MODE: Record<string, string> = {
+  review: "Reviews the current prep pack: fixes mistakes, sharpens the hints and fills gaps.",
+  more: "Keeps the current prep pack and adds more hints, practice and sources.",
+  redo: "Starts the prep pack over from scratch.",
+};
 const LIVE_STEPS = 3;
 const SHOW_FILES = 3;
 function FileLinks({ files, className }: { files: string[]; className?: string }) {

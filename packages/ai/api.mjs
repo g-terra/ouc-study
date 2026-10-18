@@ -6,16 +6,21 @@
 //   POST /api/ai/run           { sem, chatId?, action?, params?, message } → Server-Sent Events
 //   POST /api/ai/stop          { chatId }
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
+//   GET  /api/ai/prep          the automatic assignment prep: { enabled, running, chatId }
 //
 // Agents run on the student's own computer with their subscription login (no API keys).
 // Chats are saved in .ouc/chats/ (git-ignored).
+//
+// Automatic prep: when the app data is rebuilt (a sync found something) or the app starts, every
+// open assignment without a PREP.md gets one, one at a time, from the AI chosen with `ouc ai setup`.
+// Turn it off with "autoPrep": false in .ouc/ai.json.
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, loadConfig, loginStatusAsync, serverUp } from "./providers.mjs";
-import { buildPrompt, chatSystem, listActions } from "./actions.mjs";
-import { currentSemesterId, loadData } from "./context.mjs";
+import { buildPrompt, chatSystem, listActions, prepPath } from "./actions.mjs";
+import { currentSemesterId, loadData, read } from "./context.mjs";
 import { runAgentTurn, runChatTurn } from "./stream.mjs";
 
 // The background app starts with a minimal PATH; add the usual install places of the agent CLIs.
@@ -86,6 +91,31 @@ function listChats(root) {
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, 50);
 }
 
+// ---------- assignment prep (PREP.md in each assignment folder) ----------
+const PREP_TITLE = { review: "Review prep", more: "Add to prep", redo: "Redo prep" };
+const PREP_DONE = { new: "prepared", auto: "prepared after a sync", redo: "started over", review: "reviewed and improved", more: "added more" };
+/** { by, updated, log[] } from a PREP.md's front matter (written by stampPrep). */
+export function readPrepMeta(text) {
+  const fm = String(text ?? "").match(/^---\n([\s\S]*?)\n---\n?/)?.[1] ?? "";
+  const get = (k) => fm.match(new RegExp(`^${k}:\\s*(.*)$`, "m"))?.[1]?.trim();
+  return { by: get("by"), updated: get("updated"), log: [...fm.matchAll(/^\s+-\s+(.+)$/gm)].map((m) => m[1]) };
+}
+/** Puts the app's own front matter (who wrote it, when, and the history) on a PREP.md after a run. */
+export function stampPrep(abs, { assignment, by, mode, log = [], at = new Date() }) {
+  if (!existsSync(abs)) return false;
+  const body = read(abs).replace(/^---\n[\s\S]*?\n---\n?/, "").trimStart();
+  const line = `${at.toISOString().slice(0, 10)} · ${by} · ${PREP_DONE[mode] ?? PREP_DONE.new}`;
+  const all = [...log, line].slice(-20);
+  writeFileSync(abs, `---\nassignment: ${assignment}\nby: ${by}\nupdated: ${at.toISOString()}\nlog:\n${all.map((l) => `  - ${l}`).join("\n")}\n---\n\n${body}`);
+  return true;
+}
+/** Open assignments with something to prepare from and no PREP.md yet (skipping ones tried recently). */
+export function needsPrep(root, semId, data, tried = {}, now = new Date()) {
+  return data.assignments.filter((a) => !a.submitted && (!a.due || new Date(a.due) > now) && (a.briefs?.length || a.question)
+    && !existsSync(join(root, prepPath(semId, a)))
+    && !(tried[a.id] && now - new Date(tried[a.id]) < 12 * 3600_000));
+}
+
 // ---------- HTTP ----------
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 function readBody(req, max = 100_000) {
@@ -97,7 +127,7 @@ function readBody(req, max = 100_000) {
   });
 }
 
-/** Connect-style middleware. opts.bin overrides the agent binary (tests). */
+/** Connect-style middleware. opts.bin overrides the agent binary and opts.status the sign-in check (tests). */
 export function createAiApi(root, opts = {}) {
   widenPath();
   const token = randomBytes(18).toString("base64url");   // only pages served by this app can read it
@@ -105,56 +135,55 @@ export function createAiApi(root, opts = {}) {
   let cache;
   const json = (res, body, code = 200) => { res.statusCode = code; res.setHeader("Content-Type", "application/json"); res.setHeader("Cache-Control", "no-store"); res.end(JSON.stringify(body)); };
 
-  async function run(req, res) {
-    const body = await readBody(req);
+  /** Starts one turn. Returns { error, code } or { chat, live, done } (done resolves when it ends). */
+  function startTurn(body) {
     const cfg = loadConfig(root) ?? {};
     // the panel can pick another installed tool for this message; otherwise the one from `ouc ai setup`
     const tool = body.tool ?? (cfg.tool ? (ALIASES[cfg.tool] ?? cfg.tool) : null);
-    if (!tool) return json(res, { error: "No AI chosen yet. In Terminal, run: ouc ai setup" }, 400);
-    if (!AGENTIC.has(tool) && !(tool === "local" && cfg.local)) return json(res, { error: `Unknown AI "${tool}".` }, 400);
-    if (tool === "opencode" && !cfg.opencode && !existsSync(join(root, ".opencode/opencode.json"))) return json(res, { error: "opencode has no local model set up yet. In Terminal, run: ouc ai setup" }, 400);
+    const fail = (error, code = 400) => ({ error, code });
+    if (!tool) return fail("No AI chosen yet. In Terminal, run: ouc ai setup");
+    if (!AGENTIC.has(tool) && !(tool === "local" && cfg.local)) return fail(`Unknown AI "${tool}".`);
+    if (tool === "opencode" && !cfg.opencode && !existsSync(join(root, ".opencode/opencode.json"))) return fail("opencode has no local model set up yet. In Terminal, run: ouc ai setup");
     cfg.tool = tool;
     const semId = body.sem && existsSync(join(root, "semesters", body.sem)) ? body.sem : currentSemesterId(root);
     let data;
-    try { data = semId ? loadData(root, semId) : { courses: [], notes: [], assignments: [] }; } catch (e) { return json(res, { error: e.message }, 500); }
+    try { data = semId ? loadData(root, semId) : { courses: [], notes: [], assignments: [] }; } catch (e) { return fail(e.message, 500); }
 
     let chat = body.chatId && safeId(body.chatId) ? (runs.get(body.chatId)?.chat ?? loadChat(root, body.chatId)) : null;
-    if (chat && runs.has(chat.id)) return json(res, { error: "Still working on the last message. Wait for it or press Stop." }, 409);
+    if (chat && runs.has(chat.id)) return fail("Still working on the last message. Wait for it or press Stop.", 409);
     const actions = listActions(root);
     const action = chat ? chat.action : body.action || null;
     const params = chat ? chat.params ?? {} : body.params ?? {};
     const meta = actions.find((a) => a.id === action);
-    if (action && !meta) return json(res, { error: `Unknown action "${action}".` }, 400);
-    if (meta?.agentOnly && !AGENTIC.has(tool)) return json(res, { error: `"${meta.title}" needs Claude Code, Codex or opencode. With a local model, use the ouc command in Terminal (ouc notes, ouc plan).` }, 400);
+    if (action && !meta) return fail(`Unknown action "${action}".`);
+    if (meta?.agentOnly && !AGENTIC.has(tool)) return fail(`"${meta.title}" needs Claude Code, Codex or opencode. With a local model, use the ouc command in Terminal (ouc notes, ouc plan).`);
     const sameTool = chat && chat.tool === tool;
     const firstTurn = !chat || !sameTool || (AGENTIC.has(tool) && !chat.sessionId);
     let prompt;
     try { prompt = buildPrompt({ root, semId, data, action: chat && !firstTurn ? null : action, params, message: body.message, first: firstTurn && AGENTIC.has(tool) }); }
-    catch (e) { return json(res, { error: e.message }, 400); }
+    catch (e) { return fail(e.message); }
     // a follow-up after switching tools starts a new conversation with that tool
     if (chat && !sameTool) chat = { ...chat, sessionId: undefined, tool };
-    const what = params.topic || data.assignments.find((x) => x.id === params.assignment)?.title || data.courses.find((c) => c.code === params.course)?.short || (meta?.id === "make-notes" ? "all courses" : "");
-    const shown = String(body.message ?? "").trim() || `${meta?.title ?? "Request"}${what ? `: ${what}` : ""}`;
+    const assignment = data.assignments.find((x) => x.id === params.assignment);
+    const what = params.topic || assignment?.title || data.courses.find((c) => c.code === params.course)?.short || (meta?.id === "make-notes" ? "all courses" : "");
+    const title = (action === "assignment-prep" && PREP_TITLE[params.mode]) || meta?.title || "Request";
+    const shown = String(body.message ?? "").trim() || `${title}${what ? `: ${what}` : ""}`;
     const now = new Date().toISOString();
     chat ??= { id: randomUUID(), title: shown.slice(0, 80), tool, action, params, sem: semId, createdAt: now, messages: [] };
     chat.updatedAt = now;
     chat.messages.push({ role: "user", text: shown, prompt, at: now });
-    const reply = { role: "assistant", text: "", updates: [], steps: [], files: [], at: now, by: tool === "opencode" && !cfg.opencode ? "opencode" : describe(cfg) };
+    const by = tool === "opencode" && !cfg.opencode ? "opencode" : describe(cfg);
+    const reply = { role: "assistant", text: "", updates: [], steps: [], files: [], at: now, by };
     chat.messages.push(reply);
+    // a prep pack's history survives even if the AI rewrites the file without it
+    const prepAbs = action === "assignment-prep" && assignment ? join(root, prepPath(semId, assignment)) : null;
+    const prepLog = prepAbs ? readPrepMeta(read(prepAbs)).log : [];
+    const prepMode = body.auto ? "auto" : params.mode;
 
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-store");
-    res.setHeader("X-Accel-Buffering", "no");
     const live = { chat, stop: () => {}, listeners: new Set() };
     runs.set(chat.id, live);
     chat.running = true;
     const send = (e) => { for (const l of live.listeners) l(e); };
-    const write = (e) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(e)}\n\n`); };
-    live.listeners.add(write);
-    res.on("close", () => live.listeners.delete(write));   // the run goes on; the chat is saved when it ends
-    write({ type: "chat", id: chat.id, title: chat.title });
-
     const onEvent = (e) => {
       if (e.type === "text") {
         // local models send pieces of one answer; agent tools send whole messages, and only the
@@ -171,20 +200,79 @@ export function createAiApi(root, opts = {}) {
       send(e);
     };
     const onStart = ({ stop }) => { live.stop = stop; };
-    const done = AGENTIC.has(tool)
+    const done = (AGENTIC.has(tool)
       ? runAgentTurn(root, cfg, prompt, { resume: sameTool ? chat.sessionId : undefined, onEvent, onStart, bin: opts.bin })
       : runChatTurn(cfg.local, [{ role: "system", content: chatSystem({ root, semId, data, action, params }) },
-        ...chat.messages.slice(0, -1).map((m) => ({ role: m.role, content: m.role === "user" ? m.prompt ?? m.text : m.text }))], { onEvent, onStart });
-    done.finally(() => {
-      chat.running = false;
-      chat.updatedAt = new Date().toISOString();
-      saveChat(root, chat);
-      runs.delete(chat.id);
-      if (!res.writableEnded) res.end();
-    });
+        ...chat.messages.slice(0, -1).map((m) => ({ role: m.role, content: m.role === "user" ? m.prompt ?? m.text : m.text }))], { onEvent, onStart }))
+      .then((r) => {
+        if (r?.ok && prepAbs) stampPrep(prepAbs, { assignment: assignment.id, by, mode: prepMode, log: prepLog });
+        return r;
+      })
+      .finally(() => {
+        chat.running = false;
+        chat.updatedAt = new Date().toISOString();
+        saveChat(root, chat);
+        runs.delete(chat.id);
+        for (const l of live.listeners) l(null);
+      });
+    return { chat, live, done };
   }
 
-  return async (req, res, next) => {
+  async function run(req, res) {
+    const t = startTurn(await readBody(req));
+    if (t.error) return json(res, { error: t.error }, t.code);
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Accel-Buffering", "no");
+    // null = the turn ended
+    const write = (e) => { if (res.writableEnded) return; if (e) res.write(`data: ${JSON.stringify(e)}\n\n`); else res.end(); };
+    t.live.listeners.add(write);
+    res.on("close", () => t.live.listeners.delete(write));   // the run goes on; the chat is saved when it ends
+    write({ type: "chat", id: t.chat.id, title: t.chat.title });
+  }
+
+  // ----- automatic prep: one assignment at a time, in the background -----
+  const prepState = join(root, ".ouc", "prep-state.json");
+  const prep = { busy: false, again: false, running: null, chatId: null };
+  async function status(fresh = false) {
+    if (!cache || Date.now() - cache.at > 5 * 60_000 || fresh) cache = { at: Date.now(), body: await aiStatus(root) };
+    return cache.body;
+  }
+  const prepEnabled = (cfg = loadConfig(root)) => !!cfg && cfg.autoPrep !== false && AGENTIC.has(ALIASES[cfg.tool] ?? cfg.tool);
+  async function autoPrep() {
+    if (prep.busy) { prep.again = true; return; }
+    prep.busy = true;
+    try {
+      do {
+        prep.again = false;
+        if (!prepEnabled()) break;
+        const st = await (opts.status ?? status)();
+        if (!st.ready) break;   // not signed in: try again on the next rebuild
+        const semId = currentSemesterId(root);
+        if (!semId) break;
+        let tried = {};
+        try { tried = JSON.parse(read(prepState, "{}")); } catch { /* start fresh */ }
+        for (const a of needsPrep(root, semId, loadData(root, semId), tried)) {
+          tried[a.id] = new Date().toISOString();
+          mkdirSync(join(root, ".ouc"), { recursive: true });
+          writeFileSync(prepState, JSON.stringify(tried, null, 1));
+          const t = startTurn({ sem: semId, action: "assignment-prep", params: { assignment: a.id, mode: "new" }, auto: true });
+          if (t.error) break;
+          prep.running = a.id; prep.chatId = t.chat.id;
+          const r = await t.done;
+          prep.running = null; prep.chatId = null;
+          if (!r?.ok) break;     // a failure (usage limit, sign-in) would fail for the rest too
+        }
+      } while (prep.again);
+    } catch (e) {
+      console.error(`[ai] automatic prep: ${e.message}`);
+    } finally {
+      prep.busy = false; prep.running = null; prep.chatId = null;
+    }
+  }
+
+  const handler = async (req, res, next) => {
     if (!req.url?.startsWith("/api/ai/")) return next();
     const url = new URL(req.url, "http://x");
     // Only this app, opened on this computer, may use it (blocks other websites and DNS rebinding).
@@ -193,10 +281,8 @@ export function createAiApi(root, opts = {}) {
     if (req.method !== "GET" && req.headers["x-ouc-ai"] !== token) return json(res, { error: "Reload the app and try again." }, 403);
     try {
       const p = url.pathname;
-      if (p === "/api/ai/status") {
-        if (!cache || Date.now() - cache.at > 5 * 60_000 || url.searchParams.has("fresh")) cache = { at: Date.now(), body: await aiStatus(root) };
-        return json(res, { ...cache.body, token });
-      }
+      if (p === "/api/ai/status") return json(res, { ...(await status(url.searchParams.has("fresh"))), token });
+      if (p === "/api/ai/prep") return json(res, { enabled: prepEnabled(), running: prep.running, chatId: prep.chatId });
       if (p === "/api/ai/actions") return json(res, { actions: listActions(root) });
       if (p === "/api/ai/chats") return json(res, { chats: listChats(root) });
       if (p.startsWith("/api/ai/chats/")) {
@@ -216,4 +302,8 @@ export function createAiApi(root, opts = {}) {
       else res.end();
     }
   };
+  /** Call when the app data was rebuilt (a sync, new files): prepares assignments that need it. */
+  handler.autoPrep = () => { if (!opts.noAutoPrep) autoPrep(); };
+  handler.prepIdle = () => !prep.busy;
+  return handler;
 }

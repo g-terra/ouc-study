@@ -26,7 +26,7 @@ semesters/<id>/       ← personal, git-ignored
   _meta/              eclass-meta.json (course structure), submissions.json, live.json, exams.json, resources.json (study links)
   courses/<course>/NN-<week>/   original eClass files
   text/               plain-text copies of every PDF/PPTX/DOCX/notebook. **grep these**
-  assignments/<CODE>/<MM-DD>_<name>/   brief files, my-submission/, README.md (working notes)
+  assignments/<CODE>/<MM-DD>_<name>/   brief files, my-submission/, README.md (working notes), PREP.md (AI prep pack)
   notes/<CODE>/*.md   visual notes (format: docs/NOTE_FORMAT.md)
   plans/, research/   weekly plans, research digests
   updates/            daily eClass change feed
@@ -60,7 +60,7 @@ Never invent progress.
 
 ## Agents & skills
 
-Skills (`ai/skills/*/SKILL.md`, standard Agent Skills format): `sync-eclass`, `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `assignment-helper`.
+Skills (`ai/skills/*/SKILL.md`, standard Agent Skills format): `sync-eclass`, `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `assignment-helper`, `assignment-prep`.
 Agents (`ai/agents/*.md`): **note-taker**, **study-planner**, **researcher**, **tutor**. Claude Code gets them as subagents in `.claude/agents/`, opencode in `.opencode/agents/`; Codex gets each one as a skill of the same name in `.agents/skills/` (where opencode also finds the skills).
 When a request matches a skill, follow its `SKILL.md`. If the installed copies are missing, run `ouc ai install` (or read them straight from `ai/`).
 **Edit skills in `ai/` only**; the copies in `.claude/`, `.agents/` and `.opencode/agents/` are regenerated.

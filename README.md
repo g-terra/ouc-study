@@ -103,7 +103,7 @@ You can also just open the folder in the tool itself (`claude`, `codex` or `open
 | researcher | finds and checks papers, chapters, videos and tutorials, with citations |
 | tutor | explains, quizzes, reviews drafts, and logs weak spots |
 
-Skills: `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `assignment-helper`, `sync-eclass`. They live in `ai/`; `ouc ai install` copies them to `.claude/` (Claude Code), `.agents/skills/` (Codex and opencode) and `.opencode/agents/` (opencode subagents). Run it again after editing them.
+Skills: `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `assignment-helper`, `assignment-prep`, `sync-eclass`. They live in `ai/`; `ouc ai install` copies them to `.claude/` (Claude Code), `.agents/skills/` (Codex and opencode) and `.opencode/agents/` (opencode subagents). Run it again after editing them.
 
 Try: "plan my week" · "make notes on lecture 7" · "find material on signal detection theory" · "quiz me on Naive Bayes" · "help me approach the term project" · "what's new on eClass?"
 
@@ -116,6 +116,7 @@ Press **✨ Ask AI** in the top bar. Pick an action (Make notes, Quiz me, Plan m
 - Every skill in `ai/skills/` becomes an action automatically.
 - The AI edits files in this folder without asking each time (like `ouc notes`), with the same limits as the command line. Claude Code and opencode are blocked from reading your eClass key, and every AI is told never to touch it.
 - With "a local model directly" you can chat and quiz; the other actions need Claude Code, Codex or opencode.
+- **Prep packs:** every open assignment gets a `PREP.md` in its folder (what it asks, key ideas, hints, course material, extra reading, a plan), shown on the assignment page. The app makes them on its own when it starts and after each sync, one at a time, for assignments that don't have one yet. On the assignment page you can ask another AI to **Review & improve** it, **Add more**, or **Start over**. To turn the automatic part off, add `"autoPrep": false` to `.ouc/ai.json`.
 - Chats are saved on your computer in `.ouc/chats/` (never committed). **History** in the panel reopens them.
 - It only works in the app running on your computer (`ouc open` or `npm run dev`), and only pages from that app can use it.
 

@@ -14,13 +14,14 @@ const FIELDS = {
   "research-topic": [{ key: "topic", kind: "text", label: "Topic", required: true, placeholder: "e.g. signal detection theory" }, { key: "course", kind: "course", label: "Course" }],
   "find-material": [{ key: "topic", kind: "text", label: "What are you looking for?", required: true, placeholder: "e.g. the slide about d′" }, { key: "course", kind: "course", label: "Course" }],
   "assignment-helper": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
+  "assignment-prep": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "sync-eclass": [],
 };
 const TITLE = {
   "make-notes": "Make notes", "quiz-me": "Quiz me", "plan-week": "Plan my week", "research-topic": "Research a topic",
-  "find-material": "Find material", "assignment-helper": "Assignment help", "sync-eclass": "Sync eClass",
+  "find-material": "Find material", "assignment-helper": "Assignment help", "assignment-prep": "Prep an assignment", "sync-eclass": "Sync eClass",
 };
-const ICON = { "make-notes": "📒", "quiz-me": "❓", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "sync-eclass": "🔄" };
+const ICON = { "make-notes": "📒", "quiz-me": "❓", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "sync-eclass": "🔄" };
 // What a plain local model (no file or web tools) can do from the app.
 const CHAT_OK = new Set(["quiz-me"]);
 
@@ -62,6 +63,22 @@ export function notesPrompt(semId, course, week) {
       `The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/. Save the note as ${rel} (front matter: course ${course.code}, section ${week.index}, week ${weekNumber(week)}). ` +
       `When done, run: node packages/ai/validate.mjs ${rel} and fix every error it reports.`,
   };
+}
+
+/** Where an assignment's prep pack lives (repo-relative). */
+export const prepPath = (semId, a) => `semesters/${semId}/assignments/${a.id}/PREP.md`;
+export const PREP_MODES = {
+  new: "Write it from scratch.",
+  redo: "Start over: don't read the existing PREP.md, write a new one from scratch and replace it.",
+  review: "Review the existing PREP.md critically (another AI wrote it): fix mistakes, sharpen vague hints, fill gaps, remove anything that gives answers away. Keep what's good and edit the file in place.",
+  more: "Keep everything in the existing PREP.md and add depth: more hints, practice questions on the same ideas, more sources, a worked example on a different problem.",
+};
+/** The prompt for an assignment's prep pack (also used by the app's automatic prep after a sync). */
+export function prepPrompt(semId, a, mode = "new") {
+  const rel = prepPath(semId, a);
+  return `Use the assignment-prep skill (ai/skills/assignment-prep/SKILL.md). Prepare the study pack for ${a.fullTitle} (${a.code}${a.due ? `, due ${a.due}` : ""}). ` +
+    `Its folder is semesters/${semId}/assignments/${a.id}/; save the pack as ${rel}. Mode: ${PREP_MODES[mode] ? mode : "new"}. ${PREP_MODES[mode] ?? PREP_MODES.new} ` +
+    "Explain and give hints, but never write answers the student could submit.";
 }
 
 // Said once at the start of every chat from the app: nobody can answer a question mid-run.
@@ -110,6 +127,11 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       if (!a) throw new Error("That assignment isn't in the app data.");
       body = `Use the assignment-helper skill: help me with ${a.fullTitle} (${a.code}${a.due ? `, due ${a.due}` : ""}). Its folder is semesters/${semId}/assignments/${a.id}/. ` +
         `Explain, give hints and outline, but don't write answers I could submit.${extra}`; break;
+    }
+    case "assignment-prep": {
+      const a = data.assignments.find((x) => x.id === params.assignment);
+      if (!a) throw new Error("That assignment isn't in the app data.");
+      body = prepPrompt(semId, a, params.mode) + extra; break;
     }
     default:
       if (!existsSync(join(root, "ai/skills", action, "SKILL.md"))) throw new Error(`Unknown action "${action}".`);

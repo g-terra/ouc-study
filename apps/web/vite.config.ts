@@ -64,10 +64,17 @@ function eclassApi(): Plugin {
 }
 
 /** /api/ai/*: the Ask AI panel talks to the agent chosen with `ouc ai setup` (see packages/ai/api.mjs). */
+let aiHandler: ReturnType<typeof createAiApi> | undefined;
 function aiApi(): Plugin {
-  let handler: Connect.NextHandleFunction | undefined;
-  const use = (s: { middlewares: Connect.Server }) => { handler ??= createAiApi(resolve(HERE, "../..")); s.middlewares.use(handler!); };
-  return { name: "ai-api", configureServer: use, configurePreviewServer: use };
+  const use = (s: { middlewares: Connect.Server }) => { aiHandler ??= createAiApi(resolve(HERE, "../..")); s.middlewares.use(aiHandler); };
+  return {
+    name: "ai-api", configurePreviewServer: use,
+    configureServer(s) {
+      use(s);
+      // prepare open assignments that have no prep pack yet (again after each sync: see semesterFiles)
+      setTimeout(() => aiHandler?.autoPrep(), 20_000).unref();
+    },
+  };
 }
 
 /** Serves the course files from ../../semesters at /files/<semester>/<path> (dev + preview). */
@@ -105,19 +112,22 @@ function semesterFiles(): Plugin {
       // Vite's watcher takes paths, not globs: watch these folders of every semester (the handler below filters files)
       const sems = existsSync(SEMESTERS) ? readdirSync(SEMESTERS).filter((d) => existsSync(resolve(SEMESTERS, d, "semester.json"))) : [];
       for (const d of sems) mkdirSync(resolve(SEMESTERS, d, "notes"), { recursive: true }); // so the first note is seen
-      server.watcher.add(sems.flatMap((d) => ["notes", "_meta", "updates", "semester.json"].map((x) => resolve(SEMESTERS, d, x))));
+      server.watcher.add(sems.flatMap((d) => ["notes", "_meta", "updates", "assignments", "semester.json"].map((x) => resolve(SEMESTERS, d, x))));
       // Check eClass for news when the app starts (only if a key has been set up).
       if (existsSync(resolve(HERE, "../../.eclass-token")) && !process.env.NO_SYNC) {
         spawn(process.execPath, [resolve(HERE, "../../packages/eclass-sync/daily.mjs"), "--quiet"], { cwd: resolve(HERE, "../.."), stdio: "inherit" });
       }
       server.watcher.on("all", (_event, file) => {
-        if (!file.startsWith(SEMESTERS) || !/(\/notes\/.*\.md|\/_meta\/(?!sync-state).*\.json|\/updates\/(?!connection).*\.json|semester\.json)$/.test(file.replaceAll(sep, "/"))) return;
+        if (!file.startsWith(SEMESTERS) || !/(\/notes\/.*\.md|\/assignments\/.*\/PREP\.md|\/_meta\/(?!sync-state).*\.json|\/updates\/(?!connection).*\.json|semester\.json)$/.test(file.replaceAll(sep, "/"))) return;
         clearTimeout(timer);
         timer = setTimeout(() => {
           // use this same Node + local tsx (works in the background service where npm isn't on PATH)
           const p = spawn(process.execPath, [resolve(HERE, "../../node_modules/tsx/dist/cli.mjs"), "packages/content/src/build.ts"], { cwd: resolve(HERE, "../.."), stdio: "inherit" });
           // the app re-reads its data in place (no page reload, so an Ask AI run on screen isn't interrupted)
-          p.on("exit", () => server.ws.send({ type: "custom", event: "ouc:data" }));
+          p.on("exit", () => {
+            server.ws.send({ type: "custom", event: "ouc:data" });
+            aiHandler?.autoPrep(); // a sync may have brought a new assignment
+          });
         }, 300);
       });
     },

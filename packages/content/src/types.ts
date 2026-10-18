@@ -83,6 +83,14 @@ export interface Assignment {
   submissions: FileRef[];
   workingNotes?: string;  // href to README.md in the assignment folder
   resources?: Resource;
+  prep?: Prep;            // PREP.md: hints and extra material prepared by the AI
+}
+
+export interface Prep {
+  body: string;           // Markdown
+  by?: string;            // the AI that last changed it
+  updated?: string;       // ISO datetime
+  log: string[];          // "2026-10-18 · Claude Code · prepared", newest last
 }
 
 export interface Exam {
