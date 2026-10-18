@@ -10,12 +10,13 @@ export interface AiStatus {
 }
 export interface ActionField { key: string; kind: "course" | "assignment" | "text"; label: string; required?: boolean; placeholder?: string }
 export interface AiAction { id: string; title: string; icon: string; description: string; fields: ActionField[]; agentOnly: boolean }
-export interface ChatMessage { role: "user" | "assistant"; text: string; steps?: string[]; files?: string[]; error?: string; by?: string; at?: string }
+/** An assistant message: `text` is the latest (final) answer; earlier messages from the agent are progress `updates`. */
+export interface ChatMessage { role: "user" | "assistant"; text: string; updates?: string[]; steps?: string[]; files?: string[]; error?: string; by?: string; at?: string }
 export interface Chat { id: string; title: string; tool?: string; action?: string | null; sem?: string; messages: ChatMessage[]; running?: boolean; updatedAt?: string }
 export interface ChatSummary { id: string; title: string; tool?: string; action?: string; sem?: string; updatedAt: string }
 export type AiEvent =
   | { type: "chat"; id: string; title: string }
-  | { type: "text"; text: string }
+  | { type: "text"; text: string; replace?: boolean }
   | { type: "tool"; label: string }
   | { type: "file"; path: string }
   | { type: "session"; id: string }
@@ -82,7 +83,7 @@ export async function stopRun(chatId: string) {
 }
 
 /** One turn: streams the agent's events to onEvent. Throws Error(message) if the turn can't start. */
-export async function runTurn(body: { sem: string; chatId?: string; action?: string; params?: Record<string, string>; message?: string }, onEvent: (e: AiEvent) => void) {
+export async function runTurn(body: { sem: string; tool?: string; chatId?: string; action?: string; params?: Record<string, string>; message?: string }, onEvent: (e: AiEvent) => void) {
   const res = await fetch("/api/ai/run", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify(body) });
   if (!res.ok || !res.body) {
     const j = await res.json().catch(() => ({}));

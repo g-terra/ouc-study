@@ -7,15 +7,20 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import type { SemesterData } from "@ouc/content/types";
 import { Link } from "../lib/router";
 import { mdToHtml } from "../lib/markdown";
-import { TOOL_STATE, fileLink, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatSummary } from "../lib/ai";
+import { TOOL_STATE, fileLink, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
+import { refreshData } from "../lib/data";
 import { cx } from "./ui";
 
 interface Draft { action: string; params: Record<string, string> }
+/** One tab in the panel: a chat (or a draft action), with its own run. */
+export interface Session { key: string; chat: Chat | null; busy: boolean; error?: string; draft: Draft | null }
 interface Ctx {
   open: boolean; setOpen: (o: boolean) => void;
-  chat: Chat | null; busy: boolean; error?: string;
-  draft: Draft | null; setDraft: (d: Draft | null) => void;
-  /** Opens the panel with an action picked (and its inputs filled in). */
+  /** All open chats (tabs); several can run at the same time. */
+  sessions: Session[]; activeKey: string; activate: (key: string) => void; close: (key: string) => void;
+  // the active tab
+  chat: Chat | null; busy: boolean; error?: string; draft: Draft | null; setDraft: (d: Draft | null) => void;
+  /** Opens the panel with an action picked (and its inputs filled in), in a free tab. */
   start: (action: string, params?: Record<string, string>) => void;
   send: (sem: string, message: string, title?: string) => Promise<void>;
   /** The coding tool picked in the panel (null = the one from `ouc ai setup`). */
@@ -24,97 +29,154 @@ interface Ctx {
 }
 const AssistantCtx = createContext<Ctx | null>(null);
 const store = {
-  get: (): { chat?: string; open?: boolean } | null => { try { return JSON.parse(sessionStorage.getItem("ouc-ai") ?? "null"); } catch { return null; } },
-  set: (v: { chat?: string; open?: boolean }) => { try { sessionStorage.setItem("ouc-ai", JSON.stringify(v)); } catch { /* private mode */ } },
+  get: (): { chats?: string[]; active?: number; open?: boolean } | null => { try { return JSON.parse(sessionStorage.getItem("ouc-ai") ?? "null"); } catch { return null; } },
+  set: (v: { chats: string[]; active: number; open: boolean }) => { try { sessionStorage.setItem("ouc-ai", JSON.stringify(v)); } catch { /* private mode */ } },
 };
 export const useAssistant = () => useContext(AssistantCtx)!;
+export const MAX_TABS = 6;
+
+let seq = 0;
+const blank = (): Session => ({ key: `s${++seq}`, chat: null, busy: false, draft: null });
 
 export function AssistantProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [chat, setChat] = useState<Chat | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [sessions, setSessions] = useState<Session[]>(() => [blank()]);
+  const [activeKey, setActiveKey] = useState(() => sessions[0].key);
   const [tool, setToolState] = useState<string | null>(() => { try { return localStorage.getItem("ouc-ai-tool"); } catch { return null; } });
   const setTool = (t: string | null) => { setToolState(t); try { t ? localStorage.setItem("ouc-ai-tool", t) : localStorage.removeItem("ouc-ai-tool"); } catch { /* private mode */ } };
-  const poll = useRef<number | undefined>(undefined);
+  const polls = useRef(new Map<string, number>());
+  const live = useRef(sessions);
+  live.current = sessions;
 
-  const reset = () => { if (busy) return; setChat(null); setDraft(null); setError(undefined); };
+  const active = sessions.find((x) => x.key === activeKey) ?? sessions[0];
+  const update = (key: string, f: (x: Session) => Session) => setSessions((all) => all.map((x) => (x.key === key ? f(x) : x)));
+  const empty = (x: Session) => !x.chat && !x.busy;
+  /** A tab to start something new in: the active one if it's empty, else a new one. */
+  const freeTab = (): string => {
+    const cur = live.current.find((x) => x.key === activeKey);
+    if (cur && empty(cur)) return cur.key;
+    const spare = live.current.find(empty);
+    if (spare) { setActiveKey(spare.key); return spare.key; }
+    const n = blank();
+    // keep at most MAX_TABS: drop the oldest finished chat (it stays in History)
+    setSessions((all) => {
+      let next = [...all, n];
+      while (next.length > MAX_TABS) { const i = next.findIndex((x) => !x.busy); if (i < 0) break; next = next.filter((_, j) => j !== i); }
+      return next;
+    });
+    setActiveKey(n.key);
+    return n.key;
+  };
+
+  const reset = () => { const key = freeTab(); update(key, (x) => ({ ...x, draft: null, error: undefined })); };
   const start = (action: string, params: Record<string, string> = {}) => {
     setOpen(true);
-    if (busy) return;
-    setChat(null); setError(undefined); setDraft({ action, params });
+    const key = freeTab();
+    update(key, (x) => ({ ...x, error: undefined, draft: { action, params } }));
+  };
+  const close = (key: string) => {
+    window.clearInterval(polls.current.get(key));
+    polls.current.delete(key);
+    const all = live.current;
+    let next = all.filter((x) => x.key !== key);
+    if (!next.length) next = [blank()];
+    if (key === activeKey) setActiveKey((next[Math.max(0, all.findIndex((x) => x.key === key) - 1)] ?? next[0]).key);
+    setSessions(next);
   };
   // a run started earlier (before a reload) keeps going on the server: follow it until it ends
-  const follow = (id: string) => {
-    window.clearInterval(poll.current);
-    poll.current = window.setInterval(async () => {
+  const follow = (key: string, id: string) => {
+    window.clearInterval(polls.current.get(key));
+    polls.current.set(key, window.setInterval(async () => {
       const c = await getChat(id);
       if (!c) return;
-      setChat(c);
-      if (!c.running) { window.clearInterval(poll.current); setBusy(false); }
-    }, 2000);
+      update(key, (x) => ({ ...x, chat: c, busy: !!c.running }));
+      if (!c.running) { window.clearInterval(polls.current.get(key)); polls.current.delete(key); if (c.messages.at(-1)?.files?.length) refreshData(); }
+    }, 2000));
+  };
+  const openChat = async (key: string, id: string) => {
+    const c = await getChat(id);
+    if (!c) return false;
+    update(key, (x) => ({ ...x, chat: c, draft: null, error: undefined, busy: !!c.running }));
+    if (c.running) follow(key, c.id);
+    return true;
   };
   const load = async (id: string) => {
-    if (busy) return;
-    const c = await getChat(id);
-    if (!c) return;
-    setChat(c); setDraft(null); setError(undefined);
-    if (c.running) { setBusy(true); follow(c.id); }
+    const there = live.current.find((x) => x.chat?.id === id);
+    if (there) { setActiveKey(there.key); return; }
+    await openChat(freeTab(), id);
   };
-  useEffect(() => () => window.clearInterval(poll.current), []);
-  // The app reloads itself when an agent writes a note; pick the chat (and the open panel) back up.
+  useEffect(() => () => polls.current.forEach((t) => window.clearInterval(t)), []);
+  // The app reloads itself when an agent writes a note; pick the chats (and the open panel) back up.
   useEffect(() => {
     const saved = store.get();
-    if (saved?.chat) load(saved.chat);
     if (saved?.open) setOpen(true);
+    const ids = (saved?.chats ?? []).slice(0, MAX_TABS);
+    if (!ids.length) return;
+    const restored = ids.map(() => blank());
+    setSessions(restored);
+    setActiveKey(restored[Math.min(saved?.active ?? 0, restored.length - 1)].key);
+    ids.forEach((id, i) => openChat(restored[i].key, id));
   }, []);
-  useEffect(() => { store.set({ chat: chat?.id || undefined, open }); }, [chat?.id, open]);
+  useEffect(() => {
+    const withChat = sessions.filter((x) => x.chat?.id);
+    store.set({ chats: withChat.map((x) => x.chat!.id), active: Math.max(0, withChat.findIndex((x) => x.key === activeKey)), open });
+  }, [sessions.map((x) => x.chat?.id).join(), activeKey, open]);
 
   const send = async (sem: string, message: string, title?: string) => {
-    if (busy) return;
+    const key = active.key;
+    const { chat, draft } = active;
+    if (active.busy) return;
     const body = { ...(chat ? { sem, chatId: chat.id, message } : { sem, action: draft?.action, params: draft?.params, message }), ...(tool ? { tool } : {}) };
-    setError(undefined); setBusy(true);
     const user = message.trim() || null;
-    let id = chat?.id;
+    let id = chat?.id, wrote = false;
     // show the message straight away; the reply fills in as events arrive
-    setChat((c) => {
-      const base: Chat = c ?? { id: "", title: user ?? "New chat", action: draft?.action, messages: [] };
-      return { ...base, messages: [...base.messages, ...(user || !c ? [{ role: "user" as const, text: user ?? title ?? "…" }] : []), { role: "assistant" as const, text: "", steps: [], files: [] }] };
+    update(key, (x) => {
+      const base: Chat = x.chat ?? { id: "", title: user ?? title ?? "New chat", action: draft?.action, messages: [] };
+      return { ...x, busy: true, error: undefined, chat: { ...base, messages: [...base.messages, ...(user || !x.chat ? [{ role: "user" as const, text: user ?? title ?? "…" }] : []), { role: "assistant" as const, text: "", steps: [], files: [], updates: [] }] } };
     });
-    const patch = (f: (m: Chat["messages"][number]) => void) => setChat((c) => {
-      if (!c) return c;
-      const messages = c.messages.slice();
+    const patch = (f: (m: ChatMessage) => void) => update(key, (x) => {
+      if (!x.chat) return x;
+      const messages = x.chat.messages.slice();
       const last = { ...messages[messages.length - 1] };
       f(last);
       messages[messages.length - 1] = last;
-      return { ...c, messages };
+      return { ...x, chat: { ...x.chat, messages } };
     });
     try {
       await runTurn(body, (e) => {
-        if (e.type === "chat") { id = e.id; setChat((c) => (c ? { ...c, id: e.id, title: e.title } : c)); }
-        else if (e.type === "text") patch((m) => { m.text += e.text; });
+        if (e.type === "chat") { id = e.id; update(key, (x) => (x.chat ? { ...x, chat: { ...x.chat, id: e.id, title: e.title } } : x)); }
+        else if (e.type === "text") patch((m) => {
+          // a whole new message from an agent tool: the previous one becomes a progress update
+          if (e.replace) { if (m.text) m.updates = [...(m.updates ?? []), m.text]; m.text = e.text; }
+          else m.text += e.text;
+        });
         else if (e.type === "tool") patch((m) => { m.steps = [...(m.steps ?? []), e.label]; });
-        else if (e.type === "file") patch((m) => { m.files = [...(m.files ?? []), e.path]; });
+        else if (e.type === "file") { wrote = true; patch((m) => { m.files = [...(m.files ?? []), e.path]; }); }
         else if (e.type === "error") patch((m) => { m.error = e.message; });
       });
-      setDraft(null);
-      setBusy(false);
+      update(key, (x) => ({ ...x, draft: null, busy: false }));
     } catch (e) {
       // the turn never started: put the chat back as it was
-      setChat(chat);
-      setError((e as Error).message);
-      setBusy(false);
+      update(key, (x) => ({ ...x, chat, busy: false, error: (e as Error).message }));
       return;
     }
     if (!id) return;
+    // the app server rebuilds the data when a note changes; this catches a write it didn't see
+    if (wrote) window.setTimeout(refreshData, 2000);
     // the stream ended (finished, or the page lost the connection): re-read what was saved
     const saved = await getChat(id);
-    if (saved) { setChat(saved); if (saved.running) { setBusy(true); follow(id); } }
+    if (saved) { update(key, (x) => ({ ...x, chat: saved, busy: !!saved.running })); if (saved.running) follow(key, id); }
   };
-  const stop = () => { if (chat?.id) stopRun(chat.id); };
+  const stop = () => { if (active.chat?.id) stopRun(active.chat.id); };
 
-  return <AssistantCtx.Provider value={{ open, setOpen, chat, busy, error, draft, setDraft, start, send, stop, reset, load, tool, setTool }}>{children}</AssistantCtx.Provider>;
+  return (
+    <AssistantCtx.Provider value={{
+      open, setOpen, sessions, activeKey: active.key, activate: setActiveKey, close,
+      chat: active.chat, busy: active.busy, error: active.error, draft: active.draft,
+      setDraft: (d) => update(active.key, (x) => ({ ...x, draft: d })),
+      start, send, stop, reset, load, tool, setTool,
+    }}>{children}</AssistantCtx.Provider>
+  );
 }
 
 /** A small button that opens the panel with an action ready to go. */
@@ -168,7 +230,7 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
 
   return (
     <aside role="dialog" aria-label="Ask AI"
-      className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-line bg-bg shadow-2xl sm:w-[440px]">
+      className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-line bg-bg shadow-2xl sm:w-[440px] lg:shadow-none">
       <header className="flex items-center gap-2 border-b border-line px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="font-serif text-lg font-semibold leading-tight">Ask AI</div>
@@ -186,12 +248,13 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
             ) : ai.state === "checking" ? "Checking your AI…" : ai.label ?? "No AI chosen"}
           </div>
         </div>
-        <button type="button" className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-ink" disabled={a.busy}
+        <button type="button" className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-ink"
           onClick={async () => setHistory(history ? null : await listChats())}>History</button>
-        <button type="button" className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-ink disabled:opacity-40" disabled={a.busy || (!a.chat && !a.draft)}
-          onClick={() => { a.reset(); setHistory(null); }}>New</button>
+        <button type="button" className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-ink disabled:opacity-40" disabled={!a.chat && !a.draft}
+          onClick={() => { a.reset(); setHistory(null); }}>New chat</button>
         <button type="button" aria-label="Close" className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-ink" onClick={() => a.setOpen(false)}>✕</button>
       </header>
+      {a.sessions.length > 1 && <Tabs actions={actions} onPick={() => setHistory(null)} />}
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {history ? (
@@ -229,6 +292,28 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
         </div>
       </footer>
     </aside>
+  );
+}
+
+/** One tab per open chat; a dot marks the ones still working. */
+function Tabs({ actions, onPick }: { actions: AiAction[]; onPick: () => void }) {
+  const a = useAssistant();
+  return (
+    <nav aria-label="Open chats" className="flex gap-1 overflow-x-auto border-b border-line px-3 py-2">
+      {a.sessions.map((x) => {
+        const title = x.chat?.title || (x.draft ? actions.find((y) => y.id === x.draft!.action)?.title : "") || "New chat";
+        const on = x.key === a.activeKey;
+        return (
+          <div key={x.key} className={cx("flex max-w-[11rem] shrink-0 items-center rounded-full border text-xs", on ? "border-ink bg-surface font-semibold" : "border-line text-muted hover:border-muted")}>
+            <button type="button" onClick={() => { a.activate(x.key); onPick(); }} className="flex min-w-0 items-center gap-1.5 py-1 pl-3 pr-1" title={title}>
+              {x.busy && <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-accent" />}
+              <span className="truncate">{title}</span>
+            </button>
+            <button type="button" aria-label={`Close ${title}`} onClick={() => a.close(x.key)} className="px-2 py-1 text-muted hover:text-ink">×</button>
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -306,34 +391,67 @@ function ActionForm({ data, action, params, onChange }: { data: SemesterData; ac
   );
 }
 
-function Message({ msg, live }: { msg: Chat["messages"][number]; live: boolean }) {
+function Markdown({ text, className }: { text: string; className?: string }) {
+  return <div className={cx("text-sm leading-relaxed [&_a]:underline [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_ul]:list-disc", className)} dangerouslySetInnerHTML={{ __html: mdToHtml(text) }} />;
+}
+
+const LIVE_STEPS = 3;
+const SHOW_FILES = 3;
+function FileLinks({ files, className }: { files: string[]; className?: string }) {
+  const cls = "flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold hover:border-muted";
+  return (
+    <div className={cx("flex flex-col gap-1", className)}>
+      {files.map((f) => {
+        const l = fileLink(f)!;
+        const label = <><span aria-hidden>📄</span> <span className="truncate">{f.split("/").pop()}</span></>;
+        return l.internal ? <Link key={f} to={l.to} className={cls}>{label}</Link>
+          : <a key={f} href={l.to} target="_blank" rel="noreferrer" className={cls}>{label}</a>;
+      })}
+    </div>
+  );
+}
+function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
   if (msg.role === "user") {
     return <div className="ml-10 self-end whitespace-pre-wrap rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-sm text-bg">{msg.text}</div>;
   }
   const steps = msg.steps ?? [];
+  const updates = msg.updates ?? [];
+  // only files the app can open (notes, course files); memory and other bookkeeping files stay out of the way
+  const files = [...new Set(msg.files ?? [])].filter((f) => fileLink(f));
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
   return (
     <div className="flex flex-col gap-2">
-      {steps.length > 0 && (
-        <details className="text-xs text-muted" open={live}>
-          <summary className="cursor-pointer select-none">{live ? "⏳ Working…" : `${steps.length} step${steps.length === 1 ? "" : "s"}`}</summary>
-          <ul className="mt-1 flex flex-col gap-0.5 border-l border-line pl-3">{steps.map((s, i) => <li key={i}>{s}</li>)}</ul>
-        </details>
-      )}
-      {msg.text
-        ? <div className="text-sm leading-relaxed [&_a]:underline [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_ul]:list-disc" dangerouslySetInnerHTML={{ __html: mdToHtml(msg.text) }} />
-        : live && !steps.length && <div className="animate-pulse text-sm text-muted">Thinking…</div>}
-      {(msg.files?.length ?? 0) > 0 && (
-        <div className="flex flex-col gap-1">
-          {[...new Set(msg.files)].map((f) => {
-            const l = fileLink(f);
-            const label = <><span aria-hidden>📄</span> <span className="truncate">{f.split("/").pop()}</span></>;
-            const cls = "flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold hover:border-muted";
-            return !l ? <code key={f} className="text-xs text-muted">{f}</code>
-              : l.internal ? <Link key={f} to={l.to} className={cls}>{label}</Link>
-              : <a key={f} href={l.to} target="_blank" rel="noreferrer" className={cls}>{label}</a>;
-          })}
+      {live ? (
+        // while it works: a fixed-size box with what it's doing now, the last few steps and the latest message
+        <div className="rounded-xl border border-line bg-surface p-3 text-xs text-muted">
+          <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink">
+            <span aria-hidden className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            {!steps.length && !msg.text ? "Planning the answer…" : msg.text && !steps.length ? "Writing the answer…" : "Working on it…"}
+            <span className="ml-auto font-normal text-xs text-muted">{[steps.length && plural(steps.length, "step"), files.length && plural(files.length, "file")].filter(Boolean).join(" · ")}</span>
+          </div>
+          {!steps.length && !msg.text && <p className="pl-6">Reading your request and the study files to work out what to do.</p>}
+          {steps.length > LIVE_STEPS && <div className="pl-6">… {steps.length - LIVE_STEPS} earlier</div>}
+          <ul className="flex flex-col gap-0.5 pl-6">{steps.slice(-LIVE_STEPS).map((s, i, a) => <li key={steps.length - LIVE_STEPS + i} className={cx("truncate", i === a.length - 1 && "font-medium text-ink")}>{s}</li>)}</ul>
+          {msg.text && <div className="mt-2 flex max-h-36 flex-col justify-end overflow-hidden border-t border-line pt-1 [mask-image:linear-gradient(to_bottom,transparent,black_2.5rem)]"><Markdown text={msg.text} className="text-ink" /></div>}
         </div>
+      ) : (
+        <>
+          {(steps.length > 0 || updates.length > 0) && (
+            <details className="text-xs text-muted">
+              <summary className="cursor-pointer select-none">{[steps.length && plural(steps.length, "step"), updates.length && plural(updates.length, "progress update")].filter(Boolean).join(" · ")}</summary>
+              <ul className="mt-1 flex flex-col gap-0.5 border-l border-line pl-3">{steps.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              {updates.map((u, i) => <Markdown key={i} text={u} className="mt-2 border-l border-line pl-3 text-xs text-muted" />)}
+            </details>
+          )}
+          {msg.text && <Markdown text={msg.text} />}
+        </>
       )}
+      {!live && files.length > 0 && (files.length <= SHOW_FILES ? <FileLinks files={files} /> : (
+        <details className="text-xs">
+          <summary className="cursor-pointer select-none font-semibold text-ink">📄 {plural(files.length, "file")} written</summary>
+          <FileLinks files={files} className="mt-1.5" />
+        </details>
+      ))}
       {msg.error && <p className="rounded-lg bg-bad-bg px-3 py-2 text-xs text-bad">{msg.error}</p>}
     </div>
   );

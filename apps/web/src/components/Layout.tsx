@@ -77,13 +77,14 @@ function ConnectionDot({ to }: { to: string }) {
 }
 
 function AskAiHeaderButton() {
-  const { open, setOpen, busy } = useAssistant();
+  const { open, setOpen, sessions } = useAssistant();
+  const busy = sessions.some((x) => x.busy);
   const ai = useAiStatus();
   if (ai.state === "unavailable") return null;
   return (
     <button type="button" onClick={() => setOpen(!open)} aria-pressed={open}
       className="flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-sm font-semibold whitespace-nowrap text-bg">
-      <span aria-hidden className={cx(busy && "animate-spin")}>{busy ? "◌" : "✨"}</span><span className="hidden sm:inline">Ask AI</span>
+      <span aria-hidden className={cx(busy && "animate-pulse")}>✨</span><span className="hidden sm:inline">Ask AI</span>
     </button>
   );
 }
@@ -102,8 +103,10 @@ export function Layout({ sem, children }: { sem: string; children: ReactNode }) 
   const index = useIndex();
   const base = `/${enc(sem)}`;
   const section = path.split("#")[0].split("/").filter(Boolean)[1] ?? "";
+  const { open } = useAssistant();
   return (
-    <div className="min-h-screen">
+    // on wide screens the Ask AI panel sits beside the page instead of covering it
+    <div className={cx("min-h-screen transition-[padding] duration-200", open && "lg:pr-[440px]")}>
       <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
           <Link to={base} className="mr-1 flex items-center gap-2 font-serif text-lg font-semibold tracking-tight">
