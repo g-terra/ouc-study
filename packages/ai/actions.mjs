@@ -96,7 +96,8 @@ export function prepPrompt(semId, a, mode = "new") {
   const rel = prepPath(semId, a);
   return `Use the assignment-prep skill (ai/skills/assignment-prep/SKILL.md). Prepare the study pack for ${a.fullTitle} (${a.code}${a.due ? `, due ${a.due}` : ""}). ` +
     `Its folder is semesters/${semId}/assignments/${a.id}/; save the pack as ${rel}. Mode: ${PREP_MODES[mode] ? mode : "new"}. ${PREP_MODES[mode] ?? PREP_MODES.new} ` +
-    "Explain and give hints, but never write answers the student could submit.";
+    "Explain and give hints, but never write answers the student could submit. " +
+    `When done, run: node packages/ai/validate.mjs ${rel} and fix every error it reports.`;
 }
 
 /**

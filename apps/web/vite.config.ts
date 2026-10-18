@@ -122,14 +122,14 @@ function semesterFiles(): Plugin {
       let timer: NodeJS.Timeout | undefined;
       // Vite's watcher takes paths, not globs: watch these folders of every semester (the handler below filters files)
       const sems = existsSync(SEMESTERS) ? readdirSync(SEMESTERS).filter((d) => existsSync(resolve(SEMESTERS, d, "semester.json"))) : [];
-      for (const d of sems) mkdirSync(resolve(SEMESTERS, d, "notes"), { recursive: true }); // so the first note is seen
-      server.watcher.add(sems.flatMap((d) => ["notes", "_meta", "updates", "assignments", "semester.json"].map((x) => resolve(SEMESTERS, d, x))));
+      for (const d of sems) for (const x of ["notes", "plans"]) mkdirSync(resolve(SEMESTERS, d, x), { recursive: true }); // so the first note or plan is seen
+      server.watcher.add(sems.flatMap((d) => ["notes", "plans", "_meta", "updates", "assignments", "semester.json"].map((x) => resolve(SEMESTERS, d, x))));
       // Check eClass for news when the app starts (only if a key has been set up).
       if (existsSync(resolve(HERE, "../../.eclass-token")) && !process.env.NO_SYNC) {
         spawn(process.execPath, [resolve(HERE, "../../packages/eclass-sync/daily.mjs"), "--quiet"], { cwd: resolve(HERE, "../.."), stdio: "inherit" });
       }
       server.watcher.on("all", (_event, file) => {
-        if (!file.startsWith(SEMESTERS) || !/(\/notes\/.*\.md|\/assignments\/.*\/PREP\.md|\/_meta\/(?!sync-state).*\.json|\/updates\/(?!connection).*\.json|semester\.json)$/.test(file.replaceAll(sep, "/"))) return;
+        if (!file.startsWith(SEMESTERS) || !/(\/notes\/.*\.md|\/plans\/[^/]+\.md|\/assignments\/.*\/PREP\.md|\/_meta\/(?!sync-state).*\.json|\/updates\/(?!connection).*\.json|semester\.json)$/.test(file.replaceAll(sep, "/"))) return;
         clearTimeout(timer);
         timer = setTimeout(() => {
           // use this same Node + local tsx (works in the background service where npm isn't on PATH)

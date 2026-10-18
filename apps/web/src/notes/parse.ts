@@ -6,6 +6,7 @@
  * See docs/NOTE_FORMAT.md.
  */
 import YAML from "yaml";
+import { parseBlock } from "@ouc/content/yaml-blocks";
 
 export type Block =
   | { type: "md"; text: string }
@@ -39,7 +40,7 @@ export function parseNote(src: string): Block[] {
       if (fence[1] === "mermaid") out.push({ type: "mermaid", code: raw });
       else {
         let data: any;
-        try { data = YAML.parse(raw); } catch (e) { data = { error: String(e) }; }
+        try { data = parseBlock(YAML, raw); } catch (e) { data = { error: String(e) }; }
         out.push({ type: "data", kind: fence[1], data, raw });
       }
       continue;

@@ -19,6 +19,8 @@ The app runs this on its own when a sync finds an assignment without a prep pack
 Keep the front matter the app adds (`by`, `updated`, `log`) if the file already has it; don't invent it otherwise. Then these sections:
 
 - `## What it asks`: each question or task in one or two plain sentences, what's being assessed, length/format rules, the due date.
+You can use the note blocks from `docs/NOTE_FORMAT.md` (`formula`, `compare`, `steps`, `mermaid`…). Inside them, LaTeX goes in **single quotes** or a `|` block, never "double quotes" (YAML reads `\t` in `"\tau"` as a tab).
+
 - `## Key ideas`: the concepts needed, each with a one-line explanation and where it's taught (the file or note, as a path in `backticks`). Use LaTeX for maths. A `mermaid` diagram if it helps.
 - `## Hints`: per question, nudges that point the way (which idea applies, what to look out for, common mistakes). **Never the answer, worked solution or submittable text.**
 - `## From your course`: the exact slides, readings and notes to revisit, each as its repo-relative path in `backticks` (the app turns it into a link showing the file name), followed by what to look at in it.
@@ -33,4 +35,5 @@ Keep the front matter the app adds (`by`, `updated`, `log`) if the file already 
 ## Rules
 - Academic integrity first: explain and hint, never write answers. Some courses forbid copying (COS514).
 - Check every link you add opens. Cite course files by their path in `backticks`, never as plain text, so the app can link them.
+- Run `node packages/ai/validate.mjs <the PREP.md path>` and fix every error it reports.
 - Finish by replying with the PREP.md path and a 2-line summary.

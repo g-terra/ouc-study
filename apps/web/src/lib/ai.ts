@@ -108,6 +108,13 @@ async function token() {
   if (!current.token) await refreshAi();
   return current.token ?? "";
 }
+/** Ticks or unticks a task in a week plan file (semesters/<sem>/plans/<week>.md). */
+export async function setPlanTask(sem: string, week: string, line: number, done: boolean): Promise<string | null> {
+  const res = await fetch("/api/ai/plan/task", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ sem, week, line, done }) }).catch(() => null);
+  if (res?.ok) return null;
+  return (await res?.json().catch(() => null))?.error ?? "Couldn't save that. Is the app running on your computer?";
+}
+
 export async function stopRun(chatId: string) {
   await fetch("/api/ai/stop", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ chatId }) });
 }

@@ -144,6 +144,24 @@ export interface UpdatesFeed {
   days: { date: string; items: UpdateItem[] }[];
 }
 
+/** A week plan (semesters/<id>/plans/<YYYY>-W<NN>.md), parsed by src/plan.mjs. */
+export interface PlanTask { line: number; text: string; done: boolean }
+export type PlanPart = { md: string; task?: undefined } | { task: PlanTask; md?: undefined };
+export interface PlanDay { title: string; parts: PlanPart[] }
+export interface PlanSection { title: string; parts: PlanPart[]; days: PlanDay[] }
+export interface Plan {
+  week: string;           // "2026-W42"
+  file: string;
+  title: string;
+  start?: string;         // Monday, YYYY-MM-DD
+  end?: string;           // Sunday
+  updated?: string;
+  intro: PlanPart[];
+  sections: PlanSection[];
+  done: number;           // ticked tasks
+  total: number;
+}
+
 export interface SemesterData extends SemesterSummary {
   generated: string;
   updates: UpdatesFeed;
@@ -152,4 +170,5 @@ export interface SemesterData extends SemesterSummary {
   exams: Exam[];
   classes: ClassSession[];
   notes: Note[];
+  plans: Plan[];          // newest first
 }
