@@ -69,6 +69,9 @@ body { @apply bg-bg text-ink font-sans antialiased; }
   .md p { @apply my-3; }
   .md strong { @apply font-semibold; }
   .md a { @apply underline decoration-line underline-offset-2 hover:decoration-ink; }
+  /* file paths turned into links (lib/links.ts) */
+  .md a code { @apply text-accent; }
+  .md a:has(code) { @apply no-underline hover:underline; }
   .md ul { @apply my-3 list-disc pl-6 space-y-1.5; }
   .md ol { @apply my-3 list-decimal pl-6 space-y-1.5; }
   .md li > ul, .md li > ol { @apply my-1.5; }

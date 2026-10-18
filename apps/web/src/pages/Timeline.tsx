@@ -39,6 +39,8 @@ export function Timeline({ data }: { data: SemesterData }) {
   const finals = data.exams.filter((e) => e.kind === "Final exam");
   const stripEnd = finals.length ? at(finals[finals.length - 1].at) : day(data.end);
   const span = stripEnd.getTime() - first.getTime();
+  const months: Date[] = [];
+  for (let m = new Date(first.getFullYear(), first.getMonth() + 1, 1); m < stripEnd; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) months.push(m);
   const pos = (d: Date) => `${Math.min(100, Math.max(0, ((d.getTime() - first.getTime()) / span) * 100))}%`;
 
   const topicFor = (w: Date, code: string) =>
@@ -55,8 +57,8 @@ export function Timeline({ data }: { data: SemesterData }) {
       <PageHeader title="Timeline" eyebrow={data.label}>Deadlines and exams week by week. Turn on topics to see what each course covers.</PageHeader>
 
       {/* overview strip */}
-      <Card className="mb-6 p-5">
-        <div className="mb-3 flex items-center justify-between text-xs text-muted">
+      <Card className="mb-6 p-5 pb-8">
+        <div className="mb-4 flex items-center justify-between text-xs text-muted">
           <span>{fmtShort(first)}</span><span>Semester at a glance</span><span>{fmtShort(stripEnd)}</span>
         </div>
         <div className="relative h-10">
@@ -71,7 +73,14 @@ export function Timeline({ data }: { data: SemesterData }) {
             <span key={e.code} title={`${C[e.code]?.short} final exam, ${fmtFull(at(e.at))}`} className="absolute -top-1 -translate-x-1/2 text-lg" style={{ left: pos(at(e.at)) }}>🎓</span>
           ))}
           <span className="absolute top-0 h-full w-0.5 -translate-x-1/2 bg-accent" style={{ left: pos(now) }} />
-          <span className="absolute -bottom-4 -translate-x-1/2 text-[10px] font-semibold text-accent" style={{ left: pos(now) }}>today</span>
+          <span className="absolute -top-4 -translate-x-1/2 text-[10px] font-semibold text-accent" style={{ left: pos(now) }}>today</span>
+          {/* a tick and label at the start of each month */}
+          {months.map((m) => (
+            <span key={m.getTime()} className="absolute top-full -translate-x-1/2" style={{ left: pos(m) }}>
+              <span className="mx-auto block h-1.5 w-px bg-line" />
+              <span className="block text-[10px] text-muted">{m.toLocaleDateString("en-GB", { month: "short" })}</span>
+            </span>
+          ))}
         </div>
       </Card>
 
@@ -134,7 +143,7 @@ export function Timeline({ data }: { data: SemesterData }) {
                     <div className="flex flex-col gap-2">
                       {evs.map((e, i) => <EventChip key={i} e={e} color={C[e.code]?.color ?? "#888"} course={C[e.code]?.short ?? e.code} />)}
                       {tps.length > 0 && (
-                        <div className={cx("grid gap-1", evs.length && "mt-1 border-t border-line pt-2")}>
+                        <div className={cx("grid gap-1", evs.length > 0 && "mt-1 border-t border-line pt-2")}>
                           {tps.map(([c, t]) => (
                             <Link key={c.code} to={`${base}/courses/${enc(c.code)}#w${t!.index}`} className="flex items-baseline gap-2 text-sm text-muted hover:text-ink">
                               <CourseDot color={c.color} className="translate-y-[1px]" /> <span className="truncate">{t!.label}</span>

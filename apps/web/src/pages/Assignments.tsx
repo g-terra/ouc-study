@@ -83,11 +83,8 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
         <AskAiButton action="assignment-helper" params={{ assignment: a.id }} className="mt-4">Help me with this</AskAiButton>
       </PageHeader>
 
-      <SectionTitle>Question</SectionTitle>
-      {a.question ? <Card className="p-5"><div className="md whitespace-pre-line">{a.question}</div></Card>
-        : <Empty>{a.briefs.length ? "The questions are in the brief below." : "No question text found. Check eClass."}</Empty>}
-
-      <PrepSection a={a} color={course?.color ?? "#555"} />
+      {/* no question text (it's in the brief, or on eClass): no section */}
+      {a.question && <><SectionTitle>Question</SectionTitle><Card className="p-5"><div className="md whitespace-pre-line">{a.question}</div></Card></>}
 
       <SectionTitle>Files</SectionTitle>
       {a.briefs.length + a.submissions.length ? (
@@ -105,6 +102,8 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
           <Card className="overflow-hidden"><iframe title="PDF preview" src={pdfs[preview].f.href} className="h-[75vh] w-full" /></Card>
         </>
       )}
+
+      <PrepSection a={a} color={course?.color ?? "#555"} />
 
       {a.resources && (
         <>

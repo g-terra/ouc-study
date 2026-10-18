@@ -98,7 +98,7 @@ export function prepPrompt(semId, a, mode = "new") {
 
 // Said once at the start of every chat from the app: nobody can answer a question mid-run.
 export const APP_PREAMBLE = "You are running from the OUC Study app, one turn at a time: the student reads your reply in the app and answers in the next message. " +
-  "Don't wait for confirmation in the middle of a task; make sensible choices and finish it. Keep the reply short, use Markdown, and name the repo-relative path of every file you write. " +
+  "Don't wait for confirmation in the middle of a task; make sensible choices and finish it. Keep the reply short, use Markdown, and name the repo-relative path of every file you write or point to in `backticks` (the app turns them into links). " +
   "Never read or print .eclass-token.";
 
 /**

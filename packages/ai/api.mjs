@@ -7,7 +7,7 @@
 //   POST /api/ai/stop          { chatId }
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
 //   GET  /api/ai/view?path=…  a visual the AI saved (HTML, SVG or image), sandboxed, for the chat to show inline
-//   GET  /api/ai/prep          background notes/prep work: { enabled, busy, running: [{ id, chatId }], queue, total, done, error }
+//   GET  /api/ai/prep          background notes/prep work: { enabled, busy, running/finished: [{ id, chatId, ok? }], queue, total, done, error }
 //
 // Agents run on the student's own computer with their subscription login (no API keys).
 // Chats are saved in .ouc/chats/ (git-ignored).
@@ -245,7 +245,7 @@ export function createAiApi(root, opts = {}) {
 
   // ----- automatic prep: one assignment at a time, in the background -----
   const prepState = join(root, ".ouc", "prep-state.json");
-  const prep = { busy: false, again: false, notes: false, force: false, running: [], queue: [], total: 0, done: 0, error: null };
+  const prep = { busy: false, again: false, notes: false, force: false, running: [], queue: [], finished: [], total: 0, done: 0, error: null };
   async function status(fresh = false) {
     if (!cache || Date.now() - cache.at > 5 * 60_000 || fresh) cache = { at: Date.now(), body: await aiStatus(root) };
     return cache.body;
@@ -280,7 +280,7 @@ export function createAiApi(root, opts = {}) {
             .map((a) => ({ id: a.id, body: { action: "assignment-prep", params: { assignment: a.id, mode: "new" }, auto: true } })),
         ];
         prep.queue = jobs.map((j) => j.id);
-        prep.total = jobs.length; prep.done = 0; prep.error = null;
+        prep.total = jobs.length; prep.done = 0; prep.error = null; prep.finished = [];
         // a few at a time ("parallel" in .ouc/ai.json, default 3); a failure (usage limit, sign-in)
         // would fail for the rest too, so nothing new starts after one
         let stop = false;
@@ -297,6 +297,7 @@ export function createAiApi(root, opts = {}) {
             prep.running = [...prep.running, slot];
             const r = await t.done;
             prep.running = prep.running.filter((x) => x !== slot);
+            prep.finished = [...prep.finished, { ...slot, ok: !!r?.ok }];
             prep.done++;
             if (!r?.ok) { stop = true; prep.queue = []; prep.error = t.chat.messages.at(-1)?.error ?? "The AI stopped with an error."; }
           }
@@ -321,7 +322,7 @@ export function createAiApi(root, opts = {}) {
     try {
       const p = url.pathname;
       if (p === "/api/ai/status") return json(res, { ...(await status(url.searchParams.has("fresh"))), token });
-      if (p === "/api/ai/prep") return json(res, { enabled: prepEnabled(), busy: prep.busy, running: prep.running, queue: prep.queue, total: prep.total, done: prep.done, error: prep.error });
+      if (p === "/api/ai/prep") return json(res, { enabled: prepEnabled(), busy: prep.busy, running: prep.running, queue: prep.queue, finished: prep.finished, total: prep.total, done: prep.done, error: prep.error });
       if (p === "/api/ai/view") {
         const abs = viewablePath(root, url.searchParams.get("path"));
         if (!abs) return json(res, { error: "Not found" }, 404);

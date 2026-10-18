@@ -1,6 +1,6 @@
 #!/bin/bash
 # ouc: control the OUC Study app and the eClass sync from Terminal.
-#   ouc setup | start | stop | restart | status | open | sync | pull | logs [app|sync] | install | uninstall | help
+#   ouc setup | start | stop | restart | update | status | open | sync | pull | logs [app|sync] | install | uninstall | help
 set -euo pipefail
 
 # resolve the repo root (works through a symlink, e.g. /opt/homebrew/bin/ouc)
@@ -72,6 +72,27 @@ link_cmd() {
   ok "Command installed as an alias in $rc. Open a new Terminal window, then type 'ouc'."
 }
 
+# Pull the latest app code (git), then refresh dependencies and AI skills if they changed.
+# Never touches local edits: with uncommitted code changes, or no upstream branch, it skips the update.
+update_code() {
+  command -v git >/dev/null && git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || { warn "Not a git checkout, so no code update (download the latest from GitHub instead)."; return 0; }
+  if [ -n "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ]; then
+    warn "You have local code changes, so the code wasn't updated (commit or stash them, then: ouc update)."; return 0
+  fi
+  git -C "$ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1 || { warn "This branch doesn't track GitHub, so no code update."; return 0; }
+  local before after
+  before="$(git -C "$ROOT" rev-parse HEAD)"
+  if ! git -C "$ROOT" pull --ff-only --quiet; then warn "Couldn't pull the latest code (offline, or your branch differs from GitHub). Carrying on with this version."; return 0; fi
+  after="$(git -C "$ROOT" rev-parse HEAD)"
+  if [ "$before" = "$after" ]; then ok "Code is up to date"; return 0; fi
+  ok "Code updated: $(git -C "$ROOT" rev-list --count "$before..$after") new change(s), now at $(git -C "$ROOT" log -1 --format='%h %s')"
+  local changed; changed="$(git -C "$ROOT" diff --name-only "$before" "$after")"
+  if grep -qE '(^|/)package(-lock)?\.json$' <<<"$changed"; then
+    warn "Dependencies changed, installing them (npm install)…"; (cd "$ROOT" && npm install --no-audit --no-fund) || warn "npm install failed; run it in $ROOT"
+  fi
+  if grep -q '^ai/' <<<"$changed" && [ -n "$NODE" ]; then "$NODE" "$ROOT/bin/ai.mjs" install || warn "Couldn't reinstall the AI skills (ouc ai install)"; fi
+}
+
 check_tcc() {
   sleep 6
   if grep -q "Operation not permitted" "$LOGS/app.log" 2>/dev/null; then
@@ -110,7 +131,11 @@ case "$cmd" in
   stop)
     launchctl bootout "gui/$UID_/$APP_LABEL" 2>/dev/null && ok "App stopped (it will start again at next login; 'ouc uninstall' to turn that off)." || warn "App wasn't running."
     ;;
-  restart) "$0" stop || true; sleep 1; "$0" start ;;
+  update) update_code ;;
+  restart)
+    # latest code first (skip with --no-update), then a fresh start so the new code runs
+    [[ " $* " == *" --no-update "* ]] || update_code
+    "$0" stop || true; sleep 1; "$0" start ;;
   open) up || "$0" start; open "$URL" ;;
   setup)
     need_node; exec "$NODE" "$ROOT/bin/setup.mjs" "$@"
@@ -149,7 +174,9 @@ $(b "ouc: OUC Study app & eClass sync")
   ouc setup        first-time setup (or add courses / a new semester)
   ouc install      start the app automatically at login + daily eClass sync + this command
   ouc start        start the app in the background ($URL)
-  ouc stop         stop it          ouc restart    restart it
+  ouc stop         stop it
+  ouc restart      get the latest app code, then restart it (--no-update: just restart)
+  ouc update       get the latest app code without restarting
   ouc open         open the app in your browser (starts it if needed)
   ouc sync         check eClass now (grades, feedback, materials…) and refresh the app
   ouc pull         download any new course files now (--dry-run: just list them)

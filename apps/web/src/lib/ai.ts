@@ -1,5 +1,8 @@
 /** Talks to /api/ai (packages/ai/api.mjs): AI tool status, study actions and chats. */
 import { useEffect, useState } from "react";
+import type { SemesterData } from "@ouc/content/types";
+import { fileLink } from "./links";
+export { fileLink, linkPaths } from "./links";
 
 export type ToolState = "connected" | "signedout" | "apikey" | "missing" | "noserver" | "unknown";
 export interface AiTool { id: string; label: string; state: ToolState; detail?: string; fix?: string; chosen: boolean }
@@ -77,6 +80,7 @@ export const getChat = (id: string): Promise<Chat | null> => fetch(`/api/ai/chat
 /** Background AI work (missing notes and prep packs): what's running, what's queued, how far along. */
 export interface PrepStatus {
   enabled: boolean; busy: boolean; running: { id: string; chatId: string }[]; queue: string[];
+  finished: { id: string; chatId: string; ok: boolean }[];
   total: number; done: number; error: string | null;
 }
 let prepNow: PrepStatus | null = null;
@@ -84,6 +88,12 @@ const prepListeners = new Set<(s: PrepStatus | null) => void>();
 let prepTimer: number | undefined;
 export const refreshPrep = () => fetch("/api/ai/prep").then((r) => (r.ok ? r.json() : null)).catch(() => null)
   .then((j) => { prepNow = j; prepListeners.forEach((l) => l(j)); });
+/** "Notes · Short name" or "Prep · CODE title" for a background job id. */
+export function workLabel(id: string, data?: SemesterData | null): string {
+  if (id.startsWith("notes:")) { const c = data?.courses.find((x) => x.code === id.slice(6)); return `Notes · ${c?.short ?? id.slice(6)}`; }
+  const a = data?.assignments.find((x) => x.id === id);
+  return `Prep · ${a ? `${a.code} ${a.title}` : id.split("/").pop()}`;
+}
 export function usePrepStatus(): PrepStatus | null {
   const [s, setS] = useState(prepNow);
   useEffect(() => {
@@ -122,15 +132,6 @@ export async function runTurn(body: { sem: string; tool?: string; chatId?: strin
       if (block.startsWith("data: ")) { try { onEvent(JSON.parse(block.slice(6))); } catch { /* ignore a broken line */ } }
     }
   }
-}
-
-/** Where a file the agent wrote opens in the app: a note page, a course file, or nowhere. */
-export function fileLink(path: string): { to: string; internal: boolean } | null {
-  const m = path.match(/^semesters\/([^/]+)\/(.+)$/);
-  if (!m) return null;
-  const note = m[2].match(/^notes\/([^/]+)\/([^/]+)\.md$/);
-  if (note) return { to: `/${encodeURIComponent(m[1])}/notes/${encodeURIComponent(note[1])}/${encodeURIComponent(note[2])}`, internal: true };
-  return { to: `/files/${m[1]}/${m[2].split("/").map(encodeURIComponent).join("/")}`, internal: false };
 }
 
 const VISUAL = /\.(html?|svg|png|jpe?g|gif|webp)$/i;

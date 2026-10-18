@@ -46,6 +46,7 @@ The key is saved in `.eclass-token`, readable only by you and never committed. *
 | `ouc setup` | add courses, start a new semester, or replace your key |
 | `ouc status` | is the app running, is the daily sync scheduled, when was the last sync |
 | `ouc start` · `ouc stop` · `ouc restart` | control the background app (macOS) |
+| `ouc update` | get the latest app code (`ouc restart` does this first; `--no-update` skips it) |
 | `ouc logs` · `ouc logs sync` | follow the logs (`~/Library/Logs/OUC-Study/`) |
 | `ouc check-public` | before pushing to GitHub: is anything personal included? |
 | `ouc uninstall` | turn off auto-start and the daily sync |

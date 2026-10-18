@@ -19,9 +19,9 @@ The app runs this on its own when a sync finds an assignment without a prep pack
 Keep the front matter the app adds (`by`, `updated`, `log`) if the file already has it; don't invent it otherwise. Then these sections:
 
 - `## What it asks`: each question or task in one or two plain sentences, what's being assessed, length/format rules, the due date.
-- `## Key ideas`: the concepts needed, each with a one-line explanation and where it's taught (file path or note). Use LaTeX for maths. A `mermaid` diagram if it helps.
+- `## Key ideas`: the concepts needed, each with a one-line explanation and where it's taught (the file or note, as a path in `backticks`). Use LaTeX for maths. A `mermaid` diagram if it helps.
 - `## Hints`: per question, nudges that point the way (which idea applies, what to look out for, common mistakes). **Never the answer, worked solution or submittable text.**
-- `## From your course`: the exact slides, readings and notes to revisit, as repo-relative paths.
+- `## From your course`: the exact slides, readings and notes to revisit, each as its repo-relative path in `backticks` (the app turns it into a link showing the file name), followed by what to look at in it.
 - `## Extra material`: 3–6 good outside sources (textbook chapters, lecture videos, tutorials, papers) with working links and why each helps. Prefer the course's own books. No pirated copies.
 - `## Plan`: a short checklist from start to submission, sized to the days left.
 
@@ -32,5 +32,5 @@ Keep the front matter the app adds (`by`, `updated`, `log`) if the file already 
 
 ## Rules
 - Academic integrity first: explain and hint, never write answers. Some courses forbid copying (COS514).
-- Check every link you add opens. Cite course files by path.
+- Check every link you add opens. Cite course files by their path in `backticks`, never as plain text, so the app can link them.
 - Finish by replying with the PREP.md path and a 2-line summary.

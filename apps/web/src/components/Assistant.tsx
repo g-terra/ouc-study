@@ -5,7 +5,7 @@
  */
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { SemesterData } from "@ouc/content/types";
-import { Link } from "../lib/router";
+import { Link, useRouter } from "../lib/router";
 import { mdToHtml } from "../lib/markdown";
 import { TOOL_STATE, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
 import { refreshData } from "../lib/data";
@@ -204,13 +204,17 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<ChatSummary[] | null>(null);
   const end = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLElement>(null);
   const last = a.chat?.messages[a.chat.messages.length - 1];
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [a.chat?.messages.length, last?.text, last?.steps?.length]);
   useEffect(() => {
     if (!a.open) return;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && a.setOpen(false);
+    // it's a popup: a click on the page closes it (chats keep running; the robot button brings it back)
+    const away = (e: MouseEvent) => { const t = e.target as HTMLElement; if (!box.current?.contains(t) && !t.closest?.("[data-ask-ai]")) a.setOpen(false); };
     window.addEventListener("keydown", esc);
-    return () => window.removeEventListener("keydown", esc);
+    document.addEventListener("mousedown", away);
+    return () => { window.removeEventListener("keydown", esc); document.removeEventListener("mousedown", away); };
   }, [a.open]);
   if (!a.open) return null;
 
@@ -233,8 +237,8 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
   };
 
   return (
-    <aside role="dialog" aria-label="Ask AI"
-      className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-line bg-bg shadow-2xl sm:w-[440px] lg:shadow-none">
+    <aside ref={box} role="dialog" aria-label="Ask AI"
+      className="fixed inset-0 z-50 flex flex-col bg-bg shadow-2xl sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[min(78vh,760px)] sm:w-[440px] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-line">
       <header className="flex items-center gap-2 border-b border-line px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="font-serif text-lg font-semibold leading-tight">Ask AI</div>
@@ -271,7 +275,7 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
           </>
         ) : (
           <div className="flex flex-col gap-4">
-            {a.chat.messages.map((m, i) => <Message key={i} msg={m} live={a.busy && i === a.chat!.messages.length - 1} />)}
+            {a.chat.messages.map((m, i) => <Message key={i} msg={m} sem={a.chat!.sem ?? data.id} live={a.busy && i === a.chat!.messages.length - 1} />)}
           </div>
         )}
         {a.error && <p className="mt-4 rounded-xl bg-bad-bg px-3 py-2 text-sm text-bad">{a.error}</p>}
@@ -396,8 +400,15 @@ function ActionForm({ data, action, params, onChange }: { data: SemesterData; ac
   );
 }
 
-function Markdown({ text, className }: { text: string; className?: string }) {
-  return <div className={cx("text-sm leading-relaxed [&_a]:underline [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_ul]:list-disc", className)} dangerouslySetInnerHTML={{ __html: mdToHtml(text) }} />;
+/** A reply in Markdown; file paths in it link to the app's pages (notes, assignments) or open the file. */
+export function Markdown({ text, className, sem }: { text: string; className?: string; sem?: string }) {
+  const { setOpen } = useAssistant();
+  return (
+    <div className={cx("text-sm leading-relaxed [&_a]:underline [&_a_code]:text-accent [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:break-all [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_ul]:list-disc", className)}
+      // file paths open their page (the router follows the link); on phones the chat covers the page, so close it
+      onClick={(e) => { if ((e.target as HTMLElement).closest("a[data-internal]") && !window.matchMedia("(min-width: 640px)").matches) setOpen(false); }}
+      dangerouslySetInnerHTML={{ __html: mdToHtml(text, sem) }} />
+  );
 }
 
 const PREP_MODE: Record<string, string> = {
@@ -441,7 +452,7 @@ function FileLinks({ files, className }: { files: string[]; className?: string }
     </div>
   );
 }
-function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
+function Message({ msg, live, sem }: { msg: ChatMessage; live: boolean; sem?: string }) {
   if (msg.role === "user") {
     return <div className="ml-10 self-end whitespace-pre-wrap rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-sm text-bg">{msg.text}</div>;
   }
@@ -464,7 +475,7 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
           {!steps.length && !msg.text && <p className="pl-6">Reading your request and the study files to work out what to do.</p>}
           {steps.length > LIVE_STEPS && <div className="pl-6">… {steps.length - LIVE_STEPS} earlier</div>}
           <ul className="flex flex-col gap-0.5 pl-6">{steps.slice(-LIVE_STEPS).map((s, i, a) => <li key={steps.length - LIVE_STEPS + i} className={cx("truncate", i === a.length - 1 && "font-medium text-ink")}>{s}</li>)}</ul>
-          {msg.text && <div className="mt-2 flex max-h-36 flex-col justify-end overflow-hidden border-t border-line pt-1 [mask-image:linear-gradient(to_bottom,transparent,black_2.5rem)]"><Markdown text={msg.text} className="text-ink" /></div>}
+          {msg.text && <div className="mt-2 flex max-h-36 flex-col justify-end overflow-hidden border-t border-line pt-1 [mask-image:linear-gradient(to_bottom,transparent,black_2.5rem)]"><Markdown text={msg.text} sem={sem} className="text-ink" /></div>}
         </div>
       ) : (
         <>
@@ -472,10 +483,10 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
             <details className="text-xs text-muted">
               <summary className="cursor-pointer select-none">{[steps.length && plural(steps.length, "step"), updates.length && plural(updates.length, "progress update")].filter(Boolean).join(" · ")}</summary>
               <ul className="mt-1 flex flex-col gap-0.5 border-l border-line pl-3">{steps.map((s, i) => <li key={i}>{s}</li>)}</ul>
-              {updates.map((u, i) => <Markdown key={i} text={u} className="mt-2 border-l border-line pl-3 text-xs text-muted" />)}
+              {updates.map((u, i) => <Markdown key={i} text={u} sem={sem} className="mt-2 border-l border-line pl-3 text-xs text-muted" />)}
             </details>
           )}
-          {msg.text && <Markdown text={msg.text} />}
+          {msg.text && <Markdown text={msg.text} sem={sem} />}
           {visuals.map((v) => <Visual key={v} path={v} />)}
         </>
       )}
