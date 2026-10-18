@@ -6,7 +6,7 @@
 //   POST /api/ai/run           { sem, chatId?, action?, params?, message } → Server-Sent Events
 //   POST /api/ai/stop          { chatId }
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
-//   GET  /api/ai/prep          the automatic assignment prep: { enabled, running, chatId }
+//   GET  /api/ai/prep          the automatic assignment prep: { enabled, running, chatId, queue, error }
 //
 // Agents run on the student's own computer with their subscription login (no API keys).
 // Chats are saved in .ouc/chats/ (git-ignored).
@@ -234,7 +234,7 @@ export function createAiApi(root, opts = {}) {
 
   // ----- automatic prep: one assignment at a time, in the background -----
   const prepState = join(root, ".ouc", "prep-state.json");
-  const prep = { busy: false, again: false, running: null, chatId: null };
+  const prep = { busy: false, again: false, running: null, chatId: null, queue: [], error: null };
   async function status(fresh = false) {
     if (!cache || Date.now() - cache.at > 5 * 60_000 || fresh) cache = { at: Date.now(), body: await aiStatus(root) };
     return cache.body;
@@ -253,7 +253,10 @@ export function createAiApi(root, opts = {}) {
         if (!semId) break;
         let tried = {};
         try { tried = JSON.parse(read(prepState, "{}")); } catch { /* start fresh */ }
-        for (const a of needsPrep(root, semId, loadData(root, semId), tried)) {
+        const todo = needsPrep(root, semId, loadData(root, semId), tried);
+        prep.queue = todo.map((a) => a.id);
+        for (const a of todo) {
+          prep.queue = prep.queue.filter((id) => id !== a.id);
           tried[a.id] = new Date().toISOString();
           mkdirSync(join(root, ".ouc"), { recursive: true });
           writeFileSync(prepState, JSON.stringify(tried, null, 1));
@@ -262,13 +265,15 @@ export function createAiApi(root, opts = {}) {
           prep.running = a.id; prep.chatId = t.chat.id;
           const r = await t.done;
           prep.running = null; prep.chatId = null;
-          if (!r?.ok) break;     // a failure (usage limit, sign-in) would fail for the rest too
+          // a failure (usage limit, sign-in) would fail for the rest too: stop until the next sync or restart
+          if (!r?.ok) { prep.error = t.chat.messages.at(-1)?.error ?? "The AI stopped with an error."; break; }
+          prep.error = null;
         }
       } while (prep.again);
     } catch (e) {
       console.error(`[ai] automatic prep: ${e.message}`);
     } finally {
-      prep.busy = false; prep.running = null; prep.chatId = null;
+      prep.busy = false; prep.running = null; prep.chatId = null; prep.queue = [];
     }
   }
 
@@ -282,7 +287,7 @@ export function createAiApi(root, opts = {}) {
     try {
       const p = url.pathname;
       if (p === "/api/ai/status") return json(res, { ...(await status(url.searchParams.has("fresh"))), token });
-      if (p === "/api/ai/prep") return json(res, { enabled: prepEnabled(), running: prep.running, chatId: prep.chatId });
+      if (p === "/api/ai/prep") return json(res, { enabled: prepEnabled(), running: prep.running, chatId: prep.chatId, queue: prep.queue, error: prep.error });
       if (p === "/api/ai/actions") return json(res, { actions: listActions(root) });
       if (p === "/api/ai/chats") return json(res, { chats: listChats(root) });
       if (p.startsWith("/api/ai/chats/")) {

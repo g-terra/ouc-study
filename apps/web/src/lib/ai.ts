@@ -75,7 +75,7 @@ export const listChats = (): Promise<ChatSummary[]> => fetch("/api/ai/chats").th
 export const getChat = (id: string): Promise<Chat | null> => fetch(`/api/ai/chats/${encodeURIComponent(id)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
 /** The app's automatic assignment prep: is it on, and which assignment is it preparing now? */
-export interface PrepStatus { enabled: boolean; running: string | null; chatId: string | null }
+export interface PrepStatus { enabled: boolean; running: string | null; chatId: string | null; queue: string[]; error: string | null }
 export function usePrepStatus(): PrepStatus | null {
   const [s, setS] = useState<PrepStatus | null>(null);
   useEffect(() => {

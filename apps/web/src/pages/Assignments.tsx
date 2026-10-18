@@ -5,7 +5,7 @@ import { courseMap, stateOf, type State } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { Card, CourseBadge, CourseDot, Empty, FileCard, PageHeader, SectionTitle, StatePill, cx } from "../components/ui";
 import { AskAiButton, useAssistant } from "../components/Assistant";
-import { useAiStatus, usePrepStatus } from "../lib/ai";
+import { useAiStatus, usePrepStatus, type PrepStatus } from "../lib/ai";
 import { NoteBody, useNoteBlocks } from "../notes/NoteRenderer";
 import { mdToHtml } from "../lib/markdown";
 
@@ -33,6 +33,7 @@ export function AssignmentsPage({ data }: { data: SemesterData }) {
           </button>
         ))}
       </div>
+      <PrepProgress data={data} />
       <div className="grid gap-2">
         {list.length === 0 && <Empty>Nothing here.</Empty>}
         {list.map((a) => (
@@ -136,6 +137,32 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
   );
 }
 
+/** While the AI works through the prep packs: which one now, how many left. */
+function PrepProgress({ data }: { data: SemesterData }) {
+  const status = usePrepStatus();
+  const { load, setOpen } = useAssistant();
+  if (!status?.running) return null;
+  const now = data.assignments.find((a) => a.id === status.running);
+  return (
+    <div className="mb-4 flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm">
+      <span aria-hidden className="size-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      <span className="flex-1">Preparing prep packs: working on <b>{now ? `${now.code} ${now.title}` : "one"}</b>{status.queue.length ? `, ${status.queue.length} more queued` : ""}.</span>
+      {status.chatId && <button type="button" className="underline" onClick={() => { setOpen(true); load(status.chatId!); }}>Watch</button>}
+    </div>
+  );
+}
+
+/** Why an assignment has no prep pack yet, in the student's terms. */
+function prepWhy(a: Assignment, status: PrepStatus | null) {
+  const n = status?.queue.indexOf(a.id) ?? -1;
+  if (n >= 0) return `Queued: your AI prepares packs one at a time${status!.running ? ", and is working on another one now" : ""}${n ? ` (${n} more before this one)` : ""}.`;
+  if (a.submitted) return "Submitted, so it isn't prepared on its own. You can still ask for one.";
+  if (a.due && at(a.due) < new Date()) return "The deadline has passed, so it isn't prepared on its own. You can still ask for one.";
+  if (!status?.enabled) return "No prep pack yet. Ask your AI for hints and extra material for this assignment.";
+  if (status.error) return `Automatic prep paused after an error (${status.error}). It tries again after the next sync, or prepare it now.`;
+  return "Not prepared yet. Your AI prepares open assignments on its own after each sync, or prepare it now.";
+}
+
 const PREP_ASK = [
   { mode: "review", label: "Review & improve" },
   { mode: "more", label: "Add more" },
@@ -184,7 +211,7 @@ function PrepSection({ a, color }: { a: Assignment; color: string }) {
         </Card>
       ) : !running && (
         <Empty>
-          {status?.enabled ? "Not prepared yet. Your AI prepares hints and extra material for open assignments on its own after a sync." : "No prep pack yet. Ask your AI for hints and extra material for this assignment."}
+          {prepWhy(a, status)}
         </Empty>
       )}
       {agents.length > 0 && (

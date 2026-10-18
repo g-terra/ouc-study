@@ -28,5 +28,11 @@ test("make notes for all courses lists every missing week", () => {
 test("make notes for one course, or one week from a shortcut", () => {
   assert.match(buildPrompt({ root: ".", semId: "S", data, action: "make-notes", params: { course: "BBB" }, first: false }), /BBB course \(BBB\), eClass section 2/);
   assert.match(buildPrompt({ root: ".", semId: "S", data, action: "make-notes", params: { course: "AAA", week: "1" }, first: false }), /eClass section 1/);
-  assert.throws(() => buildPrompt({ root: ".", semId: "S", data: { ...data, notes: [...data.notes, { code: "AAA", weekIndex: 2 }] }, action: "make-notes", params: { course: "AAA" } }), /already has notes/);
+  assert.throws(() => buildPrompt({ root: ".", semId: "S", data: { ...data, notes: [...data.notes, { code: "AAA", weekIndex: 2 }] }, action: "make-notes", params: { course: "AAA" } }), /AAA: all 2 started weeks with files have notes/);
+});
+
+test("a course with files only in General gets a note for it, and an empty course says why", () => {
+  const general = { courses: [course("GEN", [[0, null, [file]], [1, "2026-09-01", []]]), course("NIL", [[1, "2026-09-01", []]])], notes: [], assignments: [] };
+  assert.deepEqual(weeksWithoutNotes(general, general.courses, "2026-10-18").map(({ course: c, week: w }) => `${c.code}/${w.index}`), ["GEN/0"]);
+  assert.throws(() => buildPrompt({ root: ".", semId: "S", data: general, action: "make-notes", params: { course: "NIL" } }), /NIL: no downloaded files yet/);
 });
