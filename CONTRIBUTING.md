@@ -116,4 +116,4 @@ Releases are automated with [release-please](https://github.com/googleapis/relea
 1. Every merge to `main` updates an open **release PR** with the next version (from the commit types above) and the `CHANGELOG.md` entries.
 2. Merging the release PR tags the version (`v0.2.0`), publishes a GitHub release and bumps `version` in `package.json`.
 
-While we are below 1.0, `feat` bumps the minor version and breaking changes bump the minor too. Students update with `ouc update` (or `git pull`).
+While we are below 1.0, `feat` bumps the minor version and breaking changes bump the minor too. Installed copies see the new release within a day (the app's **Update available** bar, or `ouc update --check`) and move to its tag with `ouc update`, so only released code reaches students; a release whose lockfile changed is reinstalled with `npm ci`.
