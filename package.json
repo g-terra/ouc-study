@@ -1,0 +1,34 @@
+{
+  "name": "ouc-study",
+  "private": true,
+  "description": "OUC study workspace: course files, notes and a React study dashboard",
+  "packageManager": "npm@10.9.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "setup": "node bin/setup.mjs",
+    "pull": "bash bin/ouc pull",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "content": "turbo run content",
+    "preview": "npm run build && npm -w @ouc/web run preview",
+    "sync": "node packages/eclass-sync/daily.mjs && node node_modules/tsx/dist/cli.mjs packages/content/src/build.ts",
+    "sync:check": "node packages/eclass-sync/daily.mjs --check",
+    "start": "bash bin/ouc start",
+    "stop": "bash bin/ouc stop",
+    "status": "bash bin/ouc status",
+    "ouc": "bash bin/ouc",
+    "install:background": "bash bin/ouc install",
+    "check:public": "node bin/check-public.mjs",
+    "notes": "node bin/ai.mjs notes",
+    "ai": "node bin/ai.mjs"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}

@@ -1,0 +1,33 @@
+# --- build output ---
+node_modules/
+dist/
+.turbo/
+apps/web/public/data/
+.DS_Store
+*.log
+*.part
+
+# --- personal: never commit (this repo can be public) ---
+# your eClass key
+.eclass-token
+# your courses: OUC course materials, your submissions, grades, notes, updates
+semesters/*
+!semesters/README.md
+# your study memory and personal instructions for Claude
+memory/
+STUDENT.md
+# local state: installer reports, installed copies of ai/
+.ouc/
+.claude/
+.agents/
+
+# session handover notes (mention personal details)
+HANDOVER.md
+
+# --- secrets and local caches ---
+.env
+.env.*
+*.pem
+*.key
+__pycache__/
+*.pyc

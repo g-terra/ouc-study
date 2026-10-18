@@ -1,0 +1,22 @@
+{
+  "name": "@ouc/content",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Builds the study app's data from the semesters/ folders",
+  "exports": {
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "content": "tsx src/build.ts",
+    "watch": "tsx watch src/build.ts"
+  },
+  "dependencies": {
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

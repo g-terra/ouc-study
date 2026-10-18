@@ -1,0 +1,11 @@
+{
+  "name": "@ouc/eclass-sync",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Daily eClass (Moodle web service) sync: grades, feedback, materials, deadlines, announcements",
+  "scripts": {
+    "sync": "node daily.mjs",
+    "sync:check": "node daily.mjs --check"
+  }
+}

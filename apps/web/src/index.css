@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+/* ---------- design tokens (light / dark) ---------- */
+:root {
+  --bg: #f6f4ef;
+  --surface: #ffffff;
+  --surface-2: #f1eee7;
+  --ink: #1c1b19;
+  --muted: #6e6a62;
+  --line: #e4e0d6;
+  --accent: #c2410c;
+  --ok: #15803d;
+  --ok-bg: #e9f6ee;
+  --warn: #a16207;
+  --warn-bg: #fcf3dc;
+  --bad: #b91c1c;
+  --bad-bg: #fdecea;
+  --info: #1d4ed8;
+  --info-bg: #eaf0ff;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131312;
+    --surface: #1c1c1a;
+    --surface-2: #262523;
+    --ink: #ecebe6;
+    --muted: #a19d94;
+    --line: #34322e;
+    --accent: #fb923c;
+    --ok: #4ade80;
+    --ok-bg: #12301d;
+    --warn: #facc15;
+    --warn-bg: #33290d;
+    --bad: #f87171;
+    --bad-bg: #3a1616;
+    --info: #93b4ff;
+    --info-bg: #17223b;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-bad: var(--bad);
+  --color-bad-bg: var(--bad-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --font-serif: "Iowan Old Style", "Charter", "Palatino Linotype", Georgia, serif;
+  --font-sans: ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+}
+
+html { background: var(--bg); }
+body { @apply bg-bg text-ink font-sans antialiased; }
+
+/* ---------- rendered markdown inside notes & questions ---------- */
+@layer components {
+  .md { @apply text-[15.5px] leading-7; }
+  .md p { @apply my-3; }
+  .md strong { @apply font-semibold; }
+  .md a { @apply underline decoration-line underline-offset-2 hover:decoration-ink; }
+  .md ul { @apply my-3 list-disc pl-6 space-y-1.5; }
+  .md ol { @apply my-3 list-decimal pl-6 space-y-1.5; }
+  .md li > ul, .md li > ol { @apply my-1.5; }
+  .md h3 { @apply mt-6 mb-2 text-base font-semibold; }
+  .md code { @apply rounded bg-surface-2 px-1.5 py-0.5 text-[13px]; }
+  .md blockquote { @apply border-l-4 border-line pl-4 text-muted; }
+  .md table { @apply my-4 w-full border-collapse text-sm; }
+  .md th { @apply border-b-2 border-line px-3 py-2 text-left font-semibold; }
+  .md td { @apply border-b border-line px-3 py-2 align-top; }
+  .md .math-display { @apply my-4 overflow-x-auto; }
+  .md-inline p { @apply m-0; }
+  .katex { font-size: 1.05em; }
+  .katex-display { margin: 0.4em 0; overflow-x: auto; overflow-y: hidden; }
+}
+
+/* flip cards */
+.flip { perspective: 1000px; }
+.flip-inner { transition: transform 0.45s; transform-style: preserve-3d; }
+.flip.on .flip-inner { transform: rotateY(180deg); }
+.flip-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.flip-back { transform: rotateY(180deg); }
+
+/* mermaid diagrams adapt to width */
+.mermaid-box svg { max-width: 100%; height: auto; }

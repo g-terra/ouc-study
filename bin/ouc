@@ -1,0 +1,165 @@
+#!/bin/bash
+# ouc: control the OUC Study app and the eClass sync from Terminal.
+#   ouc setup | start | stop | restart | status | open | sync | pull | logs [app|sync] | install | uninstall | help
+set -euo pipefail
+
+# resolve the repo root (works through a symlink, e.g. /opt/homebrew/bin/ouc)
+SRC="${BASH_SOURCE[0]}"
+while [ -L "$SRC" ]; do D="$(cd -P "$(dirname "$SRC")" && pwd)"; SRC="$(readlink "$SRC")"; [[ $SRC != /* ]] && SRC="$D/$SRC"; done
+ROOT="$(cd -P "$(dirname "$SRC")/.." && pwd)"
+
+NODE="$(command -v node || true)"
+PORT="${OUC_PORT:-5173}"
+URL="http://localhost:$PORT"
+UID_="$(id -u)"
+AGENTS="$HOME/Library/LaunchAgents"
+LOGS="$HOME/Library/Logs/OUC-Study"
+APP_LABEL="cy.ouc.study.app"
+SYNC_LABEL="cy.ouc.study.eclass-sync"
+APP_PLIST="$AGENTS/$APP_LABEL.plist"
+SYNC_PLIST="$AGENTS/$SYNC_LABEL.plist"
+SYNC_TIME="${OUC_SYNC_TIME:-07:30}"
+
+b() { printf "\033[1m%s\033[0m\n" "$*"; }
+ok() { printf "\033[32m✓\033[0m %s\n" "$*"; }
+warn() { printf "\033[33m⚠\033[0m %s\n" "$*"; }
+err() { printf "\033[31m✗\033[0m %s\n" "$*"; }
+need_node() { [ -n "$NODE" ] || { err "Node.js not found. Install it from https://nodejs.org"; exit 1; }; }
+need_deps() { [ -f "$ROOT/node_modules/vite/bin/vite.js" ] || { warn "Installing dependencies first (npm install)…"; (cd "$ROOT" && npm install); }; }
+loaded() { launchctl print "gui/$UID_/$1" >/dev/null 2>&1; }
+up() { curl -fsS -o /dev/null --max-time 2 "$URL" 2>/dev/null; }
+
+write_plists() {
+  mkdir -p "$AGENTS" "$LOGS"
+  cat > "$APP_PLIST" <<PL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$APP_LABEL</string>
+  <key>ProgramArguments</key><array><string>$NODE</string><string>$ROOT/bin/server.mjs</string></array>
+  <key>WorkingDirectory</key><string>$ROOT</string>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>$(dirname "$NODE"):/usr/bin:/bin:/usr/sbin:/sbin</string><key>OUC_PORT</key><string>$PORT</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>$LOGS/app.log</string>
+  <key>StandardErrorPath</key><string>$LOGS/app.log</string>
+</dict></plist>
+PL
+  local H="${SYNC_TIME%%:*}" M="${SYNC_TIME##*:}"
+  cat > "$SYNC_PLIST" <<PL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$SYNC_LABEL</string>
+  <key>ProgramArguments</key><array><string>$NODE</string><string>$ROOT/packages/eclass-sync/daily.mjs</string></array>
+  <key>WorkingDirectory</key><string>$ROOT</string>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>$((10#$H))</integer><key>Minute</key><integer>$((10#$M))</integer></dict>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>$LOGS/sync.log</string>
+  <key>StandardErrorPath</key><string>$LOGS/sync.log</string>
+</dict></plist>
+PL
+}
+
+link_cmd() {
+  for d in /opt/homebrew/bin /usr/local/bin; do
+    if [ -d "$d" ] && [ -w "$d" ]; then ln -sf "$ROOT/bin/ouc" "$d/ouc"; ok "Command installed: you can now type 'ouc' anywhere ($d/ouc)"; return; fi
+  done
+  local rc="$HOME/.zshrc"; [ -n "${BASH_VERSION:-}" ] && [ "${SHELL##*/}" = "bash" ] && rc="$HOME/.bash_profile"
+  if ! grep -q "alias ouc=" "$rc" 2>/dev/null; then echo "alias ouc='$ROOT/bin/ouc'" >> "$rc"; fi
+  ok "Command installed as an alias in $rc. Open a new Terminal window, then type 'ouc'."
+}
+
+check_tcc() {
+  sleep 6
+  if grep -q "Operation not permitted" "$LOGS/app.log" 2>/dev/null; then
+    echo; warn "macOS is blocking background access to your Desktop folder."
+    echo "   Fix (once): System Settings → Privacy & Security → Full Disk Access → + →"
+    echo "   press Cmd+Shift+G, paste:  $NODE   → Open, and switch it on. Then run: ouc restart"
+  fi
+}
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  install)
+    need_node; need_deps; chmod +x "$ROOT/bin/ouc" "$ROOT/bin/server.mjs" 2>/dev/null || true
+    write_plists
+    for L in "$APP_LABEL" "$SYNC_LABEL"; do launchctl bootout "gui/$UID_/$L" 2>/dev/null || true; done
+    launchctl bootstrap "gui/$UID_" "$APP_PLIST"; launchctl bootstrap "gui/$UID_" "$SYNC_PLIST"
+    ok "App starts automatically when you log in, and runs in the background at $URL"
+    ok "eClass is checked every day at $SYNC_TIME (and every 4 h while the app runs)"
+    link_cmd
+    check_tcc
+    up && ok "App is up: $URL" || echo "  The app is starting… check with: ouc status"
+    ;;
+  uninstall)
+    for L in "$APP_LABEL" "$SYNC_LABEL"; do launchctl bootout "gui/$UID_/$L" 2>/dev/null || true; done
+    rm -f "$APP_PLIST" "$SYNC_PLIST"
+    for d in /opt/homebrew/bin /usr/local/bin; do [ -L "$d/ouc" ] && rm -f "$d/ouc"; done
+    ok "Background app and daily sync removed. (Files untouched. Run 'npm run dev' to start manually.)"
+    ;;
+  start)
+    need_node; need_deps
+    [ -f "$APP_PLIST" ] || write_plists
+    if loaded "$APP_LABEL"; then launchctl kickstart "gui/$UID_/$APP_LABEL"; else launchctl bootstrap "gui/$UID_" "$APP_PLIST"; fi
+    for i in $(seq 1 30); do up && break; sleep 1; done
+    up && ok "App running: $URL" || { warn "Still starting… see: ouc logs"; check_tcc; }
+    ;;
+  stop)
+    launchctl bootout "gui/$UID_/$APP_LABEL" 2>/dev/null && ok "App stopped (it will start again at next login; 'ouc uninstall' to turn that off)." || warn "App wasn't running."
+    ;;
+  restart) "$0" stop || true; sleep 1; "$0" start ;;
+  open) up || "$0" start; open "$URL" ;;
+  setup)
+    need_node; exec "$NODE" "$ROOT/bin/setup.mjs" "$@"
+    ;;
+  pull)
+    need_node; "$NODE" "$ROOT/packages/eclass-sync/pull.mjs" "$@"
+    if [[ " $* " != *" --dry-run "* ]] && [ -f "$ROOT/node_modules/tsx/dist/cli.mjs" ]; then (cd "$ROOT" && "$NODE" node_modules/tsx/dist/cli.mjs packages/content/src/build.ts >/dev/null) && ok "App data refreshed"; fi
+    ;;
+  link) link_cmd ;;
+  ai) need_node; exec "$NODE" "$ROOT/bin/ai.mjs" "$@" ;;
+  notes|plan|quiz) need_node; exec "$NODE" "$ROOT/bin/ai.mjs" "$cmd" "$@" ;;
+  check-public) need_node; "$NODE" "$ROOT/bin/check-public.mjs" ;;
+  sync)
+    need_node
+    "$NODE" "$ROOT/packages/eclass-sync/daily.mjs" "$@" || true
+    # new files too, for semesters created by `ouc setup` (their eclass-meta.json comes from the API)
+    META=$(ls -t "$ROOT"/semesters/*/_meta/eclass-meta.json 2>/dev/null | head -1 || true)
+    if [ -n "$META" ] && grep -q '"source": "api"' "$META"; then "$NODE" "$ROOT/packages/eclass-sync/pull.mjs" --quiet || true; fi
+    if [ -f "$ROOT/node_modules/tsx/dist/cli.mjs" ]; then (cd "$ROOT" && "$NODE" node_modules/tsx/dist/cli.mjs packages/content/src/build.ts >/dev/null) && ok "App data refreshed"; fi
+    ;;
+  status)
+    b "OUC Study"
+    if up; then ok "App running at $URL"; elif loaded "$APP_LABEL"; then warn "App service loaded but not answering yet (ouc logs)"; else err "App not running (ouc start)"; fi
+    loaded "$SYNC_LABEL" && ok "Daily eClass sync scheduled at $SYNC_TIME" || warn "Daily sync not scheduled (ouc install)"
+    [ -f "$ROOT/.eclass-token" ] && ok "eClass key present" || warn "No eClass key yet (.eclass-token), see README → Daily updates"
+    ST=$(ls -d "$ROOT"/semesters/*/updates/status.json 2>/dev/null | tail -1 || true)
+    if [ -n "$ST" ]; then "$NODE" -e 'const s=require(process.argv[1]);const d=new Date(s.lastRun);console.log((s.ok?"\x1b[32m✓\x1b[0m":"\x1b[31m✗\x1b[0m")+" Last sync "+d.toLocaleString("en-GB")+(s.ok?` (${s.found??0} new)`:` failed: ${s.error}`))' "$ST"; fi
+    ;;
+  logs)
+    case "${1:-app}" in sync) tail -n 40 -f "$LOGS/sync.log" ;; *) tail -n 40 -f "$LOGS/app.log" ;; esac
+    ;;
+  help|-h|--help|*)
+    cat <<H
+$(b "ouc: OUC Study app & eClass sync")
+
+  ouc setup        first-time setup (or add courses / a new semester)
+  ouc install      start the app automatically at login + daily eClass sync + this command
+  ouc start        start the app in the background ($URL)
+  ouc stop         stop it          ouc restart    restart it
+  ouc open         open the app in your browser (starts it if needed)
+  ouc sync         check eClass now (grades, feedback, materials…) and refresh the app
+  ouc pull         download any new course files now (--dry-run: just list them)
+  ouc status       is it running? when was the last sync?
+  ouc logs [sync]  follow the app (or sync) log
+  ouc notes [course] [week]   AI notes for a week (default: latest without notes)
+  ouc plan         AI plan for this week      ouc quiz [course] [week]   quiz yourself
+  ouc ai           open your AI (Claude Code, Codex or local)   ouc ai setup   choose it
+  ouc check-public before pushing to GitHub: is anything personal included?
+  ouc uninstall    remove the background app and daily sync
+H
+    ;;
+esac
