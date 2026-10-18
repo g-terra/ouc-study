@@ -43,7 +43,7 @@ try {
 const problems = [];
 const flag = (f, why) => problems.push([f, why]);
 for (const f of files) {
-  if (/^(semesters\/(?!README\.md$)|memory\/|\.claude\/|\.agents\/|\.ouc\/)/.test(f)) flag(f, "personal folder (should be git-ignored)");
+  if (/^(semesters\/(?!README\.md$)|memory\/|\.claude\/|\.agents\/|\.opencode\/|\.ouc\/)/.test(f)) flag(f, "personal folder (should be git-ignored)");
   else if (/(^|\/)\.eclass-token$|(^|\/)STUDENT\.md$|CLAUDE\.local\.md$/.test(f)) flag(f, "personal file");
   else if (/\.(pdf|pptx?|docx?|xlsx?|mp4|zip|epub|djvu)$/i.test(f)) flag(f, "document/media file: course material?");
   const p = join(ROOT, f);
@@ -51,7 +51,8 @@ for (const f of files) {
   const text = readFileSync(p, "utf8");
   if (token && text.includes(token)) flag(f, c.red("contains your eClass key!"));
   const re = (n, fl) => new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, fl);
-  const hit = [...names].find((n) => re(n, "i").test(text)) ?? [...words].find((w) => re(w, "").test(text));
+  // a LICENSE names its copyright holder on purpose
+  const hit = /^LICENSE(\.\w+)?$/.test(f) ? null : [...names].find((n) => re(n, "i").test(text)) ?? [...words].find((w) => re(w, "").test(text));
   if (hit) flag(f, `mentions "${hit}"`);
 }
 
