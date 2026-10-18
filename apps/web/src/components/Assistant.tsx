@@ -7,6 +7,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import type { SemesterData } from "@ouc/content/types";
 import { Link, useRouter, enc } from "../lib/router";
 import { mdToHtml } from "../lib/markdown";
+import { linkLabel } from "../lib/links";
 import { TOOL_STATE, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
 import { refreshData } from "../lib/data";
 import { cx } from "./ui";
@@ -464,7 +465,7 @@ function FileLinks({ files, className }: { files: string[]; className?: string }
     <div className={cx("flex flex-col gap-1", className)}>
       {files.map((f) => {
         const l = fileLink(f)!;
-        const label = <><span aria-hidden>📄</span> <span className="truncate">{f.split("/").pop()}</span></>;
+        const label = <><span aria-hidden>{/\/plans\//.test(f) ? "🗓️" : "📄"}</span> <span className="truncate">{linkLabel(f, l)}</span></>;
         return l.internal ? <Link key={f} to={l.to} className={cls}>{label}</Link>
           : <a key={f} href={l.to} target="_blank" rel="noreferrer" className={cls}>{label}</a>;
       })}
