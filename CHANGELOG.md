@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/g-terra/ouc-study/compare/v0.4.0...v0.4.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **cli:** stop ouc update and restart crashing with "defaultRun is not defined" ([#41](https://github.com/g-terra/ouc-study/issues/41)) ([198c79b](https://github.com/g-terra/ouc-study/commit/198c79bd5490906de5dd3fd11f9ae51991a98ef9))
+
 ## [0.4.0](https://github.com/g-terra/ouc-study/compare/v0.3.0...v0.4.0) (2026-10-18)
 
 
