@@ -134,3 +134,19 @@ test("prep packs: prepared on their own, then reviewed by another AI with the hi
   assert.match(meta.log[1], /reviewed and improved/);
   assert.equal(JSON.parse(readFileSync(join(root, ".ouc/chats", readdirSync(join(root, ".ouc/chats"))[0]), "utf8")).action, "assignment-prep");
 });
+
+test("visuals the AI saved are served sandboxed, and nothing else is", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  mkdirSync(join(root, "visualizations"));
+  writeFileSync(join(root, "visualizations/search.html"), "<h1>red circle</h1>");
+  writeFileSync(join(root, ".ouc/secret.html"), "no");
+  const res = await fetch(`${base}/api/ai/view?path=visualizations/search.html`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-security-policy"), /^sandbox allow-scripts/);
+  assert.equal(await res.text(), "<h1>red circle</h1>");
+  assert.equal((await fetch(`${base}/api/ai/view?path=${encodeURIComponent(join(root, "visualizations/search.html"))}`)).status, 200); // an absolute path inside the folder
+  for (const bad of [".ouc/secret.html", ".ouc/ai.json", "../etc/passwd.html", "visualizations/missing.html", "/etc/hosts"]) {
+    assert.equal((await fetch(`${base}/api/ai/view?path=${encodeURIComponent(bad)}`)).status, 404, bad);
+  }
+});

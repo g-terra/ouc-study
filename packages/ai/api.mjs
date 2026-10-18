@@ -6,6 +6,7 @@
 //   POST /api/ai/run           { sem, chatId?, action?, params?, message } → Server-Sent Events
 //   POST /api/ai/stop          { chatId }
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
+//   GET  /api/ai/view?path=…  a visual the AI saved (HTML, SVG or image), sandboxed, for the chat to show inline
 //   GET  /api/ai/prep          the automatic assignment prep: { enabled, running, chatId, queue, error }
 //
 // Agents run on the student's own computer with their subscription login (no API keys).
@@ -17,7 +18,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, extname, join, relative, resolve, sep } from "node:path";
 import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, loadConfig, loginStatusAsync, serverUp } from "./providers.mjs";
 import { buildPrompt, chatSystem, listActions, prepPath } from "./actions.mjs";
 import { currentSemesterId, loadData, read } from "./context.mjs";
@@ -114,6 +115,16 @@ export function needsPrep(root, semId, data, tried = {}, now = new Date()) {
   return data.assignments.filter((a) => !a.submitted && (!a.due || new Date(a.due) > now) && (a.briefs?.length || a.question)
     && !existsSync(join(root, prepPath(semId, a)))
     && !(tried[a.id] && now - new Date(tried[a.id]) < 12 * 3600_000));
+}
+
+// ---------- visuals the AI saves (shown inline in the chat) ----------
+const VIEW_TYPE = { ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
+/** The absolute path of a visual inside the folder, or null (other types, hidden folders, outside the folder). */
+export function viewablePath(root, rel) {
+  const abs = resolve(root, String(rel ?? ""));
+  const r = relative(root, abs);
+  if (!r || r.startsWith("..") || r.split(sep).some((p) => p.startsWith(".") || p === "node_modules")) return null;
+  return VIEW_TYPE[extname(abs).toLowerCase()] && existsSync(abs) ? abs : null;
 }
 
 // ---------- HTTP ----------
@@ -288,6 +299,16 @@ export function createAiApi(root, opts = {}) {
       const p = url.pathname;
       if (p === "/api/ai/status") return json(res, { ...(await status(url.searchParams.has("fresh"))), token });
       if (p === "/api/ai/prep") return json(res, { enabled: prepEnabled(), running: prep.running, chatId: prep.chatId, queue: prep.queue, error: prep.error });
+      if (p === "/api/ai/view") {
+        const abs = viewablePath(root, url.searchParams.get("path"));
+        if (!abs) return json(res, { error: "Not found" }, 404);
+        res.setHeader("Content-Type", VIEW_TYPE[extname(abs).toLowerCase()]);
+        // the page runs in its own sandbox (no access to the app, its token or your files), even when opened in a tab
+        res.setHeader("Content-Security-Policy", "sandbox allow-scripts allow-popups");
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        return res.end(readFileSync(abs));
+      }
       if (p === "/api/ai/actions") return json(res, { actions: listActions(root) });
       if (p === "/api/ai/chats") return json(res, { chats: listChats(root) });
       if (p.startsWith("/api/ai/chats/")) {

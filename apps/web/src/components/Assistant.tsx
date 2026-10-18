@@ -7,7 +7,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import type { SemesterData } from "@ouc/content/types";
 import { Link } from "../lib/router";
 import { mdToHtml } from "../lib/markdown";
-import { TOOL_STATE, fileLink, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
+import { TOOL_STATE, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
 import { refreshData } from "../lib/data";
 import { cx } from "./ui";
 
@@ -407,6 +407,27 @@ const PREP_MODE: Record<string, string> = {
 };
 const LIVE_STEPS = 3;
 const SHOW_FILES = 3;
+/** A visual the AI saved, shown in the chat. It runs sandboxed: it can't reach the app or your files. */
+function Visual({ path }: { path: string }) {
+  const src = viewUrl(path);
+  const [ok, setOk] = useState<boolean>();
+  const [big, setBig] = useState(false);
+  useEffect(() => { fetch(src).then((r) => setOk(r.ok)).catch(() => setOk(false)); }, [src]);
+  if (!ok) return null;
+  const name = path.split("/").pop();
+  const img = /\.(png|jpe?g|gif|webp)$/i.test(path);
+  return (
+    <figure className="overflow-hidden rounded-xl border border-line bg-white">
+      {img ? <img src={src} alt={name} className="w-full" />
+        : <iframe title={name} src={src} sandbox="allow-scripts allow-popups" className={cx("block w-full bg-white", big ? "h-[75vh]" : "h-80")} />}
+      <figcaption className="flex items-center gap-3 border-t border-line bg-surface px-3 py-1.5 text-xs text-muted">
+        <span className="min-w-0 flex-1 truncate" title={path}>🖼️ {name}</span>
+        {!img && <button type="button" className="hover:text-ink" onClick={() => setBig(!big)}>{big ? "Smaller" : "Bigger"}</button>}
+        <a href={src} target="_blank" rel="noreferrer" className="hover:text-ink">Open ↗</a>
+      </figcaption>
+    </figure>
+  );
+}
 function FileLinks({ files, className }: { files: string[]; className?: string }) {
   const cls = "flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold hover:border-muted";
   return (
@@ -426,8 +447,9 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
   }
   const steps = msg.steps ?? [];
   const updates = msg.updates ?? [];
-  // only files the app can open (notes, course files); memory and other bookkeeping files stay out of the way
-  const files = [...new Set(msg.files ?? [])].filter((f) => fileLink(f));
+  // visuals it made are shown inline; the other files the app can open are listed (memory and other bookkeeping files aren't)
+  const visuals = live ? [] : visualsOf(msg);
+  const files = [...new Set(msg.files ?? [])].filter((f) => fileLink(f) && !visuals.includes(f));
   const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
   return (
     <div className="flex flex-col gap-2">
@@ -454,6 +476,7 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
             </details>
           )}
           {msg.text && <Markdown text={msg.text} />}
+          {visuals.map((v) => <Visual key={v} path={v} />)}
         </>
       )}
       {!live && files.length > 0 && (files.length <= SHOW_FILES ? <FileLinks files={files} /> : (
