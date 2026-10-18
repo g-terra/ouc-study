@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/g-terra/ouc-study/compare/v0.3.0...v0.4.0) (2026-10-18)
+
+
+### Features
+
+* **web:** show upcoming live classes with the join link and the week's material ([#37](https://github.com/g-terra/ouc-study/issues/37)) ([4cb8882](https://github.com/g-terra/ouc-study/commit/4cb8882b61b6d72c6e2078ed5cbb5b8c47a7a573))
+
 ## [0.3.0](https://github.com/g-terra/ouc-study/compare/v0.2.1...v0.3.0) (2026-10-18)
 
 
