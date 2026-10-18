@@ -1,7 +1,7 @@
 import { defineConfig, type Plugin, type Connect } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { createReadStream, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -33,6 +33,13 @@ function runJson(args: string[]): Promise<any> {
   });
 }
 const SYNC = () => resolve(HERE, "../../packages/eclass-sync/daily.mjs");
+/** Is the newest semester's course structure from the eClass API (so pull.mjs can fetch new files)? */
+const apiSemester = () => {
+  const dir = resolve(HERE, "../../semesters");
+  const metas = existsSync(dir) ? readdirSync(dir).map((d) => resolve(dir, d, "_meta/eclass-meta.json")).filter(existsSync) : [];
+  const newest = metas.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
+  return !!newest && /"source":\s*"api"/.test(readFileSync(newest, "utf8"));
+};
 const TSX = () => resolve(HERE, "../../node_modules/tsx/dist/cli.mjs");
 
 /** /api/eclass/status (GET, cached 5 min; ?fresh=1 to force) and /api/eclass/sync (POST). */
@@ -51,10 +58,14 @@ function eclassApi(): Plugin {
       return send(res, { ...cache.body, syncing: !!syncing });
     }
     if (url.pathname === "/api/eclass/sync" && req.method === "POST") {
+      const node = (args: string[]) => new Promise((ok) => spawn(process.execPath, args, { cwd: resolve(HERE, "../..") }).on("exit", ok));
       syncing ??= runJson([SYNC(), "--json", "--quiet"]).then(async (r) => {
-        await new Promise((ok) => spawn(process.execPath, [TSX(), "packages/content/src/build.ts"], { cwd: resolve(HERE, "../..") }).on("exit", ok));
+        // new course files too (like `ouc sync`), for semesters whose structure comes from the eClass API
+        if (r.ok && apiSemester()) await node([resolve(HERE, "../../packages/eclass-sync/pull.mjs"), "--quiet"]);
+        await node([TSX(), "packages/content/src/build.ts"]);
         cache = { at: Date.now(), body: { ok: r.ok, state: r.state, user: r.user ?? cache?.body?.user, error: r.error, checkedAt: new Date().toISOString() } };
-        return r;
+        // then the AI makes whatever notes and prep packs are missing, in the background
+        return { ...r, ai: r.ok ? aiHandler?.catchUp() : undefined };
       }).finally(() => { syncing = undefined; });
       return send(res, await syncing);
     }

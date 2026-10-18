@@ -53,23 +53,20 @@ const noteSections = (course) => {
   return weekly.length ? weekly : course.weeks.filter((w) => w.index === 0 && hasFiles(w));
 };
 /**
- * Weeks that have started, have files and have no note yet, oldest first. A course that keeps all
- * its files in the General section (no weekly sections with files) gets that section instead.
+ * Weeks that have files and no note yet (started or not), oldest first. A course that keeps all its
+ * files in the General section (no weekly sections with files) gets that section instead.
  */
-export function weeksWithoutNotes(data, courses, today = new Date().toISOString().slice(0, 10)) {
+export function weeksWithoutNotes(data, courses) {
   return courses.flatMap((course) => noteSections(course)
-    .filter((w) => !w.start || w.start <= today)
     .filter((w) => !data.notes.some((n) => n.code === course.code && n.weekIndex === w.index))
     .map((week) => ({ course, week })));
 }
 
 /** Why a course has nothing left to make notes for, in a few words (for the "nothing to do" message). */
-export function notesCoverage(data, course, today = new Date().toISOString().slice(0, 10)) {
+export function notesCoverage(data, course) {
   const withFiles = noteSections(course);
   if (!withFiles.length) return `${course.short}: no downloaded files yet (run ouc pull)`;
-  const started = withFiles.filter((w) => !w.start || w.start <= today);
-  if (!started.length) return `${course.short}: its weeks with files haven't started yet`;
-  return `${course.short}: all ${started.length} started week${started.length === 1 ? "" : "s"} with files have notes`;
+  return `${course.short}: all ${withFiles.length} week${withFiles.length === 1 ? "" : "s"} with files have notes`;
 }
 
 /** The prompt `ouc notes` and the app use for an agent tool. */
@@ -126,7 +123,7 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       const todo = weeksWithoutNotes(data, course ? [course] : data.courses);
       if (!todo.length) throw new Error(`Nothing to make notes for. ${(course ? [course] : data.courses).map((c) => notesCoverage(data, c)).join("; ")}.`);
       if (todo.length === 1) { body = notesPrompt(semId, todo[0].course, todo[0].week).prompt + extra; break; }
-      body = `Use the make-notes skill. Make visual study notes for each of these ${todo.length} weeks, which have material but no notes yet. ` +
+      body = `Use the make-notes skill. Make visual study notes for each of these ${todo.length} weeks, which have material but no notes yet (some may not have started: use the files that are there). ` +
         `Delegate to the note-taker agent, one per course, in parallel if you can. The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/.\n\n` +
         todo.map(({ course: c, week: w }) => `- ${c.code} section ${w.index} "${w.name}" → ${notesPrompt(semId, c, w).rel} (front matter: course ${c.code}, section ${w.index}, week ${weekNumber(w)})`).join("\n") +
         `\n\nAfter writing each note, run: node packages/ai/validate.mjs <its path> and fix every error it reports.${extra}`;

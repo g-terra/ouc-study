@@ -74,16 +74,22 @@ export function useActions(): AiAction[] {
 export const listChats = (): Promise<ChatSummary[]> => fetch("/api/ai/chats").then((r) => r.json()).then((j) => j.chats ?? []).catch(() => []);
 export const getChat = (id: string): Promise<Chat | null> => fetch(`/api/ai/chats/${encodeURIComponent(id)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
-/** The app's automatic assignment prep: is it on, and which assignment is it preparing now? */
-export interface PrepStatus { enabled: boolean; running: string | null; chatId: string | null; queue: string[]; error: string | null }
+/** Background AI work (missing notes and prep packs): what's running, what's queued, how far along. */
+export interface PrepStatus {
+  enabled: boolean; busy: boolean; running: { id: string; chatId: string }[]; queue: string[];
+  total: number; done: number; error: string | null;
+}
+let prepNow: PrepStatus | null = null;
+const prepListeners = new Set<(s: PrepStatus | null) => void>();
+let prepTimer: number | undefined;
+export const refreshPrep = () => fetch("/api/ai/prep").then((r) => (r.ok ? r.json() : null)).catch(() => null)
+  .then((j) => { prepNow = j; prepListeners.forEach((l) => l(j)); });
 export function usePrepStatus(): PrepStatus | null {
-  const [s, setS] = useState<PrepStatus | null>(null);
+  const [s, setS] = useState(prepNow);
   useEffect(() => {
-    let alive = true;
-    const get = () => fetch("/api/ai/prep").then((r) => (r.ok ? r.json() : null)).then((j) => alive && setS(j)).catch(() => {});
-    get();
-    const t = window.setInterval(get, 5000);
-    return () => { alive = false; window.clearInterval(t); };
+    prepListeners.add(setS);
+    if (prepTimer === undefined) { refreshPrep(); prepTimer = window.setInterval(refreshPrep, 3000); }
+    return () => { prepListeners.delete(setS); if (!prepListeners.size) { window.clearInterval(prepTimer); prepTimer = undefined; } };
   }, []);
   return s;
 }
