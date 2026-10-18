@@ -23,6 +23,9 @@ const ARGS = process.argv.slice(2);
 const DRY = ARGS.includes("--dry-run");
 const YES = ARGS.includes("--yes");
 const MAC = process.platform === "darwin";
+const WIN = process.platform === "win32";
+const BACKGROUND = MAC || WIN;   // ouc install: LaunchAgents on macOS, Startup folder + Task Scheduler on Windows
+const OUC = (...a) => [process.execPath, ["bin/ouc.mjs", ...a]];
 const STEPS = DRY ? 5 : 8;
 const PALETTE = ["#7c3aed", "#0e7490", "#be185d", "#c2410c", "#15803d", "#1d4ed8", "#a16207", "#9333ea"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -40,7 +43,7 @@ function sh(cmd, args, opts = {}) {
   });
 }
 const has = (bin) => spawnSync(process.platform === "win32" ? "where" : "which", [bin], { stdio: "ignore" }).status === 0;
-const ver = (bin, a = ["--version"]) => { try { return execFileSync(bin, a, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim().split("\n")[0]; } catch { return ""; } };
+const ver = (bin, a = ["--version"], o = {}) => { try { return execFileSync(bin, a, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], ...o }).trim().split("\n")[0]; } catch { return ""; } };
 
 function seasonOf(d) {
   const m = d.getMonth();
@@ -92,11 +95,12 @@ async function main() {
   const [maj, min] = process.versions.node.split(".").map(Number);
   if (maj < 18 || (maj === 18 && min < 18)) { ui.fail(`Node ${process.versions.node} is too old. Install Node 20 or newer from https://nodejs.org`); process.exit(1); }
   ui.ok(`Node ${process.versions.node}`);
-  const npmV = ver(process.platform === "win32" ? "npm.cmd" : "npm", ["-v"]);
+  // npm is npm.cmd on Windows, which Node only starts through a shell (fixed arguments, so safe)
+  const npmV = ver("npm", ["-v"], { shell: WIN });
   npmV ? ui.ok(`npm ${npmV}`) : ui.warn("npm not found (comes with Node.js). Needed to install the app.");
   const py = has("python3") ? "python3" : has("python") ? "python" : "";
   py ? ui.ok(`${ver(py)} ${c.gray("(for searchable text copies of the slides)")}`) : ui.info("Python not found: text copies of the slides will be skipped (optional).");
-  ui.ok(`${MAC ? "macOS" : process.platform}${MAC ? "" : c.gray(" (the app works; background start-up is macOS only)")}`);
+  ui.ok(`${MAC ? "macOS" : WIN ? "Windows" : process.platform}${BACKGROUND ? "" : c.gray(" (the app works; starting it at login is macOS and Windows only)")}`);
 
   // ---- 2. dependencies ----------------------------------------------------
   if (!DRY) {
@@ -105,7 +109,7 @@ async function main() {
     else if (!npmV) { ui.fail("Can't install without npm. Install Node.js from https://nodejs.org and run setup again."); process.exit(1); }
     else {
       const sp = ui.spinner("npm install");
-      const r = await sh(process.platform === "win32" ? "npm.cmd" : "npm", ["install", "--no-fund", "--no-audit"]);
+      const r = await sh("npm", ["install", "--no-fund", "--no-audit"], { shell: WIN });
       mkdirSync(join(ROOT, ".ouc"), { recursive: true });
       writeFileSync(join(ROOT, ".ouc/npm-install.log"), r.log);
       if (r.code !== 0) { sp.fail("npm install failed. Details: .ouc/npm-install.log"); process.exit(1); }
@@ -300,17 +304,17 @@ async function main() {
   // ---- 7. start -----------------------------------------------------------
   ui.step(STEPS, "Starting the app");
   let started = false;
-  if (MAC && (await confirm("Start the app automatically when you log in (and sync eClass every morning)?", true))) {
+  if (BACKGROUND && (await confirm("Start the app automatically when you log in (and sync eClass every morning)?", true))) {
     const sp = ui.spinner("Installing the background service…");
-    const r = await sh("bash", ["bin/ouc", "install"]);
+    const r = await sh(...OUC("install"));
     r.code === 0 ? sp.succeed("Runs in the background at http://localhost:5173") : sp.warn(`Background service: ${r.log.trim().split("\n").pop()}`);
     const tcc = r.log.includes("Full Disk Access");
     if (tcc) ui.warn("macOS blocks background access to this folder: see the Full Disk Access tip with `ouc status`.");
     for (const l of r.log.split("\n").filter((x) => /Command installed/.test(x))) ui.ok(strip(l.replace(/\x1b\[[0-9;]*m/g, "").replace(/^✓\s*/, "")));
     started = r.code === 0;
   }
-  if (!started && process.platform !== "win32") {
-    const r = await sh("bash", ["bin/ouc", "link"]);
+  if (!started) {
+    const r = await sh(...OUC("link"));
     for (const l of r.log.split("\n").filter((x) => /Command installed/.test(x))) ui.ok(l.replace(/\x1b\[[0-9;]*m/g, "").replace(/^✓\s*/, ""));
   }
   ui.say();
@@ -324,8 +328,8 @@ async function main() {
     `${c.cyan("ouc notes")}    AI notes for the latest lecture ${c.gray("· ouc plan · ouc quiz")}`,
     `${c.cyan("ouc ai")}       open your AI assistant in this folder`,
   ], { color: c.green });
-  if (!started) ui.info(`Start it now with: ${MAC ? "ouc open" : "npm run dev"}`);
-  else if (await confirm("Open the app now?", true)) await sh("bash", ["bin/ouc", "open"]);
+  if (!started) ui.info("Start it now with: ouc open");
+  else if (await confirm("Open the app now?", true)) await sh(...OUC("open"));
   ui.closeInput();
 }
 

@@ -102,7 +102,7 @@ function SetupCard({ error }: { error?: string }) {
     <Card className="mb-8 p-5">
       <div className="mb-2 font-semibold">🔑 Set up daily updates</div>
       {error && <p className="mb-3 rounded-lg bg-bad-bg px-3 py-2 text-sm text-bad">{error}</p>}
-      <p className="text-sm leading-6">Open Terminal in this folder and run <code>ouc setup</code> (or double-click <b>Install OUC Study.command</b>). It walks you through creating your personal eClass key, tests it, and saves it safely.</p>
+      <p className="text-sm leading-6">Open Terminal in this folder and run <code>ouc setup</code> (or double-click <b>Install OUC Study.command</b> on a Mac, <b>Install OUC Study.cmd</b> on Windows). It walks you through creating your personal eClass key, tests it, and saves it safely.</p>
       <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm leading-6 text-muted">
         <li>The key comes from <a className="underline" href="https://eclass.ouc.ac.cy/user/managetoken.php" target="_blank" rel="noreferrer">eClass → Preferences → Security keys</a>, row <b>Moodle mobile web service</b>.</li>
         <li>No such row? Install the <b>Moodle</b> app on your phone and sign in to <code>eclass.ouc.ac.cy</code> once (Office365 Login).</li>

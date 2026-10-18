@@ -57,10 +57,11 @@ You don't need an OUC account to work on most of the code. To try it with real d
 
 1. Branch from `main`: `git switch -c feat/timeline-filter`.
 2. Keep the change focused: one PR, one purpose. Match the style of the code around it.
-3. Add or update tests for behaviour you change (`node:test`, in `packages/<pkg>/test/*.test.mjs`).
-4. **Skills and agents:** edit `ai/skills/<name>/SKILL.md` or `ai/agents/<name>.md`, then `ouc ai install` to try them. The copies in `.claude/`, `.agents/` and `.opencode/` are generated. A new skill appears as an action in the Ask AI panel automatically, so give it a clear `description`.
-5. Update the docs people will read: README for students, AGENTS.md for AI tools, this file for contributors.
-6. Run `npm run check` and `npm run build` before pushing.
+3. Add or update tests for behaviour you change (`node:test`, in `packages/<pkg>/test/*.test.mjs`, or `bin/test/*.test.mjs` for the `ouc` command).
+4. It runs on **macOS and Windows** (and Linux). Start programs with Node, not a shell script: `bin/ouc.mjs` is the `ouc` command, `bin/lib/background.mjs` the per-OS background service, and `spawnCli` in `packages/ai/providers.mjs` starts the agent CLIs (npm installs them as `.cmd` files on Windows).
+5. **Skills and agents:** edit `ai/skills/<name>/SKILL.md` or `ai/agents/<name>.md`, then `ouc ai install` to try them. The copies in `.claude/`, `.agents/` and `.opencode/` are generated. A new skill appears as an action in the Ask AI panel automatically, so give it a clear `description`.
+6. Update the docs people will read: README for students, AGENTS.md for AI tools, this file for contributors.
+7. Run `npm run check` and `npm run build` before pushing.
 
 ## Commit messages and PR titles
 
@@ -90,7 +91,7 @@ Add `BREAKING CHANGE: ...` in the body, or `!` after the type, for anything that
 ## Open a pull request
 
 - Fill in the [PR template](.github/pull_request_template.md): Before / After, how, the checklist.
-- CI runs on every PR: **lint, unit tests, typecheck and a build on Node 20 and 22**, the **public check**, and the **PR title** check. All must pass.
+- CI runs on every PR: **lint, unit tests, typecheck and a build on Node 20 and 22**, the same on **Windows** plus a real `ouc install`/`uninstall`, the **public check**, and the **PR title** check. All must pass.
 - Say if an AI agent helped, and confirm you read and tested its changes. You are responsible for every line you submit.
 - A maintainer reviews and squash-merges.
 

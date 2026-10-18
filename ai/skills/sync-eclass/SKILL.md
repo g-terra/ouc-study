@@ -11,8 +11,8 @@ Everything goes through the eClass web-service API with the student's own key (`
 
 | Want | Run |
 |---|---|
-| What changed (grades, feedback, deadlines, announcements) + new files | `bash bin/ouc sync` |
-| Only download new course files (and list them first) | `bash bin/ouc pull --dry-run`, then `bash bin/ouc pull` |
+| What changed (grades, feedback, deadlines, announcements) + new files | `node bin/ouc sync` |
+| Only download new course files (and list them first) | `node bin/ouc pull --dry-run`, then `node bin/ouc pull` |
 | Add a course or start a new semester | ask the student to run `ouc setup` in Terminal (it is interactive) |
 | Key missing / expired (`updates/connection.json` state `nokey`, `invalid`) | ask the student to run `ouc setup`; it walks them through creating a key |
 
