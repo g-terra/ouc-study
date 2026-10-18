@@ -31,8 +31,8 @@ import { currentSemesterId, loadData, read } from "./context.ts";
 import { runAgentTurn, runChatTurn, type AgentEvent, type RunHandle } from "./stream.ts";
 import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview, reviewState, type Converter } from "./review.ts";
 import type { Assignment, SemesterData } from "../../content/src/types.ts";
-import { setTask } from "../../content/src/plan.mjs";
-import { setClassTime } from "../../content/src/classes.mjs";
+import { setTask } from "../../content/src/plan.ts";
+import { setClassTime } from "../../content/src/classes.ts";
 
 type ToolState = { state: "connected" | "signedout" | "apikey" | "missing" | "noserver" | "unknown"; detail?: string; fix?: string };
 export interface ToolStatus extends ToolState { id: string; label: string; chosen?: boolean }

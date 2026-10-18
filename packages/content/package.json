@@ -6,7 +6,7 @@
   "description": "Builds the study app's data from the semesters/ folders",
   "exports": {
     "./types": "./src/types.ts",
-    "./yaml-blocks": "./src/yaml-blocks.mjs"
+    "./yaml-blocks": "./src/yaml-blocks.ts"
   },
   "scripts": {
     "content": "tsx src/build.ts",

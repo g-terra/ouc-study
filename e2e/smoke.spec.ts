@@ -2,19 +2,20 @@
 import { expect, test } from "@playwright/test";
 
 const SEM = "/2026-Demo";
-const PAGES = [
+const PAGES: [path: string, name: string][] = [
   ["", "Dashboard"], ["/plan", "Plan"], ["/timeline", "Timeline"], ["/courses", "Courses"],
   ["/notes", "Notes"], ["/assignments", "Assignments"], ["/updates", "Updates"],
 ];
 
-test.beforeEach(async ({ page }, info) => {
-  const errors = [];
+// what went wrong in the browser during the current test (tests in a worker run one at a time)
+let errors: string[] = [];
+test.beforeEach(async ({ page }) => {
+  errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
   page.on("response", (r) => { if (r.status() >= 500) errors.push(`${r.status()} ${r.url()}`); });
-  info.errors = errors;
 });
-test.afterEach(async ({}, info) => expect(info.errors, "browser errors").toEqual([]));
+test.afterEach(async () => expect(errors, "browser errors").toEqual([]));
 
 for (const [path, name] of PAGES) {
   test(`${name} page renders`, async ({ page }) => {

@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import YAML from "yaml";
-import { hasQuotedLatex, parseBlock, singleQuoteLatex } from "../src/yaml-blocks.mjs";
+import { hasQuotedLatex, parseBlock, singleQuoteLatex } from "../src/yaml-blocks.ts";
 
 test("LaTeX in double quotes is read with its backslashes", () => {
   // the prep pack that broke: "\m" is not a YAML escape

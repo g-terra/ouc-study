@@ -221,7 +221,7 @@ Press **✨ Ask AI** in the top bar. Pick an action (Make notes, Quiz me, Plan m
 ```
 apps/web/             the React app (Vite + Tailwind)
 packages/content/     turns semesters/ into data for the app
-packages/eclass-sync/ eClass API: daily changes (daily.mjs), file downloads (src/pull.ts)
+packages/eclass-sync/ eClass API: daily changes (src/daily.ts), file downloads (src/pull.ts)
 packages/ai/          AI backends, study actions and the /api/ai server behind the Ask AI panel
 packages/cli/         the ouc command, the installer, the background server (TypeScript)
 bin/                  launchers that start them

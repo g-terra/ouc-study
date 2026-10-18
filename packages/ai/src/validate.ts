@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
-import { hasQuotedLatex, parseBlock, singleQuoteLatex } from "../../content/src/yaml-blocks.mjs";
+import { hasQuotedLatex, parseBlock, singleQuoteLatex } from "../../content/src/yaml-blocks.ts";
 
 const CALLOUTS = new Set(["IDEA", "KEY", "TIP", "WARN", "EXAM", "ANALOGY", "LINK"]);
 const DATA = new Set(["cards", "formula", "compare", "steps", "flashcards", "terms", "links"]);
