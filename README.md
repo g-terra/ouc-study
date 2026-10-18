@@ -71,18 +71,18 @@ The dot in the top bar shows the connection: 🟢 connected, 🔴 key expired or
 
 ## Using it with an AI assistant
 
-The study tools work with **Claude Code**, **OpenAI Codex** or a **local model through opencode**. Choose one with `ouc ai setup` (setup asks too); change it any time.
+The study tools work with **Claude Code**, **OpenAI Codex** or a **local model through opencode**. Setup asks which one you want and sets it up for you: it installs the tool, signs you in, and for a local model installs Ollama or LM Studio and downloads a model that fits your computer. Change it any time with `ouc ai setup`.
 
-| AI | Runs on | Set up |
+| AI | Runs on | Setup does |
 |---|---|---|
-| Claude Code | your Claude Pro/Max subscription | `npm i -g @anthropic-ai/claude-code`, then `claude auth login` |
-| Codex | your ChatGPT subscription | `npm i -g @openai/codex`, then `codex login` |
-| opencode + local model | your computer, offline | `npm i -g opencode-ai`, plus [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai) |
-| a local model directly | your computer, offline | Ollama or LM Studio only; notes, plans and quizzes, works with smaller models |
+| Claude Code | your Claude Pro/Max subscription | installs `@anthropic-ai/claude-code`, runs `claude auth login` |
+| Codex | your ChatGPT subscription | installs `@openai/codex`, runs `codex login` |
+| opencode + local model | your computer, free and offline | installs `opencode-ai` and Ollama or LM Studio, downloads the model, gives it a 32k context window |
+| a local model directly | your computer, free and offline | installs Ollama or LM Studio and downloads the model; notes, plans and quizzes only, lighter |
 
 Claude Code and Codex are used with **your own subscription login, never API credits**: `ouc ai` checks that you're signed in with your account, and it ignores `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` when it starts them.
 
-**Local models.** opencode needs a model that can call tools: `gpt-oss:20b`, `qwen3:14b` or bigger. Give it a context window of 32k tokens or more (Ollama: `OLLAMA_CONTEXT_LENGTH=32768 ollama serve`; LM Studio: Context Length when you load the model). Your model choice is saved in `.opencode/opencode.json`; the shared `opencode.json` keeps your eClass key off limits. On a smaller machine, "a local model directly" still makes notes, plans and quizzes: `ouc` gives it the week's material and checks the note format for it.
+**Local models.** The default is `gpt-oss:20b` on computers with 24 GB of memory or more, otherwise `qwen3:8b` (LM Studio: `openai/gpt-oss-20b` / `qwen/qwen3-8b`). opencode needs a model that can call tools and a context window of 32k tokens: with Ollama, setup makes a copy such as `qwen3-32k:8b`; with LM Studio, it loads the model with `--context-length 32768`. Your choice is saved in `.opencode/opencode.json`; the shared `opencode.json` keeps your eClass key off limits.
 
 ```
 ouc ai                 open your assistant in this folder

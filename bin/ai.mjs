@@ -14,7 +14,8 @@
  *   ouc ai run <skill> "…"     any skill (agent tools)
  *   options: --with claude|codex|opencode|local   --model <name>   --force
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { homedir, totalmem } from "node:os";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,29 +44,31 @@ export async function chooseAssistant({ quiet = false } = {}) {
   const tool = await ui.select("Which AI do you want to use?", [
     { label: "Claude Code", hint: `your Claude subscription · ${d.claude ? "installed" : `not installed: ${INSTALL_HINT.claude}`}`, value: "claude" },
     { label: "Codex (OpenAI)", hint: `your ChatGPT subscription · ${d.codex ? "installed" : `not installed: ${INSTALL_HINT.codex}`}`, value: "codex" },
-    { label: "opencode with a local model", hint: `offline, all skills; needs a model with tool calling${local ? ` · ${local} running` : ""}`, value: "opencode" },
-    { label: "A local model directly", hint: `offline; notes, plans and quizzes, works with small models${local ? ` · ${local} running` : " · start Ollama or LM Studio first"}`, value: "local" },
+    { label: "opencode with a local model", hint: `free and offline, all skills · Ollama or LM Studio${local ? ` (${local} running)` : ", set up for you"}`, value: "opencode" },
+    { label: "A local model directly", hint: `free and offline; notes, plans and quizzes, lighter · Ollama or LM Studio${local ? ` (${local} running)` : ""}`, value: "local" },
     { label: "None for now", value: null },
   ], { initial: d.claude ? 0 : d.codex ? 1 : d.opencode && (d.ollama || d.lmstudio) ? 2 : (d.ollama || d.lmstudio) ? 3 : 0 });
   if (!tool) return null;
   const cfg = { tool };
+  if ((tool === "claude" || tool === "codex" || tool === "opencode") && !d[tool] && !(await installTool(tool))) {
+    ui.warn(`${TOOL_LABEL[tool]} isn't installed yet: ${INSTALL_HINT[tool]}, then run ouc ai setup again.`);
+  }
   if (tool === "opencode" || tool === "local") {
-    const s = await pickServer(d);
-    const model = await pickModel(s.models, tool === "opencode" ? "gpt-oss:20b" : s.kind === "ollama" ? "qwen2.5:14b" : "");
-    const server = { kind: s.kind, baseUrl: s.baseUrl, model, ...(s.apiKeyEnv ? { apiKeyEnv: s.apiKeyEnv } : {}) };
+    let s = await pickServer(d);
+    s = { ...s, models: s.kind === "ollama" ? await ensureOllama(s.baseUrl) : await ensureLMStudio(s.baseUrl) };
+    const model = await pickModel(s.models, recommendedModel(tool, s.kind));
+    if (s.kind === "ollama") await ensureOllamaModel(model, s.models);
+    else await ensureLMStudioModel(model, s.models);
+    const server = { kind: s.kind, baseUrl: s.baseUrl, model };
     if (tool === "local") {
       cfg.local = s.kind === "ollama" ? { ...server, ctx: 32768 } : server;
     } else {
+      // opencode can't pass a context size to Ollama, so it gets a copy of the model with a 32k window
+      if (s.kind === "ollama") server.model = ollamaLongContext(model);
       cfg.opencode = server;
-      ui.ok(`opencode will use ${c.bold(writeOpencodeConfig(ROOT, { ...server, models: s.models }))} ${c.gray("(.opencode/opencode.json)")}`);
-      ui.info("opencode needs a model that can call tools (gpt-oss:20b, qwen3:14b or bigger) and a context window of 32k tokens or more.");
-      if (s.kind === "ollama") ui.info(`Ollama: start it with ${c.cyan("OLLAMA_CONTEXT_LENGTH=32768 ollama serve")} (or set Context length in the Ollama app).`);
-      if (s.kind === "lmstudio") ui.info("LM Studio: set Context Length to 32768 or more when you load the model.");
-      if (!d.opencode) ui.warn(`opencode isn't installed yet: ${INSTALL_HINT.opencode}`);
+      ui.ok(`opencode will use ${c.bold(writeOpencodeConfig(ROOT, { ...server, models: [...new Set([server.model, ...s.models])] }))} ${c.gray("(.opencode/opencode.json)")}`);
     }
-  } else if (!d[tool]) {
-    ui.warn(`${TOOL_LABEL[tool]} isn't installed yet: ${INSTALL_HINT[tool]}. Then run ouc ai setup again to sign in.`);
-  } else {
+  } else if (d[tool] || which(tool)) {
     await ensureLogin(tool);
   }
   saveConfig(ROOT, cfg);
@@ -73,20 +76,10 @@ export async function chooseAssistant({ quiet = false } = {}) {
   return cfg;
 }
 async function pickServer(d) {
-  const servers = [
-    d.ollama && { label: "Ollama", hint: `${d.ollama.models.length} models`, value: { kind: "ollama", ...d.ollama } },
-    d.lmstudio && { label: "LM Studio", hint: `${d.lmstudio.models.length} models`, value: { kind: "lmstudio", ...d.lmstudio } },
-    !d.ollama && { label: "Ollama (not running yet)", hint: "http://localhost:11434", value: { kind: "ollama", baseUrl: "http://localhost:11434", models: [] } },
-    !d.lmstudio && { label: "LM Studio (not running yet)", hint: "http://localhost:1234/v1", value: { kind: "lmstudio", baseUrl: "http://localhost:1234/v1", models: [] } },
-    { label: "Another OpenAI-compatible server", hint: "vLLM, llama.cpp, OpenRouter…", value: { kind: "openai" } },
-  ].filter(Boolean);
-  const s = await ui.select("Which server runs the model?", servers);
-  if (s.kind === "openai") {
-    s.baseUrl = await ui.ask("Server URL (ending in /v1)", { def: "http://localhost:8080/v1" });
-    s.apiKeyEnv = await ui.ask("Name of the environment variable with the API key (blank = none)", { def: "" }) || undefined;
-    s.models = [];
-  }
-  return s;
+  return ui.select("Which app runs the model?", [
+    { label: "Ollama", hint: d.ollama ? `running · ${d.ollama.models.length} models` : "free · ollama.com (set up for you)", value: { kind: "ollama", ...(d.ollama ?? { baseUrl: "http://localhost:11434", models: [] }) } },
+    { label: "LM Studio", hint: d.lmstudio ? `running · ${d.lmstudio.models.length} models` : "free · lmstudio.ai (set up for you)", value: { kind: "lmstudio", ...(d.lmstudio ?? { baseUrl: "http://localhost:1234/v1", models: [] }) } },
+  ], { initial: d.lmstudio && !d.ollama ? 1 : 0 });
 }
 /** Claude Code and Codex run on the student's subscription login, never on API credits. */
 async function ensureLogin(tool) {
@@ -105,6 +98,113 @@ async function ensureLogin(tool) {
   st?.subscription ? ui.ok(`Signed in to ${TOOL_LABEL[tool]}`) : ui.warn(`Not signed in yet. Try: ${tool === "claude" ? "claude auth login" : "codex login"}`);
   return !!st?.subscription;
 }
+// ---------- first-install helpers: tools, Ollama and the model ----------
+const which = (bin) => spawnSync(process.platform === "win32" ? "where" : "which", [bin], { stdio: "ignore" }).status === 0;
+const GB = 1024 ** 3;
+/** A model that runs on this computer: gpt-oss:20b needs ~16 GB free, qwen3:8b ~6 GB. */
+function recommendedModel(tool, kind) {
+  const big = totalmem() >= 24 * GB;
+  if (kind === "lmstudio") return big ? "openai/gpt-oss-20b" : "qwen/qwen3-8b";
+  return big ? "gpt-oss:20b" : "qwen3:8b";
+}
+async function installTool(tool) {
+  if (!(await ui.confirm(`Install ${TOOL_LABEL[tool].replace(/ with a local model$/, "")} now? (${INSTALL_HINT[tool]})`, true))) return false;
+  const [, , ...pkg] = INSTALL_HINT[tool].split(" ");
+  const r = spawnSync("npm", ["install", "-g", ...pkg.filter((x) => x !== "-g")], { stdio: "inherit" });
+  if (r.status === 0 && which(tool)) { ui.ok(`${TOOL_LABEL[tool].replace(/ with a local model$/, "")} installed`); return true; }
+  ui.fail(`Couldn't install it. If npm said "permission denied" (EACCES), run: sudo ${INSTALL_HINT[tool]}`);
+  return false;
+}
+const ollamaUp = (baseUrl) => serverUp({ kind: "ollama", baseUrl });
+async function ollamaModels(baseUrl) {
+  try { return ((await (await fetch(`${baseUrl.replace(/\/v1\/?$/, "")}/api/tags`)).json()).models ?? []).map((m) => m.name); } catch { return []; }
+}
+/** Installs and starts Ollama if needed; returns the models it has. */
+async function ensureOllama(baseUrl) {
+  if (await ollamaUp(baseUrl)) return ollamaModels(baseUrl);
+  const mac = process.platform === "darwin";
+  if (!which("ollama") && !(mac && existsSync("/Applications/Ollama.app"))) {
+    if (!(await ui.confirm("Ollama runs the model on this computer. Install it now?", true))) { ui.info("Install it later from https://ollama.com, then run: ouc ai setup"); return []; }
+    if (mac && which("brew")) spawnSync("brew", ["install", "ollama"], { stdio: "inherit" });
+    else if (mac) {
+      ui.info("Opening https://ollama.com/download: download Ollama, drag it to Applications and open it once.");
+      spawnSync("open", ["https://ollama.com/download"]);
+      await ui.ask("Press Enter when Ollama is open");
+    } else if (process.platform === "linux") spawnSync("sh", ["-c", "curl -fsSL https://ollama.com/install.sh | sh"], { stdio: "inherit" });
+    else { ui.info("Download Ollama from https://ollama.com/download, open it, then run ouc ai setup again."); return []; }
+  }
+  if (!(await ollamaUp(baseUrl))) {
+    const sp = ui.spinner("Starting Ollama…");
+    if (mac && existsSync("/Applications/Ollama.app")) spawnSync("open", ["-a", "Ollama"]);
+    else if (mac && which("brew") && spawnSync("brew", ["services", "start", "ollama"], { stdio: "ignore" }).status === 0) { /* starts at login too */ }
+    else if (which("ollama")) spawn("ollama", ["serve"], { detached: true, stdio: "ignore" }).unref();
+    for (let i = 0; i < 30 && !(await ollamaUp(baseUrl)); i++) await new Promise((r) => setTimeout(r, 1000));
+    if (!(await ollamaUp(baseUrl))) { sp.fail("Ollama didn't start. Open the Ollama app (or run: ollama serve), then ouc ai setup again."); return []; }
+    sp.succeed("Ollama is running");
+  }
+  return ollamaModels(baseUrl);
+}
+const hasModel = (models, m) => models.some((x) => x === m || x === `${m}:latest`);
+async function ensureOllamaModel(model, models) {
+  if (hasModel(models, model) || !which("ollama")) return;
+  const size = /gpt-oss:20b/.test(model) ? " (about 14 GB)" : /qwen3:8b/.test(model) ? " (about 5 GB)" : "";
+  if (!(await ui.confirm(`Download ${model}${size} now?`, true))) { ui.info(`Later: ollama pull ${model}`); return; }
+  spawnSync("ollama", ["pull", model], { stdio: "inherit" }).status === 0 ? ui.ok(`${model} downloaded`) : ui.warn(`Download failed. Try: ollama pull ${model}`);
+}
+/** gpt-oss:20b → gpt-oss-32k:20b, a copy with a 32k context window (Ollama's default is too small for opencode). */
+function ollamaLongContext(model) {
+  if (!which("ollama") || /-32k(:|$)/.test(model)) return model;
+  const [name, tag = "latest"] = model.split(":");
+  const long = `${name}-32k:${tag}`;
+  const dir = join(ROOT, ".ouc");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "Modelfile"), `FROM ${model}\nPARAMETER num_ctx 32768\n`);
+  const r = spawnSync("ollama", ["create", long, "-f", join(dir, "Modelfile")], { encoding: "utf8" });
+  if (r.status === 0) { ui.ok(`Made ${long}: ${model} with a 32k context window for opencode`); return long; }
+  ui.warn(`Couldn't make a 32k-context copy (${(r.stderr || r.stdout).trim().split("\n").pop()}). Start Ollama with OLLAMA_CONTEXT_LENGTH=32768 instead.`);
+  return model;
+}
+
+// LM Studio: its `lms` command starts the server, downloads and loads models
+const lmsBin = () => (which("lms") ? "lms" : [join(homedir(), ".lmstudio/bin/lms"), join(homedir(), ".cache/lm-studio/bin/lms")].find(existsSync));
+async function lmsModels(baseUrl) {
+  try { return ((await (await fetch(`${baseUrl.replace(/\/$/, "")}/models`)).json()).data ?? []).map((m) => m.id); } catch { return []; }
+}
+/** Installs LM Studio if needed and starts its local server; returns the models it has. */
+async function ensureLMStudio(baseUrl) {
+  const up = () => serverUp({ kind: "lmstudio", baseUrl });
+  if (await up()) return lmsModels(baseUrl);
+  const mac = process.platform === "darwin";
+  if (!lmsBin() && !(mac && existsSync("/Applications/LM Studio.app"))) {
+    if (!(await ui.confirm("LM Studio runs the model on this computer. Install it now?", true))) { ui.info("Install it later from https://lmstudio.ai, then run: ouc ai setup"); return []; }
+    if (mac && which("brew")) spawnSync("brew", ["install", "--cask", "lm-studio"], { stdio: "inherit" });
+    else {
+      ui.info("Opening https://lmstudio.ai/download: install LM Studio and open it once.");
+      spawnSync(mac ? "open" : process.platform === "win32" ? "explorer" : "xdg-open", ["https://lmstudio.ai/download"]);
+    }
+    if (mac && existsSync("/Applications/LM Studio.app")) spawnSync("open", ["-a", "LM Studio"]);
+    await ui.ask("Press Enter when LM Studio is open");
+  }
+  const lms = lmsBin();
+  const sp = ui.spinner("Starting the LM Studio server…");
+  if (lms) spawnSync(lms, ["server", "start"], { stdio: "ignore" });
+  for (let i = 0; i < 20 && !(await up()); i++) await new Promise((r) => setTimeout(r, 1000));
+  if (!(await up())) { sp.fail("The LM Studio server isn't running. In LM Studio: Developer → Start server, then ouc ai setup again."); return []; }
+  sp.succeed("LM Studio server is running");
+  return lmsModels(baseUrl);
+}
+/** Downloads the model if needed and loads it with a 32k context window (opencode needs at least that). */
+async function ensureLMStudioModel(model, models) {
+  const lms = lmsBin();
+  if (!lms) { ui.info(`In LM Studio, download ${model} and load it with Context Length 32768.`); return; }
+  if (!models.includes(model)) {
+    if (!(await ui.confirm(`Download ${model} now?`, true))) { ui.info(`Later: lms get ${model}`); return; }
+    if (spawnSync(lms, ["get", model, "--yes"], { stdio: "inherit" }).status !== 0) { ui.warn(`Download failed. Try: lms get ${model}`); return; }
+  }
+  const r = spawnSync(lms, ["load", model, "--context-length", "32768", "--yes"], { stdio: "inherit" });
+  r.status === 0 ? ui.ok(`${model} loaded with a 32k context window`) : ui.warn(`Couldn't load it. In LM Studio, load ${model} with Context Length 32768.`);
+}
+
 async function pickModel(models, def) {
   if (models.length) return ui.select("Which model?", models.slice(0, 15).map((m) => ({ label: m, value: m })), { initial: Math.max(0, models.indexOf(def)) });
   return ui.ask("Model name", { def, validate: (v) => (v ? "" : "Type a model name") });
