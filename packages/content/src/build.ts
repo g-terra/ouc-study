@@ -15,7 +15,7 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   UpdatesFeed, GradeItem,
-  Assignment, Course, Exam, FileRef, Note, Resource, SemesterData, SemesterIndex, SemesterSummary, Week, WeekItem,
+  Assignment, Prep, Course, Exam, FileRef, Note, Resource, SemesterData, SemesterIndex, SemesterSummary, Week, WeekItem,
 } from "./types.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -184,6 +184,14 @@ function buildSemester(id: string): SemesterData | undefined {
     }
 
     // --- assignments
+    // PREP.md: the study pack the AI prepares for an assignment (front matter written by packages/ai/api.mjs)
+    const readPrep = (abs: string): Prep | undefined => {
+      if (!existsSync(abs)) return undefined;
+      const text = readFileSync(abs, "utf8");
+      const fm = text.match(/^---\n([\s\S]*?)\n---\n?/)?.[1] ?? "";
+      const get = (k: string) => fm.match(new RegExp(`^${k}:\\s*(.*)$`, "m"))?.[1]?.trim() || undefined;
+      return { body: text.slice(fm ? text.indexOf("\n---", 3) + 4 : 0).trim(), by: get("by"), updated: get("updated"), log: [...fm.matchAll(/^\s+-\s+(.+)$/gm)].map((m) => m[1]) };
+    };
     for (const s of m.secs as any[]) {
       for (const a of s.acts as any[]) {
         if (a.type !== "assign" || String(a.name).trim() === "Exams Grade") continue;
@@ -198,7 +206,7 @@ function buildSemester(id: string): SemesterData | undefined {
         const folderRel = `assignments/${cc.code}/${folderName}`;
         const folderAbs = join(dir, folderRel);
         const briefs: FileRef[] = listFiles(folderAbs)
-          .filter((f) => !/^(README\.md|index\.html)$/i.test(f))
+          .filter((f) => !/^(README\.md|PREP\.md|index\.html)$/i.test(f))
           .map((f) => ({ name: f, href: fileHref(id, `${folderRel}/${f}`), ext: extOf(f) }));
         const submissions: FileRef[] = listFiles(join(folderAbs, "my-submission"))
           .map((f) => ({ name: f, href: fileHref(id, `${folderRel}/my-submission/${f}`), ext: extOf(f) }));
@@ -223,6 +231,7 @@ function buildSemester(id: string): SemesterData | undefined {
           grade: lv?.grade || rows["Grade"] || undefined, feedback: lv?.feedback || fb || undefined,
           question, weekIndex: s.i, eclassUrl: a.url, briefs, submissions, resources: res,
           workingNotes: existsSync(join(folderAbs, "README.md")) ? fileHref(id, `${folderRel}/README.md`) : undefined,
+          prep: readPrep(join(folderAbs, "PREP.md")),
         });
         const w = weeks.find((x) => x.index === s.i);
         const it = w?.items.find((x) => x.kind === "assignment" && x.title === String(a.name).trim());

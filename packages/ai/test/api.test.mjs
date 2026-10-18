@@ -2,11 +2,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createAiApi } from "../api.mjs";
+import { createAiApi, needsPrep, readPrepMeta } from "../api.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "../../..");
@@ -97,4 +97,40 @@ test("a local model chats without tools", async (t) => {
   const ev = await sse(await post({ message: "hi" }));
   assert.equal(ev.filter((e) => e.type === "text").map((e) => e.text).join(""), "Hello there.");
   assert.equal(ev.at(-1).ok, true);
+});
+
+test("prep packs: prepared on their own, then reviewed by another AI with the history kept", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  const sem = join(root, "semesters/S");
+  const assignment = (id, extra) => ({ id, code: "AAA", title: id, fullTitle: id, status: "", submitted: false, question: "Q?", weekIndex: 1, briefs: [], submissions: [], ...extra });
+  mkdirSync(join(sem, "assignments/AAA/open"), { recursive: true });
+  mkdirSync(join(sem, "assignments/AAA/late"), { recursive: true });
+  writeFileSync(join(sem, "semester.json"), JSON.stringify({ start: "2000-01-01", end: "2999-01-01", courses: [] }));
+  mkdirSync(join(root, "apps/web/public/data"), { recursive: true });
+  writeFileSync(join(root, "apps/web/public/data/S.json"), JSON.stringify({
+    courses: [{ code: "AAA", short: "AAA", title: "AAA course", weeks: [] }], notes: [],
+    assignments: [assignment("AAA/open", { due: "2999-01-01T23:59:00" }), assignment("AAA/late", { due: "2000-01-01T23:59:00" }), assignment("AAA/done", { submitted: true })],
+  }));
+
+  // only the open one needs a pack, and once tried it isn't retried straight away
+  assert.deepEqual(needsPrep(root, "S", JSON.parse(readFileSync(join(root, "apps/web/public/data/S.json"), "utf8"))).map((a) => a.id), ["AAA/open"]);
+
+  const mw = createAiApi(root, { bin: join(HERE, "fixtures/fake-agent.mjs"), status: async () => ({ ready: true }) });
+  mw.autoPrep();
+  while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
+  const file = join(sem, "assignments/AAA/open/PREP.md");
+  let meta = readPrepMeta(readFileSync(file, "utf8"));
+  assert.equal(meta.log.length, 1);
+  assert.match(meta.log[0], /prepared after a sync/);
+  assert.match(readFileSync(file, "utf8"), /Hints for/);
+
+  // the student asks another AI to review it: the history grows
+  const { token } = await (await fetch(`${base}/api/ai/status`)).json();
+  const res = await fetch(`${base}/api/ai/run`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify({ sem: "S", action: "assignment-prep", params: { assignment: "AAA/open", mode: "review" } }) });
+  await sse(res);
+  meta = readPrepMeta(readFileSync(file, "utf8"));
+  assert.equal(meta.log.length, 2);
+  assert.match(meta.log[1], /reviewed and improved/);
+  assert.equal(JSON.parse(readFileSync(join(root, ".ouc/chats", readdirSync(join(root, ".ouc/chats"))[0]), "utf8")).action, "assignment-prep");
 });

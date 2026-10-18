@@ -1,10 +1,12 @@
 import { useState } from "react";
-import type { SemesterData } from "@ouc/content/types";
+import type { Assignment, SemesterData } from "@ouc/content/types";
 import { Link, enc } from "../lib/router";
 import { courseMap, stateOf, type State } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { Card, CourseBadge, CourseDot, Empty, FileCard, PageHeader, SectionTitle, StatePill, cx } from "../components/ui";
-import { AskAiButton } from "../components/Assistant";
+import { AskAiButton, useAssistant } from "../components/Assistant";
+import { useAiStatus, usePrepStatus } from "../lib/ai";
+import { NoteBody, useNoteBlocks } from "../notes/NoteRenderer";
 import { mdToHtml } from "../lib/markdown";
 
 export function AssignmentsPage({ data }: { data: SemesterData }) {
@@ -44,6 +46,7 @@ export function AssignmentsPage({ data }: { data: SemesterData }) {
                 {a.due && <span>· {fmtFull(at(a.due))}{!a.submitted && ` (${relative(at(a.due), now)})`}</span>}
                 {a.grade && <span>· Grade: <b className="text-ink">{a.grade}</b></span>}
                 {a.resources && <span>· 📚 {a.resources.links.length} study links</span>}
+                {a.prep && <span>· 🧭 prep pack</span>}
               </span>
             </span>
             <StatePill state={stateOf(a, now)} />
@@ -83,6 +86,8 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
       <SectionTitle>Question</SectionTitle>
       {a.question ? <Card className="p-5"><div className="md whitespace-pre-line">{a.question}</div></Card>
         : <Empty>{a.briefs.length ? "The questions are in the brief below." : "No question text found. Check eClass."}</Empty>}
+
+      <PrepSection a={a} color={course?.color ?? "#555"} />
 
       <SectionTitle>Files</SectionTitle>
       {a.briefs.length + a.submissions.length ? (
@@ -128,5 +133,79 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
       {a.feedback && (<><SectionTitle>Tutor feedback</SectionTitle><Card className="border-ok/40 bg-ok-bg p-5"><div className="md" dangerouslySetInnerHTML={{ __html: mdToHtml(a.feedback) }} /></Card></>)}
       {a.workingNotes && <p className="mt-8 text-sm text-muted">Your working notes live in <a className="underline" href={a.workingNotes} target="_blank" rel="noreferrer">README.md</a> in this assignment's folder.</p>}
     </div>
+  );
+}
+
+const PREP_ASK = [
+  { mode: "review", label: "Review & improve" },
+  { mode: "more", label: "Add more" },
+  { mode: "redo", label: "Start over" },
+] as const;
+
+/** The AI's prep pack (PREP.md): hints and extra material, with buttons to have another AI improve it. */
+function PrepSection({ a, color }: { a: Assignment; color: string }) {
+  const ai = useAiStatus();
+  const status = usePrepStatus();
+  const { start, load, setOpen } = useAssistant();
+  const blocks = useNoteBlocks(a.prep?.body ?? "");
+  const agents = ai.tools.filter((t) => t.id !== "local" && t.state === "connected");
+  // by default ask a different AI than the one that last wrote it
+  const author = agents.find((t) => a.prep?.by?.startsWith(t.label));
+  const [pick, setPick] = useState<string>();
+  const tool = pick ?? (agents.find((t) => t !== author) ?? agents[0])?.id;
+  if (ai.state === "unavailable" && !a.prep) return null; // a static build without an app server
+  const running = status?.running === a.id;
+  const ask = (mode: string) => start("assignment-prep", { course: a.code, assignment: a.id, mode }, tool);
+  const picker = agents.length > 1 && (
+    <select aria-label="Which AI" value={tool} onChange={(e) => setPick(e.target.value)} className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm">
+      {agents.map((t) => <option key={t.id} value={t.id}>{t.label}{t === author ? " (wrote it)" : ""}</option>)}
+    </select>
+  );
+
+  return (
+    <>
+      <SectionTitle right={a.prep?.by && <span className="text-xs text-muted">By {a.prep.by}{a.prep.updated && ` · ${new Date(a.prep.updated).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}</span>}>Prep pack</SectionTitle>
+      {running && (
+        <Card className="mb-3 flex items-center gap-3 p-4 text-sm">
+          <span aria-hidden className="size-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <span className="flex-1">{a.prep ? "Updating" : "Preparing"} hints and extra material for this assignment…</span>
+          {status?.chatId && <button type="button" className="underline" onClick={() => { setOpen(true); load(status.chatId!); }}>Watch</button>}
+        </Card>
+      )}
+      {a.prep ? (
+        <Card className="p-5">
+          <NoteBody blocks={blocks} color={color} />
+          {a.prep.log.length > 0 && (
+            <details className="mt-6 text-xs text-muted">
+              <summary className="cursor-pointer select-none">History ({a.prep.log.length})</summary>
+              <ul className="mt-1 flex flex-col gap-0.5 border-l border-line pl-3">{a.prep.log.map((l, i) => <li key={i}>{l}</li>)}</ul>
+            </details>
+          )}
+        </Card>
+      ) : !running && (
+        <Empty>
+          {status?.enabled ? "Not prepared yet. Your AI prepares hints and extra material for open assignments on its own after a sync." : "No prep pack yet. Ask your AI for hints and extra material for this assignment."}
+        </Empty>
+      )}
+      {agents.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          {a.prep ? (
+            <>
+              <span className="text-muted">Ask</span>{picker}<span className="text-muted">to</span>
+              {PREP_ASK.map((x) => (
+                <button key={x.mode} type="button" disabled={running} onClick={() => ask(x.mode)}
+                  className="rounded-full border border-line bg-surface px-3 py-1.5 font-medium hover:border-muted disabled:opacity-40">{x.label}</button>
+              ))}
+            </>
+          ) : !running && (
+            <>
+              <button type="button" onClick={() => ask("new")} className="rounded-full bg-ink px-3 py-1.5 font-semibold text-bg">✨ Prepare now</button>
+              {picker && <><span className="text-muted">with</span>{picker}</>}
+            </>
+          )}
+        </div>
+      )}
+      {a.prep && <p className="mt-2 text-xs text-muted">Hints and pointers only. Write your answers in your own words.</p>}
+    </>
   );
 }
