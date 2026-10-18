@@ -22,8 +22,9 @@ import type {
 } from "./types.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const SEMESTERS = join(ROOT, "semesters");
-const OUT = join(ROOT, "apps/web/public/data");
+// OUC_SEMESTERS / OUC_PUBLIC: another data folder and output, e.g. the demo semester of the smoke tests (e2e/)
+const SEMESTERS = process.env.OUC_SEMESTERS ? resolve(process.env.OUC_SEMESTERS) : join(ROOT, "semesters");
+const OUT = join(process.env.OUC_PUBLIC ? resolve(process.env.OUC_PUBLIC) : join(ROOT, "apps/web/public"), "data");
 
 // ---------- config types ----------
 interface CourseConfig {

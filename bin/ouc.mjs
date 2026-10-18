@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { service } from "./lib/background.mjs";
+import { applyUpdate, checkForUpdate } from "./lib/update.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const OS = process.platform;
@@ -94,25 +95,15 @@ function unlinkCmd() {
   }
 }
 
-// Pull the latest app code (git), then refresh dependencies and AI skills if they changed.
-// Never touches local edits: with uncommitted code changes, or no upstream branch, it skips the update.
-function updateCode() {
-  if (git("rev-parse", "--is-inside-work-tree").status !== 0) { warn("Not a git checkout, so no code update (download the latest from GitHub instead)."); return; }
-  if (git("status", "--porcelain", "--untracked-files=no").stdout.trim()) {
-    warn("You have local code changes, so the code wasn't updated (commit or stash them, then: ouc update)."); return;
-  }
-  if (git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").status !== 0) { warn("This branch doesn't track GitHub, so no code update."); return; }
-  const before = git("rev-parse", "HEAD").stdout.trim();
-  if (git("pull", "--ff-only", "--quiet").status !== 0) { warn("Couldn't pull the latest code (offline, or your branch differs from GitHub). Carrying on with this version."); return; }
-  const after = git("rev-parse", "HEAD").stdout.trim();
-  if (before === after) { ok("Code is up to date"); return; }
-  ok(`Code updated: ${git("rev-list", "--count", `${before}..${after}`).stdout.trim()} new change(s), now at ${git("log", "-1", "--format=%h %s").stdout.trim()}`);
-  const changed = git("diff", "--name-only", before, after).stdout.split(/\r?\n/);
-  if (changed.some((f) => /(^|\/)package(-lock)?\.json$/.test(f))) {
-    warn("Dependencies changed, installing them (npm install)…");
-    if (!npm(["install", "--no-audit", "--no-fund"])) warn(`npm install failed; run it in ${ROOT}`);
-  }
-  if (changed.some((f) => f.startsWith("ai/")) && node([join(ROOT, "bin/ai.mjs"), "install"]) !== 0) warn("Couldn't reinstall the AI skills (ouc ai install)");
+// Move to the newest release (--main or --latest: the newest code on this branch), then refresh dependencies and AI skills
+// if they changed. Never touches local edits. Details in lib/update.mjs.
+function updateCode(opts = {}) {
+  return applyUpdate(ROOT, { latest: args.includes("--main") || args.includes("--latest"), log: (kind, text) => (kind === "ok" ? ok : warn)(text), ...opts });
+}
+/** One line when a newer release is out (checked at most once a day). */
+async function updateHint() {
+  const u = await checkForUpdate(ROOT).catch(() => null);
+  if (u?.available) warn(`Update available: v${u.current} → v${u.latest}. Run: ouc update (or press Update in the app)`);
 }
 
 async function checkTcc() {
@@ -168,8 +159,10 @@ const HELP = () => `${paint("1", "ouc: OUC Study app & eClass sync")}
   ouc install      start the app automatically at login + daily eClass sync + this command
   ouc start        start the app in the background (${URL_})
   ouc stop         stop it
-  ouc restart      get the latest app code, then restart it (--no-update: just restart)
-  ouc update       get the latest app code without restarting
+  ouc restart      stop, update to the latest release, start again (--main: newest code on main
+                   instead; --no-update: just restart)
+  ouc update       update to the latest release without restarting (--main: newest code on main;
+                   --check: only say whether there is one)
   ouc open         open the app in your browser (starts it if needed)
   ouc sync         check eClass now (grades, feedback, materials…) and refresh the app
   ouc pull         download any new course files now (--dry-run: just list them)
@@ -205,16 +198,26 @@ switch (cmd) {
     svc.stop(); svc.uninstall(); unlinkCmd();
     ok("Background app and daily sync removed. (Files untouched. Run 'npm run dev' to start manually.)");
     break;
-  case "start": if (!(await start())) process.exitCode = 1; break;
+  case "start": if (!(await start())) process.exitCode = 1; else await updateHint(); break;
   case "stop":
     if (svc.stop()) ok(`App stopped${svc.autostart ? " (it will start again at next login; 'ouc uninstall' to turn that off)" : ""}.`);
     else warn("App wasn't running.");
     break;
-  case "update": updateCode(); break;
+  case "update":
+    if (args.includes("--check")) {
+      const u = await checkForUpdate(ROOT, { fresh: true });
+      if (u.error) warn(u.error);
+      else if (u.available) warn(`Update available: v${u.current} → v${u.latest} (${u.url}). Run: ouc update`);
+      else ok(`Up to date: v${u.current}${u.latest ? ` (latest release v${u.latest})` : ""}`);
+      break;
+    }
+    if (!updateCode().ok) process.exitCode = 1;
+    else if (await up()) console.log("  Restart the app to use it: ouc restart");
+    break;
   case "restart":
-    // latest code first (skip with --no-update), then a fresh start so the new code runs
-    if (!args.includes("--no-update")) updateCode();
+    // stop first, so a clean reinstall of the dependencies doesn't pull them from under the running app
     node([SELF, "stop"]); await sleep(1000);
+    if (!args.includes("--no-update")) updateCode();
     process.exitCode = node([SELF, "start"]);
     break;
   case "open": if (!(await up())) await start(); openBrowser(URL_); break;
@@ -251,6 +254,7 @@ switch (cmd) {
         console.log(`${s.ok ? paint("32", "✓") : paint("31", "✗")} Last sync ${when}${s.ok ? ` (${s.found ?? 0} new)` : ` failed: ${s.error}`}`);
       } catch {}
     }
+    await updateHint();
     break;
   }
   case "logs": follow(join(LOGS, args[0] === "sync" ? "sync.log" : "app.log")); break;

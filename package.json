@@ -28,9 +28,11 @@
     "ai": "node bin/ai.mjs",
     "typecheck": "turbo run typecheck",
     "lint": "node bin/lint.mjs",
-    "check": "npm run lint && npm test && npm run typecheck && npm run check:public"
+    "check": "npm run lint && npm test && npm run typecheck && npm run check:public",
+    "e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "turbo": "^2.3.3"
   },
   "engines": {

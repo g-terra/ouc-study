@@ -7,10 +7,13 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { createAiApi } from "../../packages/ai/api.mjs";
+// @ts-ignore: plain JS module shared with the `ouc` command line
+import { checkForUpdate, restartDetached } from "../../bin/lib/update.mjs";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 
-const SEMESTERS = resolve(HERE, "../../semesters");
+// OUC_SEMESTERS / OUC_PUBLIC: another data folder, e.g. the demo semester of the smoke tests (e2e/)
+const SEMESTERS = process.env.OUC_SEMESTERS ? resolve(process.env.OUC_SEMESTERS) : resolve(HERE, "../../semesters");
 const MIME: Record<string, string> = {
   ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
   ".svg": "image/svg+xml", ".md": "text/markdown; charset=utf-8", ".txt": "text/plain; charset=utf-8",
@@ -88,6 +91,33 @@ function aiApi(): Plugin {
   };
 }
 
+/**
+ * /api/update (GET): is a newer release out? (asks GitHub at most once a day; ?fresh=1 to force)
+ * /api/update (POST): update and restart the background app (`ouc restart`); the page waits for it to come back.
+ */
+function updateApi(): Plugin {
+  const ROOT = resolve(HERE, "../..");
+  const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+  let updating = false;
+  const send = (res: any, body: any, status = 200) => { res.statusCode = status; res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify(body)); };
+  const handler: Connect.NextHandleFunction = async (req, res, next) => {
+    if (!req.url?.startsWith("/api/update")) return next();
+    // only pages from this app on this computer (the update runs git and npm)
+    const origin = req.headers.origin;
+    if (!LOCAL.test(req.headers.host ?? "") || (origin && !LOCAL.test(origin.replace(/^https?:\/\//, "")))) return send(res, { error: "Forbidden" }, 403);
+    // the button restarts the background app; with `npm run dev` there is none, so it shows the command instead
+    const canUpdate = process.env.OUC_BACKGROUND === "1";
+    if (req.method === "POST") {
+      if (!canUpdate) return send(res, { ok: false, error: "Run in Terminal: ouc update, then restart the app" }, 409);
+      if (!updating) { updating = true; restartDetached(ROOT); }
+      return send(res, { ok: true, updating: true });
+    }
+    const fresh = new URL(req.url, "http://x").searchParams.has("fresh");
+    send(res, { ...(await checkForUpdate(ROOT, { fresh })), canUpdate, updating });
+  };
+  return { name: "update-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
+}
+
 /** Serves the course files from ../../semesters at /files/<semester>/<path> (dev + preview). */
 function semesterFiles(): Plugin {
   const handler: Connect.NextHandleFunction = (req, res, next) => {
@@ -149,6 +179,7 @@ function semesterFiles(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), semesterFiles(), eclassApi(), aiApi()],
+  plugins: [react(), tailwindcss(), semesterFiles(), eclassApi(), aiApi(), updateApi()],
   server: { port: 5173 },
+  ...(process.env.OUC_PUBLIC ? { publicDir: resolve(process.env.OUC_PUBLIC) } : {}),
 });

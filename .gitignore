@@ -37,3 +37,7 @@ visualizations/
 *.key
 __pycache__/
 *.pyc
+
+# Playwright smoke test output
+test-results/
+playwright-report/

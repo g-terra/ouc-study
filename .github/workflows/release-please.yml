@@ -9,7 +9,12 @@ permissions:
   pull-requests: write
 
 jobs:
+  # a release goes out only if the app still works on the code being released
+  smoke:
+    uses: ./.github/workflows/smoke.yml
+
   release-please:
+    needs: smoke
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v5
