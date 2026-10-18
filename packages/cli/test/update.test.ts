@@ -76,6 +76,19 @@ test("ouc update never touches local code edits", () => {
   } finally { done(); }
 });
 
+test("ouc update works without an injected runner: the real one runs the AI skills install after ai/ changed", () => {
+  // the tests above inject `run`; this one uses the default, which once crashed every `ouc restart`
+  const { dev, student, done } = setup();
+  try {
+    mkdirSync(join(student, "node_modules/vite/bin"), { recursive: true }); writeFileSync(join(student, "node_modules/vite/bin/vite.js"), "");
+    release(dev, "0.2.0", { "ai/skills/x/SKILL.md": "new", "bin/ai.mjs": 'import { writeFileSync } from "node:fs"; writeFileSync("installed.txt", process.argv[2]);' });
+    sh(dev, "tag", "v0.2.0"); sh(dev, "push", "-q", "--tags", "origin", "main");
+    const r = applyUpdate(student);
+    assert.equal(r.ok, true); assert.equal(r.changed, true);
+    assert.equal(readFileSync(join(student, "installed.txt"), "utf8"), "install");
+  } finally { done(); }
+});
+
 test("the update check compares the latest GitHub release with package.json and asks at most once a day", async () => {
   const { student, done } = setup();
   try {

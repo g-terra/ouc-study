@@ -80,7 +80,7 @@ export async function checkForUpdate(root: string, { fresh = false, fetchImpl = 
  * then reinstall what changed: a clean `npm ci` when the dependencies changed, the AI skills when ai/ did.
  * Never touches local code edits. Returns { ok, changed, message }; log(kind, text) reports progress.
  */
-export function applyUpdate(root: string, { latest = false, log = (() => {}) as UpdateLog, run = npmRunner(root) } = {}): UpdateResult {
+export function applyUpdate(root: string, { latest = false, log = (() => {}) as UpdateLog, run = runIn(root) } = {}): UpdateResult {
   const fail = (message: string) => { log("warn", message); return { ok: false, changed: false, message }; };
   if (git(root, "rev-parse", "--is-inside-work-tree").status !== 0) return fail("Not a git checkout, so no code update (download the latest from GitHub instead).");
   if (git(root, "status", "--porcelain", "--untracked-files=no").stdout.trim()) return fail("You have local code changes, so the code wasn't updated (commit or stash them, then: ouc update).");
@@ -119,8 +119,8 @@ export function applyUpdate(root: string, { latest = false, log = (() => {}) as 
   return { ok: true, changed: true, message: onReleases ? `Updated to ${tag}` : "Updated" };
 }
 
-/** Runs a command in root with its output shown; true when it worked. */
-function npmRunner(root: string): Runner {
+/** Runs a command in root, showing its output; true when it worked. (Outside applyUpdate: a default parameter can't see functions declared in the body.) */
+function runIn(root: string): Runner {
   // npm is npm.cmd on Windows, which needs a shell (the arguments here are fixed)
   return (cmd, args) => spawnSync(cmd, args, { cwd: root, stdio: "inherit", shell: process.platform === "win32" && cmd === "npm" }).status === 0;
 }
