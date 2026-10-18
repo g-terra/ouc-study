@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildPrompt, weeksWithoutNotes } from "../actions.mjs";
+import { buildPrompt, weeksWithoutNotes } from "../src/actions.ts";
 
 const file = { kind: "file", title: "slides" };
 const course = (code, weeks) => ({ code, short: code, title: `${code} course`, weeks: weeks.map(([index, start, items]) => ({ index, name: `Week ${index}`, label: `Week ${index}`, start, items })) });

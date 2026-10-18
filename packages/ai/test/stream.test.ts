@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseClaude, parseCodex, parseOpencode, toolLabel } from "../stream.mjs";
+import { parseClaude, parseCodex, parseOpencode, toolLabel } from "../src/stream.ts";
 
 const ROOT = "/Users/me/OUC-Study";
 

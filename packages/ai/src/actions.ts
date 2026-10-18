@@ -3,8 +3,8 @@
 // ask the AI the same thing. A new skill in ai/skills/ shows up in the app on its own.
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { findCourse, noteFileName, read, weekNumber } from "./context.mjs";
-import { loadReview, reviewDir, reviewFile } from "./review.mjs";
+import { findCourse, noteFileName, read, weekNumber } from "./context.ts";
+import { loadReview, reviewDir, reviewFile } from "./review.ts";
 
 // The inputs each known skill asks for in the app; other skills just take a free-text request.
 const FIELDS = {

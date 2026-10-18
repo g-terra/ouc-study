@@ -24,12 +24,12 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
-import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, loadConfig, loginStatusAsync, serverUp } from "./providers.mjs";
-import { buildPrompt, chatSystem, listActions, prepPath, weeksWithoutNotes } from "./actions.mjs";
-import { currentSemesterId, loadData, read } from "./context.mjs";
-import { runAgentTurn, runChatTurn } from "./stream.mjs";
-import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview, reviewState } from "./review.mjs";
-import { setTask } from "../content/src/plan.mjs";
+import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, loadConfig, loginStatusAsync, serverUp } from "./providers.ts";
+import { buildPrompt, chatSystem, listActions, prepPath, weeksWithoutNotes } from "./actions.ts";
+import { currentSemesterId, loadData, read } from "./context.ts";
+import { runAgentTurn, runChatTurn } from "./stream.ts";
+import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview, reviewState } from "./review.ts";
+import { setTask } from "../../content/src/plan.mjs";
 
 // The background app starts with a minimal PATH; add the usual install places of the agent CLIs
 // (on Windows: npm's global folder, Claude's native installer in ~/.local/bin, Ollama, LM Studio).

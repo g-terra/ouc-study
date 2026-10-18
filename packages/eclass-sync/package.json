@@ -6,6 +6,11 @@
   "description": "Daily eClass (Moodle web service) sync: grades, feedback, materials, deadlines, announcements",
   "scripts": {
     "sync": "node daily.mjs",
-    "sync:check": "node daily.mjs --check"
+    "sync:check": "node daily.mjs --check",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
   }
 }

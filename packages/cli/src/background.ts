@@ -14,10 +14,10 @@ export const APP_LABEL = "cy.ouc.study.app";
 export const SYNC_LABEL = "cy.ouc.study.eclass-sync";
 export const WIN_TASK = "OUC Study eClass sync";
 
-const xml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const xml = (s: unknown) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 // ---------- macOS ----------
-export function appPlist({ node, root, port, logs }) {
+export function appPlist({ node, root, port, logs }: { node: string; root: string; port: string; logs: string }): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -34,7 +34,7 @@ export function appPlist({ node, root, port, logs }) {
 </dict></plist>
 `;
 }
-export function syncPlist({ node, root, logs, time }) {
+export function syncPlist({ node, root, logs, time }: { node: string; root: string; logs: string; time: string }): string {
   const [h, m] = time.split(":").map(Number);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -51,9 +51,9 @@ export function syncPlist({ node, root, logs, time }) {
 }
 
 // ---------- Windows ----------
-const vbsStr = (s) => `"${String(s).replace(/"/g, '""')}"`;
+const vbsStr = (s: unknown) => `"${String(s).replace(/"/g, '""')}"`;
 /** A .vbs that runs `node script` with no window, appending its output to log (wscript has no console). */
-export function hiddenLauncher({ node, root, script, log, env = {} }) {
+export function hiddenLauncher({ node, root, script, log, env = {} }: { node: string; root: string; script: string; log: string; env?: Record<string, string> }): string {
   // cmd /c "<line>": cmd strips the outer quotes and keeps the inner ones
   const line = `cmd /c ""${node}" "${join(root, script).replace(/\//g, "\\")}" >> "${log}" 2>&1"`;
   return [
@@ -66,7 +66,7 @@ export function hiddenLauncher({ node, root, script, log, env = {} }) {
   ].join("\r\n");
 }
 /** Task Scheduler task: the daily sync at `time`, as the signed-in user, caught up if the PC was off. */
-export function syncTaskXml({ launcher, time, user }) {
+export function syncTaskXml({ launcher, time, user }: { launcher: string; time: string; user?: string }): string {
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Description>OUC Study: checks eClass for new grades, feedback, files and deadlines.</Description></RegistrationInfo>
@@ -86,32 +86,45 @@ export function syncTaskXml({ launcher, time, user }) {
 }
 
 // ---------- where things go ----------
-export function paths({ platform = process.platform, home = homedir(), env = process.env } = {}) {
-  const { join } = platform === "win32" ? win32 : posix;   // that OS's paths, whatever OS this runs on
-  if (platform === "darwin") {
-    const agents = join(home, "Library/LaunchAgents");
-    return { logs: join(home, "Library/Logs/OUC-Study"), appPlist: join(agents, `${APP_LABEL}.plist`), syncPlist: join(agents, `${SYNC_LABEL}.plist`) };
-  }
-  if (platform === "win32") {
-    const local = join(env.LOCALAPPDATA ?? join(home, "AppData/Local"), "OUC-Study");
-    const startup = join(env.APPDATA ?? join(home, "AppData/Roaming"), "Microsoft/Windows/Start Menu/Programs/Startup");
-    return { logs: join(local, "Logs"), dir: local, appLauncher: join(local, "app.vbs"), syncLauncher: join(local, "sync.vbs"), startup: join(startup, "OUC Study.vbs") };
-  }
-  return { logs: join(env.XDG_STATE_HOME ?? join(home, ".local/state"), "ouc-study") };
+export interface MacPaths { logs: string; appPlist: string; syncPlist: string }
+export interface WinPaths { logs: string; dir: string; appLauncher: string; syncLauncher: string; startup: string }
+type Where = { home?: string; env?: NodeJS.ProcessEnv };
+export function macPaths({ home = homedir() }: Where = {}): MacPaths {
+  const { join } = posix;
+  const agents = join(home, "Library/LaunchAgents");
+  return { logs: join(home, "Library/Logs/OUC-Study"), appPlist: join(agents, `${APP_LABEL}.plist`), syncPlist: join(agents, `${SYNC_LABEL}.plist`) };
+}
+export function winPaths({ home = homedir(), env = process.env }: Where = {}): WinPaths {
+  const { join } = win32;   // Windows paths, whatever OS this runs on
+  const local = join(env.LOCALAPPDATA ?? join(home, "AppData/Local"), "OUC-Study");
+  const startup = join(env.APPDATA ?? join(home, "AppData/Roaming"), "Microsoft/Windows/Start Menu/Programs/Startup");
+  return { logs: join(local, "Logs"), dir: local, appLauncher: join(local, "app.vbs"), syncLauncher: join(local, "sync.vbs"), startup: join(startup, "OUC Study.vbs") };
+}
+export function paths({ platform = process.platform, home = homedir(), env = process.env }: Where & { platform?: NodeJS.Platform } = {}): { logs: string } {
+  if (platform === "darwin") return macPaths({ home });
+  if (platform === "win32") return winPaths({ home, env });
+  return { logs: posix.join(env.XDG_STATE_HOME ?? posix.join(home, ".local/state"), "ouc-study") };
+}
+
+/** The background app and daily sync on this OS. start() and stop() say whether it worked. */
+export interface Service {
+  autostart: boolean; logs: string;
+  installed(): boolean; running(): boolean; syncScheduled(): boolean;
+  install(): boolean; uninstall(): void; start(): boolean; stop(): boolean;
 }
 
 // ---------- the service per OS: { autostart, installed(), syncScheduled(), install(), uninstall(), start(), stop() } ----------
 // start() and stop() return a short result; the caller prints messages and waits for the app.
-export function service({ root, node, port, syncTime, platform = process.platform }) {
-  const p = paths({ platform });
+export function service({ root, node, port, syncTime, platform = process.platform }: { root: string; node: string; port: string; syncTime: string; platform?: NodeJS.Platform }): Service {
   const pidFile = join(root, ".ouc/app.pid");
-  const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
   const readPid = () => { try { const n = Number(readFileSync(pidFile, "utf8").trim()); return n > 0 && alive(n) ? n : null; } catch { return null; } };
 
   if (platform === "darwin") {
+    const p = macPaths();
     const uid = process.getuid?.() ?? 501;
-    const lc = (...a) => spawnSync("launchctl", a, { stdio: "ignore" }).status === 0;
-    const loaded = (label) => lc("print", `gui/${uid}/${label}`);
+    const lc = (...a: string[]) => spawnSync("launchctl", a, { stdio: "ignore" }).status === 0;
+    const loaded = (label: string) => lc("print", `gui/${uid}/${label}`);
     const write = () => {
       mkdirSync(dirname(p.appPlist), { recursive: true }); mkdirSync(p.logs, { recursive: true });
       writeFileSync(p.appPlist, appPlist({ node, root, port, logs: p.logs }));
@@ -152,13 +165,14 @@ export function service({ root, node, port, syncTime, platform = process.platfor
   };
 
   if (platform === "win32") {
+    const p = winPaths();
     const env = { OUC_PORT: port };
     const write = () => {
       mkdirSync(p.logs, { recursive: true });
       writeFileSync(p.appLauncher, hiddenLauncher({ node, root, script: "bin/server.mjs", log: join(p.logs, "app.log"), env }));
       writeFileSync(p.syncLauncher, hiddenLauncher({ node, root, script: "packages/eclass-sync/daily.mjs", log: join(p.logs, "sync.log") }));
     };
-    const schtasks = (...a) => spawnSync("schtasks", a, { encoding: "utf8", windowsHide: true });
+    const schtasks = (...a: string[]) => spawnSync("schtasks", a, { encoding: "utf8", windowsHide: true });
     return {
       autostart: true, logs: p.logs,
       installed: () => existsSync(p.startup), running: () => !!readPid(), syncScheduled: () => schtasks("/Query", "/TN", WIN_TASK).status === 0,
@@ -186,6 +200,7 @@ export function service({ root, node, port, syncTime, platform = process.platfor
     };
   }
 
+  const p = paths({ platform });
   return {
     autostart: false, logs: p.logs,
     installed: () => false, running: () => !!readPid(), syncScheduled: () => false,

@@ -3,22 +3,27 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Course, Note, SemesterData, Week } from "../../content/src/types.ts";
+import type { SemesterConfig } from "../../content/src/eclass.ts";
 
-const pad = (n) => String(n).padStart(2, "0");
-export const slug = (s, n = 40) => String(s).toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-").slice(0, n).replace(/-+$/, "") || "note";
-export const read = (p, d = "") => { try { return readFileSync(p, "utf8"); } catch { return d; } };
+/** A week's material as text, for a model that can't read files. */
+export interface Material { sources: { title: string; rel: string; text: string }[]; missing: string[]; main?: string }
 
-export function currentSemesterId(root) {
+const pad = (n: number) => String(n).padStart(2, "0");
+export const slug = (s: unknown, n = 40) => String(s).toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-").slice(0, n).replace(/-+$/, "") || "note";
+export const read = (p: string, d = "") => { try { return readFileSync(p, "utf8"); } catch { return d; } };
+
+export function currentSemesterId(root: string): string | null {
   const m = read(join(root, "STUDENT.md")).match(/semesters\/([\w.-]+)\//);
-  if (m && existsSync(join(root, "semesters", m[1], "semester.json"))) return m[1];
+  if (m && existsSync(join(root, "semesters", m[1]!, "semester.json"))) return m[1]!;
   const dir = join(root, "semesters");
   const today = new Date().toISOString().slice(0, 10);
   const sems = (existsSync(dir) ? readdirSync(dir) : []).filter((d) => existsSync(join(dir, d, "semester.json")))
-    .map((id) => ({ id, ...JSON.parse(read(join(dir, id, "semester.json"), "{}")) })).sort((a, b) => String(a.start).localeCompare(b.start));
-  return (sems.find((s) => s.start <= today && today <= s.end) ?? sems.at(-1))?.id ?? null;
+    .map((id): Partial<SemesterConfig> & { id: string } => ({ id, ...JSON.parse(read(join(dir, id, "semester.json"), "{}")) })).sort((a, b) => String(a.start).localeCompare(String(b.start)));
+  return (sems.find((s) => s.start! <= today && today <= s.end!) ?? sems.at(-1))?.id ?? null;
 }
 
-export function loadData(root, semId) {
+export function loadData(root: string, semId: string): SemesterData {
   const p = join(root, "apps/web/public/data", `${semId}.json`);
   if (!existsSync(p)) {
     const tsx = join(root, "node_modules/tsx/dist/cli.mjs");
@@ -28,7 +33,7 @@ export function loadData(root, semId) {
   return JSON.parse(readFileSync(p, "utf8"));
 }
 
-export function findCourse(data, q) {
+export function findCourse(data: Pick<SemesterData, "courses">, q: string | undefined): Course | null | undefined {
   if (!q) return null;
   const s = q.toLowerCase();
   return data.courses.find((c) => c.code.toLowerCase() === s)
@@ -37,9 +42,9 @@ export function findCourse(data, q) {
 }
 
 /** the number a week is known by ("Week 3", "Lecture 5"), else its eClass index */
-export const weekNumber = (w) => Number((`${w.name} ${w.label}`.match(/\b(?:week|lecture)\s*(\d+)/i) ?? [])[1] ?? w.index);
+export const weekNumber = (w: Pick<Week, "name" | "label" | "index">) => Number((`${w.name} ${w.label}`.match(/\b(?:week|lecture)\s*(\d+)/i) ?? [])[1] ?? w.index);
 
-export function findWeek(course, q, notes = []) {
+export function findWeek(course: Course, q?: string | number | null, notes: Pick<Note, "code" | "weekIndex">[] = []): Week | null {
   const weeks = course.weeks.filter((w) => w.index > 0);
   if (q !== undefined && q !== null && q !== "") {
     const n = Number(String(q).replace(/\D/g, ""));
@@ -48,17 +53,17 @@ export function findWeek(course, q, notes = []) {
   // default: the latest week that has started, has files and has no note yet
   const today = new Date().toISOString().slice(0, 10);
   const started = weeks.filter((w) => !w.start || w.start <= today);
-  const has = (w) => w.items.some((i) => i.kind === "file");
+  const has = (w: Week) => w.items.some((i) => i.kind === "file");
   return [...started].reverse().find((w) => has(w) && !notes.some((n) => n.code === course.code && n.weekIndex === w.index))
     ?? [...started].reverse().find(has) ?? started.at(-1) ?? null;
 }
 
 /** text of a week's files (from text/ copies), trimmed to a character budget */
-export function weekMaterial(root, semId, week, budget = 48000) {
+export function weekMaterial(root: string, semId: string, week: Week, budget = 48000): Material {
   const sem = join(root, "semesters", semId);
   const files = week.items.filter((i) => i.kind === "file" && i.href?.startsWith("/files/"))
-    .map((i) => ({ title: i.title, rel: decodeURIComponent(i.href.split("/").slice(3).join("/")) }));
-  const sources = [], missing = [];
+    .map((i) => ({ title: i.title, rel: decodeURIComponent(i.href!.split("/").slice(3).join("/")) }));
+  const sources: Material["sources"] = [], missing: string[] = [];
   for (const f of files) {
     let text = "";
     if (f.rel.startsWith("courses/")) text = read(join(sem, "text", `${f.rel.slice(8)}.txt`));
@@ -71,7 +76,7 @@ export function weekMaterial(root, semId, week, budget = 48000) {
   return { sources, missing, main: sources[0]?.rel ?? files[0]?.rel };
 }
 
-export const noteFileName = (course, week, label) => {
+export const noteFileName = (course: Course, week: Week, label?: string) => {
   const lec = /lecture/i.test(`${week.name} ${week.label}`) || label === "lecture";
   const topic = String(week.label).replace(/^(week|lecture)\s*\d+\s*[:.·-]?\s*/i, "").replace(/^\d+\.\s*/, "");
   return `${lec ? "lecture" : "week"}-${pad(weekNumber(week))}-${slug(topic, 30)}.md`;

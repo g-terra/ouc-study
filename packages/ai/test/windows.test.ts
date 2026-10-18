@@ -1,7 +1,7 @@
 // Starting the agent CLIs on Windows, where npm installs them as .cmd shims (tested on any OS).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseCmdShim, resolveCommand } from "../providers.mjs";
+import { parseCmdShim, resolveCommand } from "../src/providers.ts";
 
 // what npm's cmd-shim writes for `npm i -g @anthropic-ai/claude-code`
 const NODE_SHIM = `@ECHO off\r
@@ -64,7 +64,7 @@ test("Windows for real: a CLI installed as an npm shim gets every argument intac
   const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
-  const { spawnCliSync } = await import("../providers.mjs");
+  const { spawnCliSync } = await import("../src/providers.ts");
   const dir = mkdtempSync(join(tmpdir(), "ouc-shim-"));
   mkdirSync(join(dir, "node_modules/fake"), { recursive: true });
   writeFileSync(join(dir, "node_modules/fake/cli.js"), "process.stdout.write(JSON.stringify(process.argv.slice(2)))");

@@ -6,9 +6,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const json = (f) => JSON.parse(readFileSync(join(ROOT, f), "utf8"));
-const major = (v) => Number(String(v).replace(/^[^\d]*/, "").split(".")[0]);
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const json = (f: string) => JSON.parse(readFileSync(join(ROOT, f), "utf8"));
+const major = (v: unknown) => Number(String(v).replace(/^[^\d]*/, "").split(".")[0]);
 
 test("the lockfile puts the app's Vite at the root, where the app is started from", () => {
   const want = json("apps/web/package.json").devDependencies.vite;

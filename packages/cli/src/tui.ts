@@ -2,26 +2,31 @@
 // (text, hidden, confirm, single and multi select). Falls back to plain text when not a TTY.
 import readline from "node:readline";
 
+type Paint = (s: unknown) => string;
+export interface Choice<T> { label: string; hint?: string; value: T; checked?: boolean }
+type Key = { name?: string; ctrl?: boolean; meta?: boolean };
+type KeyHandler<T> = (str: string | undefined, key: Key, done: (v: T) => void) => void;
+
 const out = process.stdout;
 const inp = process.stdin;
 export const TTY = !!(out.isTTY && inp.isTTY);
 const COLOR = out.isTTY && !process.env.NO_COLOR;
-const esc = (c) => (s) => (COLOR ? `\x1b[${c}m${s}\x1b[0m` : String(s));
+const esc = (c: string): Paint => (s) => (COLOR ? `\x1b[${c}m${s}\x1b[0m` : String(s));
 export const c = {
   bold: esc("1"), dim: esc("2"), italic: esc("3"), under: esc("4"),
   red: esc("31"), green: esc("32"), yellow: esc("33"), blue: esc("34"), magenta: esc("35"), cyan: esc("36"), gray: esc("90"),
   violet: esc("38;5;141"), teal: esc("38;5;37"), pink: esc("38;5;205"),
-  hex: (hex) => (s) => {
+  hex: (hex: string): Paint => (s) => {
     if (!COLOR) return String(s);
     const n = parseInt(hex.replace("#", ""), 16);
     return `\x1b[38;2;${(n >> 16) & 255};${(n >> 8) & 255};${n & 255}m${s}\x1b[0m`;
   },
 };
 const ANSI = /\x1b\[[0-9;]*m/g;
-export const width = (s) => [...String(s).replace(ANSI, "")].length;
+export const width = (s: unknown) => [...String(s).replace(ANSI, "")].length;
 const cols = () => Math.min(out.columns || 80, 92);
 // cut a line to the terminal width so it never wraps: menus redraw by moving up one row per line
-const fit = (s) => {
+const fit = (s: string) => {
   const max = (out.columns || 80) - 1;
   if (width(s) <= max) return s;
   let n = 0, res = "";
@@ -37,13 +42,13 @@ export const sym = {
   on: c.green("◉"), off: c.gray("◯"), bullet: c.violet("●"),
 };
 
-export const say = (s = "") => out.write(`${s}\n`);
-export const ok = (s) => say(`  ${sym.ok} ${s}`);
-export const warn = (s) => say(`  ${sym.warn} ${s}`);
-export const fail = (s) => say(`  ${sym.no} ${s}`);
-export const info = (s) => say(`  ${c.gray(s)}`);
+export const say = (s: unknown = "") => out.write(`${s}\n`);
+export const ok = (s: string) => say(`  ${sym.ok} ${s}`);
+export const warn = (s: string) => say(`  ${sym.warn} ${s}`);
+export const fail = (s: string) => say(`  ${sym.no} ${s}`);
+export const info = (s: string) => say(`  ${c.gray(s)}`);
 
-export function box(lines, { color = c.violet, pad = 2 } = {}) {
+export function box(lines: string[], { color = c.violet, pad = 2 }: { color?: Paint; pad?: number } = {}) {
   const inner = Math.max(...lines.map(width)) + pad * 2;
   say(color(`  ╭${"─".repeat(inner)}╮`));
   for (const l of lines) say(`  ${color("│")}${" ".repeat(pad)}${l}${" ".repeat(inner - pad - width(l))}${color("│")}`);
@@ -51,7 +56,7 @@ export function box(lines, { color = c.violet, pad = 2 } = {}) {
 }
 
 let stepN = 0;
-export function step(total, title, hint = "") {
+export function step(total: number, title: string, hint = "") {
   stepN++;
   say();
   const tag = c.bold(c.violet(` ${stepN}/${total} `));
@@ -60,72 +65,72 @@ export function step(total, title, hint = "") {
 
 // ---------- spinner & progress ----------
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-export function spinner(text) {
-  let i = 0, t = text, timer;
+export function spinner(text: string) {
+  let i = 0, t = text, timer: NodeJS.Timeout | undefined;
   const start = Date.now();
   const draw = () => out.write(`\r\x1b[2K  ${c.violet(FRAMES[i++ % FRAMES.length])} ${t}`);
   if (TTY) { out.write("\x1b[?25l"); draw(); timer = setInterval(draw, 80); }
   else say(`  … ${t}`);
-  const stop = (mark, msg) => {
+  const stop = (mark: string, msg?: string) => {
     if (timer) clearInterval(timer);
     const secs = ((Date.now() - start) / 1000).toFixed(0);
     if (TTY) out.write(`\r\x1b[2K\x1b[?25h`);
     say(`  ${mark} ${msg ?? t}${Number(secs) >= 3 ? c.gray(` (${secs}s)`) : ""}`);
   };
   return {
-    set text(v) { t = v; if (!TTY) say(`  … ${v}`); },
-    succeed: (m) => stop(sym.ok, m),
-    fail: (m) => stop(sym.no, m),
-    warn: (m) => stop(sym.warn, m),
+    set text(v: string) { t = v; if (!TTY) say(`  … ${v}`); },
+    succeed: (m?: string) => stop(sym.ok, m),
+    fail: (m?: string) => stop(sym.no, m),
+    warn: (m?: string) => stop(sym.warn, m),
   };
 }
 
-export function bar(done, total, w = 28) {
+export function bar(done: number, total: number, w = 28) {
   const f = total ? Math.round((done / total) * w) : w;
   return `${c.violet("█".repeat(f))}${c.gray("░".repeat(w - f))}`;
 }
-export function progress(label) {
+export function progress(label: string) {
   let last = 0;
   return {
-    update(done, total, detail = "") {
+    update(done: number, total: number, detail = "") {
       if (!TTY) { if (Date.now() - last > 4000 || done === total) { last = Date.now(); say(`    ${label} ${done}/${total}`); } return; }
       const d = detail ? c.gray(` ${trunc(detail, cols() - 58)}`) : "";
       out.write(`\r\x1b[2K    ${label} ${bar(done, total)} ${c.bold(`${done}/${total}`)}${d}`);
     },
-    end(msg) { if (TTY) out.write("\r\x1b[2K"); say(`  ${sym.ok} ${msg}`); },
+    end(msg: string) { if (TTY) out.write("\r\x1b[2K"); say(`  ${sym.ok} ${msg}`); },
   };
 }
-export const trunc = (s, n) => (n < 4 ? "" : width(s) > n ? `${[...s].slice(0, n - 1).join("")}…` : s);
-export const fmtBytes = (b) => (b > 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b > 1e6 ? `${(b / 1e6).toFixed(0)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
+export const trunc = (s: string, n: number) => (n < 4 ? "" : width(s) > n ? `${[...s].slice(0, n - 1).join("")}…` : s);
+export const fmtBytes = (b: number) => (b > 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b > 1e6 ? `${(b / 1e6).toFixed(0)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
 
 // ---------- prompts ----------
-let lineRl;
-const lineQueue = [], lineWaiters = [];
+let lineRl: readline.Interface | undefined;
+const lineQueue: string[] = [], lineWaiters: ((line: string) => void)[] = [];
 let lineClosed = false;
 function lineReader() {
   if (!lineRl) {
     // buffer lines: piped answers arrive all at once, before the next question is asked
     lineRl = readline.createInterface({ input: inp, terminal: false });
-    lineRl.on("line", (l) => (lineWaiters.length ? lineWaiters.shift()(l) : lineQueue.push(l)));
-    lineRl.on("close", () => { lineClosed = true; while (lineWaiters.length) lineWaiters.shift()(""); });
+    lineRl.on("line", (l) => (lineWaiters.length ? lineWaiters.shift()!(l) : lineQueue.push(l)));
+    lineRl.on("close", () => { lineClosed = true; while (lineWaiters.length) lineWaiters.shift()!(""); });
   }
   return lineRl;
 }
 /** non-TTY: read one line from stdin (for piped answers / tests) */
-function readLine() {
+function readLine(): Promise<string> {
   lineReader();
-  if (lineQueue.length) return Promise.resolve(lineQueue.shift());
+  if (lineQueue.length) return Promise.resolve(lineQueue.shift()!);
   if (lineClosed) return Promise.resolve("");
   return new Promise((res) => lineWaiters.push(res));
 }
 
-function raw(handler) {
+function raw<T>(handler: KeyHandler<T>): Promise<T> {
   return new Promise((resolve) => {
     readline.emitKeypressEvents(inp);
     inp.setRawMode(true);
     inp.resume();
-    const done = (v) => { inp.off("keypress", on); inp.setRawMode(false); inp.pause(); resolve(v); };
-    const on = (str, key = {}) => {
+    const done = (v: T) => { inp.off("keypress", on); inp.setRawMode(false); inp.pause(); resolve(v); };
+    const on = (str: string | undefined, key: Key = {}) => {
       if (key.ctrl && key.name === "c") { inp.setRawMode(false); out.write("\x1b[?25h\n"); say(c.gray("  Setup cancelled. Nothing else was changed.")); process.exit(130); }
       handler(str, key, done);
     };
@@ -133,15 +138,15 @@ function raw(handler) {
   });
 }
 
-export async function ask(q, { def = "", validate } = {}) {
+export async function ask(q: string, { def = "", validate }: { def?: string; validate?: (v: string) => string | undefined } = {}): Promise<string> {
   for (;;) {
     const hint = def ? c.gray(` (${def})`) : "";
-    let v;
+    let v: string;
     if (!TTY) { out.write(`  ${sym.arrow} ${q}${hint} `); v = (await readLine()).trim(); say(); }
     else {
       out.write(`  ${c.cyan("?")} ${c.bold(q)}${hint} `);
       let buf = "";
-      v = await raw((s, k, done) => {
+      v = await raw<string>((s, k, done) => {
         if (k.name === "return" || k.name === "enter") { out.write("\n"); done(buf.trim()); }
         else if (k.name === "backspace") { if (buf) { buf = buf.slice(0, -1); out.write("\b \b"); } }
         else if (s && !k.ctrl && !k.meta && s >= " ") { buf += s; out.write(s); }
@@ -155,11 +160,11 @@ export async function ask(q, { def = "", validate } = {}) {
   }
 }
 
-export async function secret(q) {
+export async function secret(q: string): Promise<string> {
   if (!TTY) { out.write(`  ${sym.arrow} ${q} `); const v = (await readLine()).trim(); say(); return v; }
   out.write(`  ${c.cyan("?")} ${c.bold(q)} `);
   let buf = "";
-  return raw((s, k, done) => {
+  return raw<string>((s, k, done) => {
     if (k.name === "return" || k.name === "enter") { out.write("\n"); done(buf.trim()); }
     else if (k.name === "backspace") { if (buf) { buf = buf.slice(0, -1); out.write("\b \b"); } }
     else if (s && !k.ctrl && !k.meta) {
@@ -168,11 +173,11 @@ export async function secret(q) {
   });
 }
 
-export async function confirm(q, def = true) {
+export async function confirm(q: string, def = true): Promise<boolean> {
   const hint = c.gray(def ? " (Y/n)" : " (y/N)");
   if (!TTY) { out.write(`  ${sym.arrow} ${q}${hint} `); const v = (await readLine()).trim().toLowerCase(); say(); return v ? v.startsWith("y") : def; }
   out.write(`  ${c.cyan("?")} ${c.bold(q)}${hint} `);
-  return raw((s, k, done) => {
+  return raw<boolean>((s, k, done) => {
     if (k.name === "return" || k.name === "enter") { out.write(`${def ? c.green("yes") : c.gray("no")}\n`); done(def); }
     else if (s?.toLowerCase() === "y") { out.write(`${c.green("yes")}\n`); done(true); }
     else if (s?.toLowerCase() === "n") { out.write(`${c.gray("no")}\n`); done(false); }
@@ -180,7 +185,7 @@ export async function confirm(q, def = true) {
 }
 
 /** choices: [{ label, hint?, value }] → value */
-export async function select(q, choices, { initial = 0 } = {}) {
+export async function select<T>(q: string, choices: Choice<T>[], { initial = 0 } = {}): Promise<T> {
   if (!TTY) {
     say(`  ${sym.arrow} ${q}`);
     choices.forEach((ch, i) => say(`     ${i + 1}) ${ch.label}`));
@@ -198,7 +203,7 @@ export async function select(q, choices, { initial = 0 } = {}) {
     drawn = lines.length;
   };
   out.write("\x1b[?25l"); render();
-  const v = await raw((s, k, done) => {
+  const v = await raw<number>((s, k, done) => {
     if (k.name === "up" || s === "k") { i = (i - 1 + choices.length) % choices.length; render(); }
     else if (k.name === "down" || s === "j") { i = (i + 1) % choices.length; render(); }
     else if (k.name === "return" || k.name === "enter") done(i);
@@ -209,7 +214,7 @@ export async function select(q, choices, { initial = 0 } = {}) {
 }
 
 /** choices: [{ label, hint?, value, checked? }] → value[] */
-export async function multiselect(q, choices, { min = 1 } = {}) {
+export async function multiselect<T>(q: string, choices: Choice<T>[], { min = 1 } = {}): Promise<T[]> {
   const sel = choices.map((ch) => !!ch.checked);
   if (!TTY) {
     say(`  ${sym.arrow} ${q}`);
@@ -230,7 +235,7 @@ export async function multiselect(q, choices, { min = 1 } = {}) {
     drawn = lines.length;
   };
   out.write("\x1b[?25l"); render();
-  await raw((s, k, done) => {
+  await raw<void>((s, k, done) => {
     msg = "";
     if (k.name === "up" || s === "k") i = (i - 1 + choices.length) % choices.length;
     else if (k.name === "down" || s === "j") i = (i + 1) % choices.length;

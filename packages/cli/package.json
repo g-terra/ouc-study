@@ -1,0 +1,17 @@
+{
+  "name": "@ouc/cli",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The ouc command, the installer, the AI commands and the background app (started through the launchers in bin/)",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}

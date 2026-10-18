@@ -23,17 +23,20 @@
     "ouc": "node bin/ouc.mjs",
     "install:background": "node bin/ouc.mjs install",
     "check:public": "node bin/check-public.mjs",
-    "test": "node bin/test.mjs",
+    "test": "node --import tsx packages/cli/scripts/test.ts",
     "notes": "node bin/ai.mjs notes",
     "ai": "node bin/ai.mjs",
     "typecheck": "turbo run typecheck",
-    "lint": "node bin/lint.mjs",
+    "lint": "node --import tsx packages/cli/scripts/lint.ts",
     "check": "npm run lint && npm test && npm run typecheck && npm run check:public"
+  },
+  "dependencies": {
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "turbo": "^2.3.3"
   },
   "engines": {
-    "node": ">=18.18"
+    "node": ">=20"
   }
 }

@@ -8,60 +8,68 @@ import { dirname, join } from "node:path";
 const DEFAULT_REPO = "g-terra/ouc-study";
 const DAY = 24 * 60 * 60_000;
 
+/** What the newest release is, as cached in .ouc/update.json. */
+export interface Release { latest: string; notes: string; url: string; publishedAt?: string | null; checkedAt: string }
+export interface UpdateCheck extends Partial<Omit<Release, "latest">> { current: string | null; latest: string | null; available: boolean; error?: string }
+export type UpdateLog = (kind: "ok" | "warn", text: string) => void;
+export type Runner = (cmd: string, args: string[]) => boolean;
+export interface UpdateResult { ok: boolean; changed: boolean; message: string }
+export type FetchLike = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status?: number; json(): Promise<unknown> }>;
+
 /** "v1.2.3" or "1.2.3" → [1, 2, 3]; anything else → null. */
-export function parseVersion(v) {
+export function parseVersion(v: unknown): number[] | null {
   const m = String(v ?? "").trim().match(/^v?(\d+)\.(\d+)\.(\d+)$/);
   return m ? m.slice(1).map(Number) : null;
 }
 /** Is version a newer than b? */
-export function isNewer(a, b) {
+export function isNewer(a: unknown, b: unknown): boolean {
   const x = parseVersion(a), y = parseVersion(b);
   if (!x || !y) return false;
-  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i]! > y[i]!;
   return false;
 }
 /** The newest vX.Y.Z of a list of tags, or null. */
-export function newestTag(tags) {
-  return tags.filter(parseVersion).reduce((best, t) => (!best || isNewer(t, best) ? t : best), null);
+export function newestTag(tags: string[]): string | null {
+  return tags.filter(parseVersion).reduce<string | null>((best, t) => (!best || isNewer(t, best) ? t : best), null);
 }
 /** "owner/repo" from a GitHub remote URL (https or ssh), or null. */
-export function repoFromRemote(url) {
+export function repoFromRemote(url: unknown): string | null {
   return String(url ?? "").trim().match(/github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?\/?$/)?.[1] ?? null;
 }
 
-const git = (root, ...a) => spawnSync("git", ["-C", root, ...a], { encoding: "utf8" });
-export const localVersion = (root) => { try { return JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version ?? null; } catch { return null; } };
-const repoSlug = (root) => repoFromRemote(git(root, "remote", "get-url", "origin").stdout) ?? DEFAULT_REPO;
+const git = (root: string, ...a: string[]) => spawnSync("git", ["-C", root, ...a], { encoding: "utf8" });
+export const localVersion = (root: string): string | null => { try { return JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version ?? null; } catch { return null; } };
+const repoSlug = (root: string) => repoFromRemote(git(root, "remote", "get-url", "origin").stdout) ?? DEFAULT_REPO;
 /** The newest vX.Y.Z tag on GitHub, read with git (no API rate limit), or null. */
-const remoteTag = (root) => {
+const remoteTag = (root: string) => {
   const r = spawnSync("git", ["-C", root, "ls-remote", "--tags", "--refs", "origin", "v*"], { encoding: "utf8", timeout: 15_000 });
   return r.status === 0 ? newestTag(r.stdout.split(/\r?\n/).map((l) => l.split("refs/tags/")[1] ?? "")) : null;
 };
-const cacheFile = (root) => join(root, ".ouc/update.json");
+const cacheFile = (root: string) => join(root, ".ouc/update.json");
 
 /**
  * Is a newer release out? { current, latest, available, notes, url, checkedAt, error? }
  * Asks GitHub at most once a day (fresh: now), so the app and `ouc status` can call it freely.
  */
-export async function checkForUpdate(root, { fresh = false, fetchImpl = fetch, now = Date.now() } = {}) {
+export async function checkForUpdate(root: string, { fresh = false, fetchImpl = fetch as FetchLike, now = Date.now() } = {}): Promise<UpdateCheck> {
   const current = localVersion(root);
-  let cached;
+  let cached: Release | undefined;
   try { cached = JSON.parse(readFileSync(cacheFile(root), "utf8")); } catch {}
   let rel = cached;
-  if (!rel || fresh || now - Date.parse(rel.checkedAt ?? 0) > DAY) {
+  if (!rel || fresh || now - Date.parse(rel.checkedAt ?? "") > DAY) {
     try {
       const r = await fetchImpl(`https://api.github.com/repos/${repoSlug(root)}/releases/latest`, {
         headers: { Accept: "application/vnd.github+json", "User-Agent": "ouc-study" }, signal: AbortSignal.timeout(8000),
       });
       if (!r.ok) throw new Error(`GitHub answered ${r.status}`);
-      const j = await r.json();
+      const j = (await r.json()) as { tag_name?: string; body?: string; html_url?: string; published_at?: string };
       rel = { latest: String(j.tag_name ?? "").replace(/^v/, ""), notes: j.body ?? "", url: j.html_url ?? "", publishedAt: j.published_at ?? null, checkedAt: new Date(now).toISOString() };
       try { mkdirSync(dirname(cacheFile(root)), { recursive: true }); writeFileSync(cacheFile(root), JSON.stringify(rel, null, 2)); } catch {}
     } catch (e) {
       // the GitHub API allows 60 calls an hour per network (shared on campus Wi-Fi): fall back to the git tags
       const tag = remoteTag(root);
       if (tag) rel = { latest: tag.replace(/^v/, ""), notes: "", url: `https://github.com/${repoSlug(root)}/releases/tag/${tag}`, checkedAt: new Date(now).toISOString() };
-      else if (!rel) return { current, latest: null, available: false, error: `Couldn't check for updates (${e.message})` };
+      else if (!rel) return { current, latest: null, available: false, error: `Couldn't check for updates (${(e as Error).message})` };
     }
   }
   return { current, ...rel, available: isNewer(rel.latest, current) };
@@ -72,8 +80,8 @@ export async function checkForUpdate(root, { fresh = false, fetchImpl = fetch, n
  * then reinstall what changed: a clean `npm ci` when the dependencies changed, the AI skills when ai/ did.
  * Never touches local code edits. Returns { ok, changed, message }; log(kind, text) reports progress.
  */
-export function applyUpdate(root, { latest = false, log = () => {}, run = defaultRun } = {}) {
-  const fail = (message) => { log("warn", message); return { ok: false, changed: false, message }; };
+export function applyUpdate(root: string, { latest = false, log = (() => {}) as UpdateLog, run = npmRunner(root) } = {}): UpdateResult {
+  const fail = (message: string) => { log("warn", message); return { ok: false, changed: false, message }; };
   if (git(root, "rev-parse", "--is-inside-work-tree").status !== 0) return fail("Not a git checkout, so no code update (download the latest from GitHub instead).");
   if (git(root, "status", "--porcelain", "--untracked-files=no").stdout.trim()) return fail("You have local code changes, so the code wasn't updated (commit or stash them, then: ouc update).");
   const branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.trim();
@@ -109,11 +117,12 @@ export function applyUpdate(root, { latest = false, log = () => {}, run = defaul
   }
   if (changed.some((f) => f.startsWith("ai/")) && !run(process.execPath, [join(root, "bin/ai.mjs"), "install"])) log("warn", "Couldn't reinstall the AI skills (ouc ai install)");
   return { ok: true, changed: true, message: onReleases ? `Updated to ${tag}` : "Updated" };
+}
 
-  function defaultRun(cmd, args) {
-    // npm is npm.cmd on Windows, which needs a shell (the arguments here are fixed)
-    return spawnSync(cmd, args, { cwd: root, stdio: "inherit", shell: process.platform === "win32" && cmd === "npm" }).status === 0;
-  }
+/** Runs a command in root with its output shown; true when it worked. */
+function npmRunner(root: string): Runner {
+  // npm is npm.cmd on Windows, which needs a shell (the arguments here are fixed)
+  return (cmd, args) => spawnSync(cmd, args, { cwd: root, stdio: "inherit", shell: process.platform === "win32" && cmd === "npm" }).status === 0;
 }
 
 /**
@@ -121,7 +130,7 @@ export function applyUpdate(root, { latest = false, log = () => {}, run = defaul
  * a short-lived launcher starts it detached and exits, so stopping the app (launchd, or taskkill /T
  * on Windows) doesn't take the updater down with it. Output goes to .ouc/update.log.
  */
-export function restartDetached(root) {
+export function restartDetached(root: string): void {
   mkdirSync(join(root, ".ouc"), { recursive: true });
   const log = join(root, ".ouc/update.log");
   writeFileSync(log, `[${new Date().toISOString()}] Update requested from the app\n`);

@@ -7,9 +7,9 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateRawSync } from "node:zlib";
-import { createAiApi } from "../api.mjs";
-import { docxText, isDocx, wordCount } from "../docx.mjs";
-import { approve, findConverter, safeBase } from "../review.mjs";
+import { createAiApi } from "../src/api.ts";
+import { docxText, isDocx, wordCount } from "../src/docx.ts";
+import { approve, findConverter, safeBase } from "../src/review.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "../../..");

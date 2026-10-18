@@ -3,7 +3,7 @@
 import { inflateRawSync } from "node:zlib";
 
 /** One file from a zip, or null (not a zip, not there, or packed in a way we don't read). */
-export function unzipEntry(buf, name) {
+export function unzipEntry(buf: Buffer, name: string): Buffer | null {
   try {
     let end = -1;
     for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (buf.readUInt32LE(i) === 0x06054b50) { end = i; break; }
@@ -25,17 +25,17 @@ export function unzipEntry(buf, name) {
   return null;
 }
 
-const ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
-const decode = (s) => s.replace(/&(#x[\da-f]+|#\d+|\w+);/gi, (m, e) => (e[0] === "#" ? String.fromCodePoint(e[1] === "x" ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : ENT[e] ?? m));
+const ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+const decode = (s: string) => s.replace(/&(#x[\da-f]+|#\d+|\w+);/gi, (m, e: string) => (e[0] === "#" ? String.fromCodePoint(e[1] === "x" ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : ENT[e] ?? m));
 
 /** Is this buffer a Word document? */
-export const isDocx = (buf) => buf.length > 4 && buf.readUInt32LE(0) === 0x04034b50 && !!unzipEntry(buf, "word/document.xml");
+export const isDocx = (buf: Buffer) => buf.length > 4 && buf.readUInt32LE(0) === 0x04034b50 && !!unzipEntry(buf, "word/document.xml");
 
 /** The document's text as light Markdown, or null if it isn't a .docx. */
-export function docxText(buf) {
+export function docxText(buf: Buffer): string | null {
   const xml = unzipEntry(buf, "word/document.xml")?.toString("utf8");
   if (!xml) return null;
-  const out = [];
+  const out: string[] = [];
   let line = "", prefix = "", table = 0;
   const re = /<w:tbl>|<\/w:tbl>|<w:p[ >]|<w:p\/>|<\/w:p>|<w:pStyle w:val="([^"]+)"|<w:numPr>|<[wm]:t(?: [^>]*)?>([^<]*)<\/[wm]:t>|<w:tab\/>|<w:br[^>]*\/>|<\/w:tc>|<\/w:tr>/g;
   for (const m of xml.matchAll(re)) {
@@ -55,4 +55,4 @@ export function docxText(buf) {
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-export const wordCount = (text) => (String(text).match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length;
+export const wordCount = (text: unknown) => (String(text).match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length;

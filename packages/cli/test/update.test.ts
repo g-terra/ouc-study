@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyUpdate, checkForUpdate, isNewer, newestTag, repoFromRemote } from "../lib/update.mjs";
+import { applyUpdate, checkForUpdate, isNewer, newestTag, repoFromRemote } from "../src/update.ts";
 
 test("versions: newer, newest tag, repo from the remote URL", () => {
   assert.ok(isNewer("0.10.0", "0.9.9"));
@@ -20,12 +20,12 @@ test("versions: newer, newest tag, repo from the remote URL", () => {
 });
 
 const tmp = () => mkdtempSync(join(tmpdir(), "ouc-update-"));
-const sh = (cwd, ...a) => {
+const sh = (cwd: string, ...a: string[]) => {
   const r = spawnSync("git", a, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
   assert.equal(r.status, 0, `git ${a.join(" ")}: ${r.stderr}`);
   return r.stdout.trim();
 };
-const release = (dir, version, files = {}) => {
+const release = (dir: string, version: string, files: Record<string, string> = {}) => {
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "x", version }));
   for (const [f, body] of Object.entries(files)) { mkdirSync(join(dir, f, ".."), { recursive: true }); writeFileSync(join(dir, f), body); }
   sh(dir, "add", "-A"); sh(dir, "commit", "-qm", `release ${version}`);
@@ -41,7 +41,7 @@ function setup() {
   sh(base, "clone", "-q", origin, student);
   return { base, dev, student, done: () => rmSync(base, { recursive: true, force: true }) };
 }
-const recorder = () => { const calls = []; return { calls, run: (cmd, args) => { calls.push([cmd, ...args].join(" ")); return true; } }; };
+const recorder = () => { const calls: string[] = []; return { calls, run: (cmd: string, args: string[]) => { calls.push([cmd, ...args].join(" ")); return true; } }; };
 
 test("ouc update moves to the newest release tag, not past it, and reinstalls with npm ci when the lockfile changed", () => {
   const { dev, student, done } = setup();
@@ -80,7 +80,7 @@ test("the update check compares the latest GitHub release with package.json and 
   const { student, done } = setup();
   try {
     let asked = 0;
-    const fetchImpl = async (url) => { asked++; assert.match(url, /\/releases\/latest$/); return { ok: true, json: async () => ({ tag_name: "v0.3.0", body: "* **web:** a thing", html_url: "https://example/r" }) }; };
+    const fetchImpl = async (url: string) => { asked++; assert.match(url, /\/releases\/latest$/); return { ok: true, json: async () => ({ tag_name: "v0.3.0", body: "* **web:** a thing", html_url: "https://example/r" }) }; };
     const now = Date.parse("2026-10-18T12:00:00Z");
     const u = await checkForUpdate(student, { fetchImpl, now });
     assert.deepEqual([u.current, u.latest, u.available, u.url], ["0.1.0", "0.3.0", true, "https://example/r"]);
@@ -89,7 +89,7 @@ test("the update check compares the latest GitHub release with package.json and 
     await checkForUpdate(student, { fetchImpl, now: now + 25 * 60 * 60_000 });
     assert.equal(asked, 2);
     // GitHub API refused (rate limit, shared campus network) or unreachable: the newest tag on the git remote tells
-    const limited = await checkForUpdate(student, { fresh: true, fetchImpl: async () => ({ ok: false, status: 403 }), now });
+    const limited = await checkForUpdate(student, { fresh: true, fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({}) }), now });
     assert.deepEqual([limited.latest, limited.available, limited.notes], ["0.1.0", false, ""]);
   } finally { done(); }
 });

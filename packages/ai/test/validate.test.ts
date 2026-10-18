@@ -1,7 +1,7 @@
 // The note / prep pack checker: LaTeX quoting, prep packs, --fix.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fixQuotedLatex, validateNote } from "../validate.mjs";
+import { fixQuotedLatex, validateNote } from "../src/validate.ts";
 
 const PREP = `---
 by: Codex
