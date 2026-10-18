@@ -1,7 +1,9 @@
 @import "tailwindcss";
 
-/* ---------- design tokens (light / dark) ---------- */
-:root {
+@custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
+
+/* ---------- design tokens, one set per theme (lib/theme.ts lists them) ---------- */
+:root, [data-theme="light"] {
   --bg: #f6f4ef;
   --surface: #ffffff;
   --surface-2: #f1eee7;
@@ -19,25 +21,89 @@
   --info-bg: #eaf0ff;
   color-scheme: light;
 }
+/* no saved choice and no script yet: follow the computer */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #131312;
-    --surface: #1c1c1a;
-    --surface-2: #262523;
-    --ink: #ecebe6;
-    --muted: #a19d94;
-    --line: #34322e;
-    --accent: #fb923c;
-    --ok: #4ade80;
-    --ok-bg: #12301d;
-    --warn: #facc15;
-    --warn-bg: #33290d;
-    --bad: #f87171;
-    --bad-bg: #3a1616;
-    --info: #93b4ff;
-    --info-bg: #17223b;
+  :root:not([data-theme]) {
+    --bg: #131312; --surface: #1c1c1a; --surface-2: #262523; --ink: #ecebe6; --muted: #a19d94; --line: #34322e;
+    --accent: #fb923c; --ok: #4ade80; --ok-bg: #12301d; --warn: #facc15; --warn-bg: #33290d;
+    --bad: #f87171; --bad-bg: #3a1616; --info: #93b4ff; --info-bg: #17223b;
     color-scheme: dark;
   }
+}
+[data-theme="dark"] {
+  --bg: #131312;
+  --surface: #1c1c1a;
+  --surface-2: #262523;
+  --ink: #ecebe6;
+  --muted: #a19d94;
+  --line: #34322e;
+  --accent: #fb923c;
+  --ok: #4ade80;
+  --ok-bg: #12301d;
+  --warn: #facc15;
+  --warn-bg: #33290d;
+  --bad: #f87171;
+  --bad-bg: #3a1616;
+  --info: #93b4ff;
+  --info-bg: #17223b;
+  color-scheme: dark;
+}
+/* Paper: warm sepia, easy on the eyes for long reading */
+[data-theme="paper"] {
+  --bg: #f3ead6;
+  --surface: #fbf6ea;
+  --surface-2: #ebe0c6;
+  --ink: #3b2f20;
+  --muted: #76664e;
+  --line: #dccfb1;
+  --accent: #9a3412;
+  --ok: #3f6212;
+  --ok-bg: #e7eccd;
+  --warn: #92400e;
+  --warn-bg: #f4dfb8;
+  --bad: #9f1239;
+  --bad-bg: #f5dcd8;
+  --info: #1e40af;
+  --info-bg: #e2e3ec;
+  color-scheme: light;
+}
+/* Midnight: deep blue with a violet accent */
+[data-theme="midnight"] {
+  --bg: #0b1020;
+  --surface: #121a2e;
+  --surface-2: #1a2440;
+  --ink: #e3e8f4;
+  --muted: #8d98b3;
+  --line: #26314f;
+  --accent: #a78bfa;
+  --ok: #5eead4;
+  --ok-bg: #0f2e2e;
+  --warn: #fcd34d;
+  --warn-bg: #332a10;
+  --bad: #fb7185;
+  --bad-bg: #3a1422;
+  --info: #7dd3fc;
+  --info-bg: #10263a;
+  color-scheme: dark;
+}
+/* Forest: dark green with a gold accent */
+[data-theme="forest"] {
+  --bg: #0f1712;
+  --surface: #16211a;
+  --surface-2: #1f2d24;
+  --ink: #e4ece4;
+  --muted: #93a596;
+  --line: #2b3b30;
+  --accent: #e9b949;
+  --ok: #86efac;
+  --ok-bg: #143222;
+  --warn: #fdba74;
+  --warn-bg: #3a2614;
+  --bad: #fca5a5;
+  --bad-bg: #3b1a1a;
+  --info: #93c5fd;
+  --info-bg: #172538;
+  color-scheme: dark;
 }
 
 @theme inline {
