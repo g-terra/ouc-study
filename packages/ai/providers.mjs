@@ -86,25 +86,40 @@ export function agentEnv(tool) {
   for (const k of API_KEY_ENV[tool] ?? []) delete env[k];
   return env;
 }
-/** { loggedIn, subscription, how } for claude/codex; null if the tool isn't installed. */
-export function loginStatus(tool) {
+const LOGIN_CMD = { claude: ["claude", ["auth", "status", "--json"]], codex: ["codex", ["login", "status"]] };
+/** Reads the output of the tool's own status command (see LOGIN_CMD). */
+export function parseLogin(tool, { status, stdout = "", stderr = "" }) {
   if (tool === "claude") {
-    const r = spawnSync("claude", ["auth", "status", "--json"], { encoding: "utf8", env: agentEnv("claude"), timeout: 15000 });
-    if (r.error) return null;
     try {
-      const j = JSON.parse(r.stdout);
+      const j = JSON.parse(stdout);
       const apiKey = /api.?key/i.test(`${j.authMethod ?? ""} ${j.apiKeySource ?? ""}`);
       return { loggedIn: !!j.loggedIn, subscription: !!j.loggedIn && !apiKey, how: j.authMethod ?? "" };
     } catch { return { loggedIn: false, subscription: false, how: "" }; }
   }
-  if (tool === "codex") {
-    const r = spawnSync("codex", ["login", "status"], { encoding: "utf8", env: agentEnv("codex"), timeout: 15000 });
-    if (r.error) return null;
-    const out = `${r.stdout}${r.stderr}`.trim();
-    const loggedIn = r.status === 0 && /logged in/i.test(out) && !/not logged in/i.test(out);
-    return { loggedIn, subscription: loggedIn && !/api key/i.test(out), how: out.split("\n")[0] };
-  }
-  return null;
+  const out = `${stdout}${stderr}`.trim();
+  const loggedIn = status === 0 && /logged in/i.test(out) && !/not logged in/i.test(out);
+  return { loggedIn, subscription: loggedIn && !/api key/i.test(out), how: out.split("\n")[0] };
+}
+/** { loggedIn, subscription, how } for claude/codex; null if the tool isn't installed. */
+export function loginStatus(tool) {
+  if (!LOGIN_CMD[tool]) return null;
+  const [bin, args] = LOGIN_CMD[tool];
+  const r = spawnSync(bin, args, { encoding: "utf8", env: agentEnv(tool), timeout: 15000 });
+  return r.error ? null : parseLogin(tool, r);
+}
+/** Same as loginStatus, without blocking (for the app server). */
+export function loginStatusAsync(tool, ms = 8000) {
+  if (!LOGIN_CMD[tool]) return Promise.resolve(null);
+  const [bin, args] = LOGIN_CMD[tool];
+  return new Promise((done) => {
+    let stdout = "", stderr = "";
+    const p = spawn(bin, args, { env: agentEnv(tool) });
+    const t = setTimeout(() => { p.kill(); done({ loggedIn: false, subscription: false, how: "", unknown: true }); }, ms);
+    p.stdout.on("data", (d) => (stdout += d));
+    p.stderr.on("data", (d) => (stderr += d));
+    p.on("error", () => { clearTimeout(t); done(null); });
+    p.on("exit", (status) => { clearTimeout(t); done(parseLogin(tool, { status, stdout, stderr })); });
+  });
 }
 /** Runs the tool's own browser sign-in (Claude account / ChatGPT account). */
 export function login(tool) {
@@ -140,21 +155,29 @@ export function writeOpencodeConfig(root, local) {
 }
 
 // ---------- agent tools ----------
-const CLAUDE_TOOLS = "Read,Write,Edit,Glob,Grep,Bash(node packages/ai/validate.mjs *),Bash(python3 tools/extract_text.py *),Bash(ls *),Bash(grep *),Bash(date)";
-export function agentCommand(cfg, prompt, { interactive = false } = {}) {
+const CLAUDE_TOOLS = "Read,Write,Edit,Glob,Grep,Bash(node packages/ai/validate.mjs *),Bash(python3 tools/extract_text.py *),Bash(ls *),Bash(grep *),Bash(date),Bash(bash bin/ouc sync*),Bash(bash bin/ouc pull*)";
+/**
+ * [bin, args] for an agent run. interactive: the tool's own terminal UI.
+ * json: one-shot run that prints machine-readable events (used by the study app), optionally
+ * continuing an earlier conversation (resume = the tool's session/thread id).
+ */
+export function agentCommand(cfg, prompt, { interactive = false, json = false, resume } = {}) {
   if (cfg.tool === "claude") {
-    return interactive ? ["claude", prompt ? [prompt] : []] : ["claude", ["-p", prompt, "--permission-mode", "acceptEdits", "--allowedTools", CLAUDE_TOOLS]];
+    if (interactive) return ["claude", prompt ? [prompt] : []];
+    const tools = json ? `${CLAUDE_TOOLS},WebSearch,WebFetch` : CLAUDE_TOOLS;
+    return ["claude", ["-p", prompt, "--permission-mode", "acceptEdits", "--allowedTools", tools,
+      ...(json ? ["--output-format", "stream-json", "--verbose", "--disallowedTools", "Read(.eclass-token),Read(./.eclass-token)"] : []),
+      ...(resume ? ["--resume", resume] : [])]];
   }
   if (cfg.tool === "opencode") {
     // .opencode/opencode.json sets the model; opencode.json in the root denies the eClass key and destructive commands
-    return interactive
-      ? ["opencode", prompt ? ["--prompt", prompt] : []]
-      : ["opencode", ["run", "--auto", prompt]];
+    if (interactive) return ["opencode", prompt ? ["--prompt", prompt] : []];
+    return ["opencode", ["run", "--auto", ...(json ? ["--format", "json"] : []), ...(resume ? ["--session", resume] : []), prompt]];
   }
   // codex exec never asks for approval; workspace-write keeps it inside this folder
-  return interactive
-    ? ["codex", prompt ? [prompt] : []]
-    : ["codex", ["exec", "--sandbox", "workspace-write", "--skip-git-repo-check", prompt]];
+  if (interactive) return ["codex", prompt ? [prompt] : []];
+  const base = ["exec", ...(json ? ["--json"] : []), "--sandbox", "workspace-write", "--skip-git-repo-check"];
+  return ["codex", resume ? [...base, "resume", resume, prompt] : [...base, prompt]];
 }
 export function runAgent(root, cfg, prompt, opts = {}) {
   const [bin, args] = agentCommand(cfg, prompt, opts);
@@ -170,7 +193,7 @@ export function runAgent(root, cfg, prompt, opts = {}) {
  * Stream a chat completion. local = { kind: "ollama" | "lmstudio" | "openai", baseUrl, model, ctx?, apiKeyEnv? }
  * Returns the full text; onToken(t) gets each piece as it arrives.
  */
-export async function chat(local, messages, { onToken = () => {}, temperature = 0.3 } = {}) {
+export async function chat(local, messages, { onToken = () => {}, temperature = 0.3, signal } = {}) {
   let res;
   const ollama = local.kind === "ollama";
   const url = ollama ? `${local.baseUrl.replace(/\/v1\/?$/, "")}/api/chat` : `${local.baseUrl.replace(/\/$/, "")}/chat/completions`;
@@ -179,7 +202,7 @@ export async function chat(local, messages, { onToken = () => {}, temperature = 
   const body = ollama
     ? { model: local.model, messages, stream: true, options: { num_ctx: local.ctx ?? 32768, temperature } }
     : { model: local.model, messages, stream: true, temperature };
-  try { res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) }); }
+  try { res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal }); }
   catch (e) { throw new Error(`Can't reach the model at ${local.baseUrl} (${e.cause?.code ?? e.message}). Is ${ollama ? "Ollama" : "the server"} running?`); }
   if (!res.ok) throw new Error(`The model server answered HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const dec = new TextDecoder();

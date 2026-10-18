@@ -24,6 +24,7 @@ import * as ui from "./lib/tui.mjs";
 import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, agentEnv, chat, describe, detect, loadConfig, login, loginStatus, runAgent, saveConfig, serverUp, writeOpencodeConfig } from "../packages/ai/providers.mjs";
 import { currentSemesterId, findCourse, findWeek, loadData, noteFileName, read, weekMaterial, weekNumber } from "../packages/ai/context.mjs";
 import { validateNote } from "../packages/ai/validate.mjs";
+import { notesPrompt } from "../packages/ai/actions.mjs";
 
 const { c } = ui;
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -278,9 +279,7 @@ async function notes(o) {
   if (existing && !o.force) { ui.warn(`There is already a note for this week: notes/${course.code}/${existing.slug}.md (add --force to write another).`); return; }
 
   if (AGENTIC.has(cfg.tool)) {
-    const prompt = `Use the make-notes skill. Make visual study notes for ${course.title} (${course.code}), eClass section ${week.index} "${week.name}". ` +
-      `The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/. Save the note as ${rel} (front matter: course ${course.code}, section ${week.index}, week ${weekNumber(week)}). ` +
-      `When done, run: node packages/ai/validate.mjs ${rel} and fix every error it reports.`;
+    const { prompt } = notesPrompt(semId, course, week);
     process.exitCode = await runAgent(ROOT, cfg, prompt);
     return;
   }

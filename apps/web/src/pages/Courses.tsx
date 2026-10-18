@@ -4,6 +4,7 @@ import { Link, enc, useRouter } from "../lib/router";
 import { currentWeek, stateOf } from "../lib/data";
 import { at, day, fmtFull, fmtShort, relative } from "../lib/dates";
 import { Card, Empty, PageHeader, ProgressRing, SectionTitle, StatePill, cx, kindIcon } from "../components/ui";
+import { AskAiButton } from "../components/Assistant";
 
 export function Courses({ data }: { data: SemesterData }) {
   const base = `/${enc(data.id)}`;
@@ -113,7 +114,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
                   </Link>
                 ))}
               </div>
-            ) : <Empty>No notes yet. Ask Claude to “make notes on {c.short} week N”.</Empty>}
+            ) : <Empty>No notes yet. Open a week and press “Make notes”, or ask the AI.</Empty>}
           </div>
         </aside>
       </div>
@@ -156,6 +157,12 @@ function WeekRow({ w, isOpen, isNow, color, onToggle, base, code }: { w: Week; i
             })}
           </ul>
           {w.items.length === 0 && <p className="text-sm text-muted">Nothing posted for this week.</p>}
+          {w.index > 0 && w.items.some((i) => i.kind === "file") && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {!w.items.some((i) => i.kind === "note") && <AskAiButton action="make-notes" params={{ course: code, week: String(w.index) }}>Make notes</AskAiButton>}
+              <AskAiButton action="quiz-me" params={{ course: code, week: String(w.index) }}>Quiz me</AskAiButton>
+            </div>
+          )}
         </div>
       )}
     </div>

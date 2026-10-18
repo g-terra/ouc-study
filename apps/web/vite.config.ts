@@ -5,6 +5,8 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+// @ts-ignore: plain JS module shared with the `ouc` command line
+import { createAiApi } from "../../packages/ai/api.mjs";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 
@@ -61,6 +63,13 @@ function eclassApi(): Plugin {
   return { name: "eclass-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
 }
 
+/** /api/ai/*: the Ask AI panel talks to the agent chosen with `ouc ai setup` (see packages/ai/api.mjs). */
+function aiApi(): Plugin {
+  let handler: Connect.NextHandleFunction | undefined;
+  const use = (s: { middlewares: Connect.Server }) => { handler ??= createAiApi(resolve(HERE, "../..")); s.middlewares.use(handler!); };
+  return { name: "ai-api", configureServer: use, configurePreviewServer: use };
+}
+
 /** Serves the course files from ../../semesters at /files/<semester>/<path> (dev + preview). */
 function semesterFiles(): Plugin {
   const handler: Connect.NextHandleFunction = (req, res, next) => {
@@ -115,6 +124,6 @@ function semesterFiles(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), semesterFiles(), eclassApi()],
+  plugins: [react(), tailwindcss(), semesterFiles(), eclassApi(), aiApi()],
   server: { port: 5173 },
 });
