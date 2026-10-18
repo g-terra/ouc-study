@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/g-terra/ouc-study/compare/v0.2.0...v0.2.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **deps:** start the app with Vite 8, not a leftover Vite 6 ([#27](https://github.com/g-terra/ouc-study/issues/27)) ([40f3d65](https://github.com/g-terra/ouc-study/commit/40f3d6597281ab82a6843123b4ae5fe88ea40380))
+
 ## [0.2.0](https://github.com/g-terra/ouc-study/compare/v0.1.1...v0.2.0) (2026-10-18)
 
 
