@@ -80,7 +80,7 @@ When a request matches a skill, follow its `SKILL.md`. If the installed copies a
 
 When the task is to change this repo's code, docs, skills or agents (not to help with studying), you are a contributor. Full guide: `CONTRIBUTING.md`. In short:
 
-- **Verify with one command:** `npm run check` (lint, `node:test` unit tests, typecheck, public check), plus `npm run build`. CI runs the same on Node 20 and 22; run them before saying you're done.
+- **Verify with one command:** `npm run check` (lint, `node:test` unit tests, typecheck, public check), plus `npm run build` and, for UI changes, `npm run e2e` (Playwright smoke test on the demo semester in `e2e/demo/`). CI runs them all; run them before saying you're done.
 - **Never touch personal data:** don't read, print or commit `.eclass-token`, and don't commit anything from `semesters/`, `memory/`, `STUDENT.md`, `CLAUDE.local.md` or `.ouc/`. Tests use small made-up fixtures, never course material.
 - **Skills and agents:** edit `ai/` only, keep the `name`/`description` front matter (agents also `tools`); `npm test` checks it. Every skill becomes an Ask AI action in the app.
 - **Tests:** add or update `packages/<pkg>/test/*.test.mjs` for behaviour you change.

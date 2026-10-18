@@ -1,0 +1,17 @@
+[
+  {
+    "code": "DEMO101",
+    "secs": [
+      { "i": 0, "name": "General", "summary": "Made-up course for the smoke tests.", "acts": [] },
+      { "i": 1, "name": "Week 1: Getting started", "summary": "", "acts": [
+        { "type": "url", "name": "Course website", "url": "https://example.org/demo" },
+        { "type": "assign", "name": "Assignment 1", "url": "https://example.org/mod/assign/view.php?id=101",
+          "dates": ["Opened: Monday, 14 September 2026, 12:00 AM", "Due: Monday, 28 September 2026, 11:59 PM"],
+          "status": ["Submission status No submissions have been made yet"], "body": "Write a short reflection on the demo week." }
+      ] },
+      { "i": 2, "name": "Week 2: Going further", "summary": "", "acts": [
+        { "type": "forum", "name": "Discussion", "url": "https://example.org/mod/forum/view.php?id=102" }
+      ] }
+    ]
+  }
+]

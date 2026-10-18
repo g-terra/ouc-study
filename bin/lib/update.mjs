@@ -1,6 +1,6 @@
 // App updates from GitHub releases: is there a newer release, and move this checkout to it.
 // Used by `ouc update` / `ouc restart` and by the app's "Update available" banner (/api/update in vite.config.ts).
-// Releases are the vX.Y.Z tags release-please makes on main; `ouc update --latest` follows main itself.
+// Releases are the vX.Y.Z tags release-please makes on main; `ouc update --main` follows main itself.
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -87,7 +87,7 @@ export function applyUpdate(root, { latest = false, log = () => {}, run = defaul
     if (tagSha === before) { log("ok", `Up to date: v${localVersion(root)}`); return { ok: true, changed: false, message: "Up to date" }; }
     // already past the release (code from main that isn't released yet): nothing to do
     if (git(root, "merge-base", "--is-ancestor", tag, "HEAD").status === 0) { log("ok", `Up to date: v${localVersion(root)} (newer than the latest release ${tag})`); return { ok: true, changed: false, message: "Ahead of the latest release" }; }
-    if (git(root, "merge-base", "--is-ancestor", "HEAD", tag).status !== 0) return fail(`Your branch has commits that aren't in ${tag}, so it wasn't moved. To follow main instead: ouc update --latest`);
+    if (git(root, "merge-base", "--is-ancestor", "HEAD", tag).status !== 0) return fail(`Your branch has commits that aren't in ${tag}, so it wasn't moved. To follow main instead: ouc update --main`);
     if (git(root, "merge", "--ff-only", "--quiet", tag).status !== 0) return fail(`Couldn't move to ${tag}.`);
   } else {
     if (git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").status !== 0) return fail("This branch doesn't track GitHub, so no code update.");
