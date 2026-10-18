@@ -155,7 +155,8 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       if (!existsSync(join(root, "ai/skills", action, "SKILL.md"))) throw new Error(`Unknown action "${action}".`);
       body = `Use the ${action} skill${msg ? `: ${msg}` : "."}`;
   }
-  return first ? `${APP_PREAMBLE}\n\n${body}` : body;
+  const visuals = semId ? ` When a picture would help (a diagram, a chart, a side-by-side), save it as one self-contained HTML or SVG file in semesters/${semId}/visuals/ and name its path in backticks: the app shows it right in the chat.` : "";
+  return first ? `${APP_PREAMBLE}${visuals}\n\n${body}` : body;
 }
 
 /** System prompt for a plain local model chatting from the app (it has no tools). */

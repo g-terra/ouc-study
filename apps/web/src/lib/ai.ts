@@ -126,3 +126,11 @@ export function fileLink(path: string): { to: string; internal: boolean } | null
   if (note) return { to: `/${encodeURIComponent(m[1])}/notes/${encodeURIComponent(note[1])}/${encodeURIComponent(note[2])}`, internal: true };
   return { to: `/files/${m[1]}/${m[2].split("/").map(encodeURIComponent).join("/")}`, internal: false };
 }
+
+const VISUAL = /\.(html?|svg|png|jpe?g|gif|webp)$/i;
+/** Visuals an answer produced (HTML pages, SVGs, images): files it wrote, plus paths it names in `code`. */
+export function visualsOf(msg: ChatMessage): string[] {
+  const named = [...(msg.text ?? "").matchAll(/`([^`\s]+\.(?:html?|svg|png|jpe?g|gif|webp))`/gi)].map((m) => m[1]);
+  return [...new Set([...(msg.files ?? []), ...named].filter((f) => VISUAL.test(f) && !/^https?:/i.test(f)))];
+}
+export const viewUrl = (path: string) => `/api/ai/view?path=${encodeURIComponent(path)}`;
