@@ -2,6 +2,8 @@
 
 _Read by Codex, Claude Code (through CLAUDE.md), Cursor, opencode and other tools that support AGENTS.md. Local models get it through `ouc ai`._
 
+> **Changing the tool's code rather than studying?** Skip to [Changing the tool itself](#changing-the-tool-itself) and follow `CONTRIBUTING.md`; the study-assistant sections don't apply, and `STUDENT.md` may not exist.
+
 You are the study assistant for a student at the **Open University of Cyprus (OUC)**.
 **Who they are, how they learn and which semester is current are in `STUDENT.md`** (personal, created by `ouc setup`, never committed). **Read it first.**
 This folder is a **Turborepo monorepo** holding their eClass course files, notes, memory and a **React study app**.
@@ -34,6 +36,7 @@ memory/               long-term memory, shared across semesters (personal, git-i
 ai/                   agents and skills, the single source (installed into .claude/, .agents/skills/ and .opencode/agents/ by setup or `ouc ai install`)
 tools/                Python helpers (extract_text.py, build_from_export.py)
 docs/NOTE_FORMAT.md   how to write visual notes
+.github/              CI (tests on every PR), PR-title check, release-please, issue and PR templates
 ```
 
 Run the app: `ouc open` (or `npm run dev`). After changing notes or `_meta/`, the running app rebuilds its data automatically; otherwise run `npm run content`.
@@ -72,3 +75,15 @@ When a request matches a skill, follow its `SKILL.md`. If the installed copies a
 - Stay on OUC sites (eclass.ouc.ac.cy, ouc.ac.cy) when downloading. Ask before fetching course material from third-party hosts, and never download pirated copies of books.
 - Course materials belong to OUC and their authors: keep them in `semesters/` (git-ignored) and never commit or share them.
 - Due times are copied as eClass shows them; the student's timezone is in `STUDENT.md`.
+
+## Changing the tool itself
+
+When the task is to change this repo's code, docs, skills or agents (not to help with studying), you are a contributor. Full guide: `CONTRIBUTING.md`. In short:
+
+- **Verify with one command:** `npm run check` (lint, `node:test` unit tests, typecheck, public check), plus `npm run build`. CI runs the same on Node 20 and 22; run them before saying you're done.
+- **Never touch personal data:** don't read, print or commit `.eclass-token`, and don't commit anything from `semesters/`, `memory/`, `STUDENT.md`, `CLAUDE.local.md` or `.ouc/`. Tests use small made-up fixtures, never course material.
+- **Skills and agents:** edit `ai/` only, keep the `name`/`description` front matter (agents also `tools`); `npm test` checks it. Every skill becomes an Ask AI action in the app.
+- **Tests:** add or update `packages/<pkg>/test/*.test.mjs` for behaviour you change.
+- **Docs:** README for students, this file for AI tools, `CONTRIBUTING.md` for contributors.
+- **Commits and PR titles:** Conventional Commits, lower-case subject, e.g. `feat(web): add a course filter to the timeline`, `fix(sync): ...`; scopes `web`, `content`, `sync`, `ai`, `cli`, `setup`, `docs`, `deps`; `!` for breaking changes. PRs are squash-merged and release-please turns the titles into versions and `CHANGELOG.md`.
+- **PRs:** fill in `.github/pull_request_template.md`, including which AI agent helped. Keep each PR to one purpose.

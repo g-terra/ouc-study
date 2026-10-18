@@ -9,7 +9,8 @@
   },
   "scripts": {
     "content": "tsx src/build.ts",
-    "watch": "tsx watch src/build.ts"
+    "watch": "tsx watch src/build.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "yaml": "^2.6.1"

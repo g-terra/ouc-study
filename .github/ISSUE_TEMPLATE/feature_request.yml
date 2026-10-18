@@ -1,0 +1,56 @@
+name: Feature or improvement
+description: Propose something new for the study app, the sync, the setup or the study agents.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem first, then your idea. A clear issue can be handed straight to an AI coding agent (Claude Code, Codex, opencode, Cursor...) to implement.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard or missing today, and for whom?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should happen instead? Sketches and examples welcome.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - App (apps/web)
+        - Content build (packages/content)
+        - eClass sync (packages/eclass-sync)
+        - AI panel / study agents (packages/ai, ai/)
+        - Setup and the ouc command (bin/)
+        - Docs
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A short checklist that says when this is done. Agents and reviewers work from it.
+      placeholder: |
+        - [ ] The timeline has a per-course filter
+        - [ ] The filter is remembered after a reload
+        - [ ] A test covers ...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to implement this myself (with or without an AI agent).

@@ -15,6 +15,9 @@
     "build": {
       "dependsOn": ["^content"],
       "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "outputs": []
     }
   }
 }
