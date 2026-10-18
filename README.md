@@ -4,6 +4,84 @@ Your Open University of Cyprus **eClass courses offline**, in a visual study app
 
 Built by students for students. Works with **your own** eClass account: nothing is shared between users.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.webp">
+  <img src="docs/images/dashboard.webp" alt="The OUC Study dashboard: next deadline with a countdown, final exams and what's new on eClass">
+</picture>
+
+<sub>Screenshots use a made-up demo semester. They follow your light or dark theme.</sub>
+
+## A quick tour
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/course-dark.webp">
+  <img src="docs/images/course.webp" alt="A course page listing each week's materials, upcoming assignments and grades">
+</picture>
+
+**Every course, week by week**<br>Slides, recordings, readings and your notes for each week, with upcoming work and grades on the side.
+
+</td>
+<td width="50%" valign="top">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/timeline-dark.webp">
+  <img src="docs/images/timeline.webp" alt="The timeline page with the semester bar and deadlines grouped by week">
+</picture>
+
+**The whole semester at a glance**<br>Every deadline and final exam on one line, then week by week with a filter per course.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/note-dark.webp">
+  <img src="docs/images/note.webp" alt="A visual note with a big-idea callout and concept cards">
+</picture>
+
+**Visual notes**<br>Notes your AI writes from the slides: big idea, concept cards, diagrams, formulas and flashcards.
+
+</td>
+<td width="50%" valign="top">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/assignment-dark.webp">
+  <img src="docs/images/assignment.webp" alt="An assignment page showing the AI prep pack with a step-by-step route">
+</picture>
+
+**Assignments with a prep pack**<br>The question, your files, study links and an AI prep pack with hints, never the answers.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/ask-ai-dark.webp">
+  <img src="docs/images/ask-ai.webp" alt="The Ask AI panel answering a question next to a note">
+</picture>
+
+**Ask AI, on any page**<br>Chat with Claude Code, Codex or a local model about what you're looking at. It knows your courses and notes.
+
+</td>
+<td width="50%" valign="top">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/updates-dark.webp">
+  <img src="docs/images/updates.webp" alt="The daily updates page grouped by day">
+</picture>
+
+**What changed on eClass**<br>New grades, feedback, files, moved deadlines and announcements, checked every day.
+
+</td>
+</tr>
+</table>
+
 ## Install
 
 You need [Node.js](https://nodejs.org) (the LTS version) and a few minutes.
