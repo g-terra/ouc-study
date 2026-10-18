@@ -72,7 +72,7 @@ export async function checkForUpdate(root, { fresh = false, fetchImpl = fetch, n
  * then reinstall what changed: a clean `npm ci` when the dependencies changed, the AI skills when ai/ did.
  * Never touches local code edits. Returns { ok, changed, message }; log(kind, text) reports progress.
  */
-export function applyUpdate(root, { latest = false, log = () => {}, run = defaultRun } = {}) {
+export function applyUpdate(root, { latest = false, log = () => {}, run = runIn(root) } = {}) {
   const fail = (message) => { log("warn", message); return { ok: false, changed: false, message }; };
   if (git(root, "rev-parse", "--is-inside-work-tree").status !== 0) return fail("Not a git checkout, so no code update (download the latest from GitHub instead).");
   if (git(root, "status", "--porcelain", "--untracked-files=no").stdout.trim()) return fail("You have local code changes, so the code wasn't updated (commit or stash them, then: ouc update).");
@@ -109,11 +109,12 @@ export function applyUpdate(root, { latest = false, log = () => {}, run = defaul
   }
   if (changed.some((f) => f.startsWith("ai/")) && !run(process.execPath, [join(root, "bin/ai.mjs"), "install"])) log("warn", "Couldn't reinstall the AI skills (ouc ai install)");
   return { ok: true, changed: true, message: onReleases ? `Updated to ${tag}` : "Updated" };
+}
 
-  function defaultRun(cmd, args) {
-    // npm is npm.cmd on Windows, which needs a shell (the arguments here are fixed)
-    return spawnSync(cmd, args, { cwd: root, stdio: "inherit", shell: process.platform === "win32" && cmd === "npm" }).status === 0;
-  }
+/** Runs a command in root, showing its output; true when it worked. (Outside applyUpdate: a default parameter can't see functions declared in the body.) */
+function runIn(root) {
+  // npm is npm.cmd on Windows, which needs a shell (the arguments here are fixed)
+  return (cmd, args) => spawnSync(cmd, args, { cwd: root, stdio: "inherit", shell: process.platform === "win32" && cmd === "npm" }).status === 0;
 }
 
 /**
