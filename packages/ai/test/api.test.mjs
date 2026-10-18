@@ -40,6 +40,11 @@ test("actions, guard, run and follow-up", async (t) => {
   const post = (path, body, headers = {}) => fetch(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": token, ...headers }, body: JSON.stringify(body) });
   assert.equal((await post("/api/ai/run", { action: "plan-week" }, { Origin: "https://evil.example" })).status, 403);
 
+  // the panel can only pick a tool that exists here
+  assert.equal((await post("/api/ai/run", { tool: "gpt-9", message: "hi" })).status, 400);
+  assert.equal((await post("/api/ai/run", { tool: "local", message: "hi" })).status, 400); // no local model set up
+  assert.match((await (await post("/api/ai/run", { tool: "opencode", message: "hi" })).json()).error, /ouc ai setup/);
+
   // missing input is a readable 400
   const bad = await post("/api/ai/run", { action: "research-topic" });
   assert.equal(bad.status, 400);

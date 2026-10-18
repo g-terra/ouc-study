@@ -3,16 +3,17 @@
 // ask the AI the same thing. A new skill in ai/skills/ shows up in the app on its own.
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { findCourse, findWeek, noteFileName, read, weekNumber } from "./context.mjs";
+import { findCourse, noteFileName, read, weekNumber } from "./context.mjs";
 
 // The inputs each known skill asks for in the app; other skills just take a free-text request.
 const FIELDS = {
-  "make-notes": [{ key: "course", kind: "course", label: "Course", required: true }, { key: "week", kind: "week", label: "Week", placeholder: "Latest week without notes" }],
-  "quiz-me": [{ key: "course", kind: "course", label: "Course", required: true }, { key: "week", kind: "week", label: "Week", placeholder: "Whole course" }],
+  // a week can still come from a shortcut button (e.g. "Make notes" on a course week)
+  "make-notes": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }],
+  "quiz-me": [{ key: "course", kind: "course", label: "Course", required: true }],
   "plan-week": [],
   "research-topic": [{ key: "topic", kind: "text", label: "Topic", required: true, placeholder: "e.g. signal detection theory" }, { key: "course", kind: "course", label: "Course" }],
   "find-material": [{ key: "topic", kind: "text", label: "What are you looking for?", required: true, placeholder: "e.g. the slide about d′" }, { key: "course", kind: "course", label: "Course" }],
-  "assignment-helper": [{ key: "assignment", kind: "assignment", label: "Assignment", required: true }],
+  "assignment-helper": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "sync-eclass": [],
 };
 const TITLE = {
@@ -42,6 +43,14 @@ export function listActions(root) {
       fields: FIELDS[id] ?? [], agentOnly: !CHAT_OK.has(id),
     };
   });
+}
+
+/** Weeks that have started, have files and have no note yet, oldest first. */
+export function weeksWithoutNotes(data, courses, today = new Date().toISOString().slice(0, 10)) {
+  return courses.flatMap((course) => course.weeks
+    .filter((w) => w.index > 0 && (!w.start || w.start <= today) && w.items.some((i) => i.kind === "file"))
+    .filter((w) => !data.notes.some((n) => n.code === course.code && n.weekIndex === w.index))
+    .map((week) => ({ course, week })));
 }
 
 /** The prompt `ouc notes` and the app use for an agent tool. */
@@ -78,9 +87,15 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       if (!msg) throw new Error("Type a message first.");
       body = msg; break;
     case "make-notes": {
-      const w = week ?? findWeek(course, undefined, data.notes);
-      if (!w) throw new Error(`Couldn't find a week with material in ${course.short}.`);
-      body = notesPrompt(semId, course, w).prompt + extra; break;
+      if (week) { body = notesPrompt(semId, course, week).prompt + extra; break; }
+      const todo = weeksWithoutNotes(data, course ? [course] : data.courses);
+      if (!todo.length) throw new Error(`Every week with material${course ? ` in ${course.short}` : ""} already has notes.`);
+      if (todo.length === 1) { body = notesPrompt(semId, todo[0].course, todo[0].week).prompt + extra; break; }
+      body = `Use the make-notes skill. Make visual study notes for each of these ${todo.length} weeks, which have material but no notes yet. ` +
+        `Delegate to the note-taker agent, one per course, in parallel if you can. The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/.\n\n` +
+        todo.map(({ course: c, week: w }) => `- ${c.code} section ${w.index} "${w.name}" → ${notesPrompt(semId, c, w).rel} (front matter: course ${c.code}, section ${w.index}, week ${weekNumber(w)})`).join("\n") +
+        `\n\nAfter writing each note, run: node packages/ai/validate.mjs <its path> and fix every error it reports.${extra}`;
+      break;
     }
     case "quiz-me":
       body = `Use the quiz-me skill: quiz me on ${course.short}${week ? `, ${week.label}` : ""} (${course.code}${week ? `, eClass section ${week.index}` : ""}). Ask one question, then stop and wait for my answer in the next message.${extra}`; break;

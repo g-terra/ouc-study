@@ -8,7 +8,7 @@ export interface AiStatus {
   chosen?: string | null; label?: string; agentic?: boolean; ready?: boolean; reason?: string;
   tools: AiTool[]; checkedAt?: string; token?: string;
 }
-export interface ActionField { key: string; kind: "course" | "week" | "assignment" | "text"; label: string; required?: boolean; placeholder?: string }
+export interface ActionField { key: string; kind: "course" | "assignment" | "text"; label: string; required?: boolean; placeholder?: string }
 export interface AiAction { id: string; title: string; icon: string; description: string; fields: ActionField[]; agentOnly: boolean }
 export interface ChatMessage { role: "user" | "assistant"; text: string; steps?: string[]; files?: string[]; error?: string; by?: string; at?: string }
 export interface Chat { id: string; title: string; tool?: string; action?: string | null; sem?: string; messages: ChatMessage[]; running?: boolean; updatedAt?: string }
