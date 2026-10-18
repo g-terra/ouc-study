@@ -84,7 +84,7 @@ Built by students for students. Works with **your own** eClass account: nothing 
 
 ## Install
 
-You need [Node.js](https://nodejs.org) (the LTS version) and a few minutes.
+Works on **macOS and Windows** (and Linux, without starting at login). You need [Node.js](https://nodejs.org) (the LTS version), [git](https://git-scm.com) and a few minutes.
 
 ```bash
 git clone <this repo> OUC-Study
@@ -92,7 +92,7 @@ cd OUC-Study
 npm run setup
 ```
 
-On a Mac you can also double-click **`Install OUC Study.command`**.
+On a Mac you can also double-click **`Install OUC Study.command`**, on Windows **`Install OUC Study.cmd`**. Afterwards **`Start Study App.command`** / **`Start Study App.cmd`** opens the app.
 
 The installer walks you through everything:
 
@@ -101,7 +101,7 @@ The installer walks you through everything:
 3. **Lists your enrolled courses**. The current ones are already ticked.
 4. **Downloads everything**: weekly slides and files, assignment briefs and questions, your submitted files, grades and feedback.
 5. **Finishes the setup**: searchable text copies for your AI assistant, daily updates, your preferences for the assistant.
-6. **Starts the app**, on a Mac automatically at every login. Open **http://localhost:5173**, or type `ouc open`.
+6. **Starts the app**, automatically at every login on macOS and Windows. Open **http://localhost:5173**, or type `ouc open`.
 
 Want to see first what it would download? Run `npm run setup -- --dry-run`. It changes nothing.
 
@@ -123,13 +123,13 @@ The key is saved in `.eclass-token`, readable only by you and never committed. *
 | `ouc pull` | download any new course files (`--dry-run` just lists them) |
 | `ouc setup` | add courses, start a new semester, or replace your key |
 | `ouc status` | is the app running, is the daily sync scheduled, when was the last sync |
-| `ouc start` · `ouc stop` · `ouc restart` | control the background app (macOS) |
+| `ouc start` · `ouc stop` · `ouc restart` | control the background app |
 | `ouc update` | get the latest app code (`ouc restart` does this first; `--no-update` skips it) |
-| `ouc logs` · `ouc logs sync` | follow the logs (`~/Library/Logs/OUC-Study/`) |
+| `ouc logs` · `ouc logs sync` | follow the logs (macOS `~/Library/Logs/OUC-Study/`, Windows `%LOCALAPPDATA%\OUC-Study\Logs\`) |
 | `ouc check-public` | before pushing to GitHub: is anything personal included? |
 | `ouc uninstall` | turn off auto-start and the daily sync |
 
-Not on a Mac, or prefer no background service? `npm run dev` runs the app in the current Terminal window.
+How it runs in the background: on macOS two LaunchAgents (`~/Library/LaunchAgents/cy.ouc.study.*`); on Windows a hidden launcher in your Startup folder and a Task Scheduler task "OUC Study eClass sync" (no admin rights needed); on Linux `ouc start` runs it until you log out. Prefer no background service? `npm run dev` runs the app in the current terminal window.
 
 ## Pages
 
@@ -143,7 +143,7 @@ Not on a Mac, or prefer no background service? `npm run dev` runs the app in the
 
 ## Daily updates
 
-Every morning at 07:30 (and every 4 hours while the app runs) it asks eClass what changed: **new grades, tutor feedback, submission status, new or updated files, deadline changes, new assignments, announcements, forum replies and notifications**. These appear on the **Updates** page and the dashboard. On a Mac you also get a notification.
+Every morning at 07:30 (and every 4 hours while the app runs) it asks eClass what changed: **new grades, tutor feedback, submission status, new or updated files, deadline changes, new assignments, announcements, forum replies and notifications**. These appear on the **Updates** page and the dashboard. On a Mac you also get a notification. If the computer was off or asleep at 07:30, the check runs when it's back.
 
 New files are downloaded into the right week folder. Existing files are never overwritten: a newer version is saved next to the old one as `name (updated YYYY-MM-DD).ext`.
 
@@ -228,7 +228,7 @@ Bug reports, ideas and pull requests are welcome, including ones made with an AI
 | Problem | Fix |
 |---|---|
 | The app doesn't open | `ouc status`, then `ouc logs`. Missing dependencies: `npm install`, then `ouc restart` |
-| `ouc: command not found` | open a new Terminal window, or use `bash bin/ouc …` from this folder |
+| `ouc: command not found` | open a new terminal window, or use `node bin/ouc.mjs …` from this folder (`ouc link` installs the command again) |
 | 🔴 eClass key expired | `ouc setup` (it asks for a new key; your files stay) |
 | A file failed to download | `ouc pull` retries; failures are listed in `semesters/<id>/_meta/pull-report.json` |
 | Week dates are off for a course | edit `dating.first` for that course in `semesters/<id>/semester.json` |

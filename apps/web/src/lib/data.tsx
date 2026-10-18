@@ -88,7 +88,7 @@ function Welcome() {
       <div className="rounded-xl border border-line bg-surface p-4 text-left text-sm leading-7">
         <div>In Terminal, in this folder:</div>
         <code className="mt-1 block rounded-lg bg-ink px-3 py-2 font-mono text-bg">npm run setup</code>
-        <div className="mt-2 text-muted">On a Mac you can also double-click <b>Install OUC Study.command</b>.</div>
+        <div className="mt-2 text-muted">You can also double-click <b>Install OUC Study.command</b> (Mac) or <b>Install OUC Study.cmd</b> (Windows).</div>
       </div>
     </div>
   );

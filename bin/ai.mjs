@@ -21,7 +21,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import readline from "node:readline";
 import * as ui from "./lib/tui.mjs";
-import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, agentEnv, chat, describe, detect, loadConfig, login, loginStatus, runAgent, saveConfig, serverUp, writeOpencodeConfig } from "../packages/ai/providers.mjs";
+import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, agentEnv, chat, describe, detect, loadConfig, login, loginStatus, runAgent, saveConfig, serverUp, spawnCliSync, writeOpencodeConfig } from "../packages/ai/providers.mjs";
 import { currentSemesterId, findCourse, findWeek, loadData, noteFileName, read, weekMaterial, weekNumber } from "../packages/ai/context.mjs";
 import { validateNote } from "../packages/ai/validate.mjs";
 import { notesPrompt } from "../packages/ai/actions.mjs";
@@ -93,14 +93,19 @@ async function ensureLogin(tool) {
     ui.info(`Later: ${tool === "claude" ? "claude auth login" : "codex login"}`);
     return false;
   }
-  if (st?.loggedIn) spawnSync(tool, tool === "claude" ? ["auth", "logout"] : ["logout"], { stdio: "inherit", env: agentEnv(tool) });
+  if (st?.loggedIn) spawnCliSync(tool, tool === "claude" ? ["auth", "logout"] : ["logout"], { stdio: "inherit", env: agentEnv(tool) });
   login(tool);
   st = loginStatus(tool);
   st?.subscription ? ui.ok(`Signed in to ${TOOL_LABEL[tool]}`) : ui.warn(`Not signed in yet. Try: ${tool === "claude" ? "claude auth login" : "codex login"}`);
   return !!st?.subscription;
 }
 // ---------- first-install helpers: tools, Ollama and the model ----------
-const which = (bin) => spawnSync(process.platform === "win32" ? "where" : "which", [bin], { stdio: "ignore" }).status === 0;
+const WIN = process.platform === "win32";
+const which = (bin) => spawnSync(WIN ? "where" : "which", [bin], { stdio: "ignore" }).status === 0;
+/** winget (built into Windows 10/11) installs apps without a browser; false if it isn't there or fails. */
+const winget = (id) => WIN && which("winget") && spawnSync("winget", ["install", "--id", id, "-e", "--accept-source-agreements", "--accept-package-agreements"], { stdio: "inherit" }).status === 0;
+// a fresh winget install isn't on this window's PATH yet, so look in its install folder too
+const ollamaBin = () => (which("ollama") ? "ollama" : WIN ? [join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData/Local"), "Programs/Ollama/ollama.exe")].find(existsSync) : undefined);
 const GB = 1024 ** 3;
 /** A model that runs on this computer: gpt-oss:20b needs ~16 GB free, qwen3:8b ~6 GB. */
 function recommendedModel(tool, kind) {
@@ -111,9 +116,10 @@ function recommendedModel(tool, kind) {
 async function installTool(tool) {
   if (!(await ui.confirm(`Install ${TOOL_LABEL[tool].replace(/ with a local model$/, "")} now? (${INSTALL_HINT[tool]})`, true))) return false;
   const [, , ...pkg] = INSTALL_HINT[tool].split(" ");
-  const r = spawnSync("npm", ["install", "-g", ...pkg.filter((x) => x !== "-g")], { stdio: "inherit" });
+  // npm is npm.cmd on Windows, which needs a shell (the arguments are fixed, so that's safe)
+  const r = spawnSync("npm", ["install", "-g", ...pkg.filter((x) => x !== "-g")], { stdio: "inherit", shell: WIN });
   if (r.status === 0 && which(tool)) { ui.ok(`${TOOL_LABEL[tool].replace(/ with a local model$/, "")} installed`); return true; }
-  ui.fail(`Couldn't install it. If npm said "permission denied" (EACCES), run: sudo ${INSTALL_HINT[tool]}`);
+  ui.fail(WIN ? `Couldn't install it. Try in a new terminal: ${INSTALL_HINT[tool]}` : `Couldn't install it. If npm said "permission denied" (EACCES), run: sudo ${INSTALL_HINT[tool]}`);
   return false;
 }
 const ollamaUp = (baseUrl) => serverUp({ kind: "ollama", baseUrl });
@@ -124,7 +130,7 @@ async function ollamaModels(baseUrl) {
 async function ensureOllama(baseUrl) {
   if (await ollamaUp(baseUrl)) return ollamaModels(baseUrl);
   const mac = process.platform === "darwin";
-  if (!which("ollama") && !(mac && existsSync("/Applications/Ollama.app"))) {
+  if (!ollamaBin() && !(mac && existsSync("/Applications/Ollama.app"))) {
     if (!(await ui.confirm("Ollama runs the model on this computer. Install it now?", true))) { ui.info("Install it later from https://ollama.com, then run: ouc ai setup"); return []; }
     if (mac && which("brew")) spawnSync("brew", ["install", "ollama"], { stdio: "inherit" });
     else if (mac) {
@@ -132,13 +138,17 @@ async function ensureOllama(baseUrl) {
       spawnSync("open", ["https://ollama.com/download"]);
       await ui.ask("Press Enter when Ollama is open");
     } else if (process.platform === "linux") spawnSync("sh", ["-c", "curl -fsSL https://ollama.com/install.sh | sh"], { stdio: "inherit" });
-    else { ui.info("Download Ollama from https://ollama.com/download, open it, then run ouc ai setup again."); return []; }
+    else if (!winget("Ollama.Ollama")) {
+      ui.info("Opening https://ollama.com/download: install Ollama for Windows and open it once.");
+      spawnSync("explorer", ["https://ollama.com/download"]);
+      await ui.ask("Press Enter when Ollama is open");
+    }
   }
   if (!(await ollamaUp(baseUrl))) {
     const sp = ui.spinner("Starting Ollama…");
     if (mac && existsSync("/Applications/Ollama.app")) spawnSync("open", ["-a", "Ollama"]);
     else if (mac && which("brew") && spawnSync("brew", ["services", "start", "ollama"], { stdio: "ignore" }).status === 0) { /* starts at login too */ }
-    else if (which("ollama")) spawn("ollama", ["serve"], { detached: true, stdio: "ignore" }).unref();
+    else if (ollamaBin()) spawn(ollamaBin(), ["serve"], { detached: true, stdio: "ignore", windowsHide: true }).unref();
     for (let i = 0; i < 30 && !(await ollamaUp(baseUrl)); i++) await new Promise((r) => setTimeout(r, 1000));
     if (!(await ollamaUp(baseUrl))) { sp.fail("Ollama didn't start. Open the Ollama app (or run: ollama serve), then ouc ai setup again."); return []; }
     sp.succeed("Ollama is running");
@@ -147,27 +157,27 @@ async function ensureOllama(baseUrl) {
 }
 const hasModel = (models, m) => models.some((x) => x === m || x === `${m}:latest`);
 async function ensureOllamaModel(model, models) {
-  if (hasModel(models, model) || !which("ollama")) return;
+  if (hasModel(models, model) || !ollamaBin()) return;
   const size = /gpt-oss:20b/.test(model) ? " (about 14 GB)" : /qwen3:8b/.test(model) ? " (about 5 GB)" : "";
   if (!(await ui.confirm(`Download ${model}${size} now?`, true))) { ui.info(`Later: ollama pull ${model}`); return; }
-  spawnSync("ollama", ["pull", model], { stdio: "inherit" }).status === 0 ? ui.ok(`${model} downloaded`) : ui.warn(`Download failed. Try: ollama pull ${model}`);
+  spawnSync(ollamaBin(), ["pull", model], { stdio: "inherit" }).status === 0 ? ui.ok(`${model} downloaded`) : ui.warn(`Download failed. Try: ollama pull ${model}`);
 }
 /** gpt-oss:20b → gpt-oss-32k:20b, a copy with a 32k context window (Ollama's default is too small for opencode). */
 function ollamaLongContext(model) {
-  if (!which("ollama") || /-32k(:|$)/.test(model)) return model;
+  if (!ollamaBin() || /-32k(:|$)/.test(model)) return model;
   const [name, tag = "latest"] = model.split(":");
   const long = `${name}-32k:${tag}`;
   const dir = join(ROOT, ".ouc");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "Modelfile"), `FROM ${model}\nPARAMETER num_ctx 32768\n`);
-  const r = spawnSync("ollama", ["create", long, "-f", join(dir, "Modelfile")], { encoding: "utf8" });
+  const r = spawnSync(ollamaBin(), ["create", long, "-f", join(dir, "Modelfile")], { encoding: "utf8" });
   if (r.status === 0) { ui.ok(`Made ${long}: ${model} with a 32k context window for opencode`); return long; }
   ui.warn(`Couldn't make a 32k-context copy (${(r.stderr || r.stdout).trim().split("\n").pop()}). Start Ollama with OLLAMA_CONTEXT_LENGTH=32768 instead.`);
   return model;
 }
 
 // LM Studio: its `lms` command starts the server, downloads and loads models
-const lmsBin = () => (which("lms") ? "lms" : [join(homedir(), ".lmstudio/bin/lms"), join(homedir(), ".cache/lm-studio/bin/lms")].find(existsSync));
+const lmsBin = () => (which("lms") ? "lms" : [".lmstudio/bin/lms", ".cache/lm-studio/bin/lms"].flatMap((p) => (WIN ? [`${p}.exe`] : [p])).map((p) => join(homedir(), p)).find(existsSync));
 async function lmsModels(baseUrl) {
   try { return ((await (await fetch(`${baseUrl.replace(/\/$/, "")}/models`)).json()).data ?? []).map((m) => m.id); } catch { return []; }
 }
@@ -179,9 +189,10 @@ async function ensureLMStudio(baseUrl) {
   if (!lmsBin() && !(mac && existsSync("/Applications/LM Studio.app"))) {
     if (!(await ui.confirm("LM Studio runs the model on this computer. Install it now?", true))) { ui.info("Install it later from https://lmstudio.ai, then run: ouc ai setup"); return []; }
     if (mac && which("brew")) spawnSync("brew", ["install", "--cask", "lm-studio"], { stdio: "inherit" });
+    else if (winget("ElementLabs.LMStudio")) ui.info("LM Studio is installed: open it once from the Start menu.");
     else {
       ui.info("Opening https://lmstudio.ai/download: install LM Studio and open it once.");
-      spawnSync(mac ? "open" : process.platform === "win32" ? "explorer" : "xdg-open", ["https://lmstudio.ai/download"]);
+      spawnSync(mac ? "open" : WIN ? "explorer" : "xdg-open", ["https://lmstudio.ai/download"]);
     }
     if (mac && existsSync("/Applications/LM Studio.app")) spawnSync("open", ["-a", "LM Studio"]);
     await ui.ask("Press Enter when LM Studio is open");
@@ -288,7 +299,7 @@ async function notes(o) {
   let mat = weekMaterial(ROOT, semId, week, cfg.local.budget ?? 48000);
   if (!mat.sources.length && mat.missing.length) {
     const sp = ui.spinner("Making text copies of the slides first…");
-    spawnSync(existsSync("/usr/bin/python3") ? "python3" : "python", ["tools/extract_text.py", semId], { cwd: ROOT, stdio: "ignore" });
+    spawnSync(which("python3") ? "python3" : "python", ["tools/extract_text.py", semId], { cwd: ROOT, stdio: "ignore" });
     mat = weekMaterial(ROOT, semId, week, cfg.local.budget ?? 48000);
     sp.succeed(`${mat.sources.length} file(s) ready`);
   }

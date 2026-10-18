@@ -7,17 +7,17 @@
 //   { type: "error", message }
 //   { type: "done", ok }
 // Each tool prints its own JSON shape; parse<Tool>() maps one parsed line to zero or more events.
-import { spawn } from "node:child_process";
-import { isAbsolute, relative } from "node:path";
-import { agentCommand, agentEnv, chat } from "./providers.mjs";
+import { isAbsolute, relative, sep } from "node:path";
+import { agentCommand, agentEnv, chat, spawnCli } from "./providers.mjs";
 
 const short = (s, n = 90) => { s = String(s ?? "").replace(/\s+/g, " ").trim(); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
 export const relPath = (root, p) => {
   if (!p) return "";
   const r = isAbsolute(p) ? relative(root, p) : p;
-  return r.replace(/^\.\//, "");
+  // the app links paths with forward slashes (Windows paths come back with backslashes)
+  return (sep === "\\" ? r.replace(/\\/g, "/") : r).replace(/^\.\//, "");
 };
-const fileName = (p) => String(p ?? "").split("/").pop();
+const fileName = (p) => String(p ?? "").split(/[\\/]/).pop();
 
 /** "Read" + {file_path} → "Reading x.md" (shared wording for every tool). */
 export function toolLabel(name, input = {}, root = "") {
@@ -118,7 +118,7 @@ export function runAgentTurn(root, cfg, prompt, { resume, onEvent, onStart, bin 
         emit(e);
       }
     };
-    const p = spawn(bin ?? cmd, args, { cwd: root, env: agentEnv(cfg.tool), stdio: ["ignore", "pipe", "pipe"] });
+    const p = spawnCli(bin ?? cmd, args, { cwd: root, env: agentEnv(cfg.tool), stdio: ["ignore", "pipe", "pipe"] });
     const finish = (ok) => { if (finished) return; finished = true; done({ ok }); };
     onStart?.({ stop: () => { if (!finished) p.kill("SIGTERM"); } });
     p.stdout.on("data", (d) => {

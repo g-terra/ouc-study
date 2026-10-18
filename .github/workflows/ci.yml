@@ -37,3 +37,36 @@ jobs:
         run: npm run build
       - name: Nothing personal is committed
         run: npm run check:public
+
+  windows:
+    name: Windows (Node 22)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Lint (scripts parse)
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build the app
+        run: npm run build
+      - name: The ouc command (bin\ouc.cmd)
+        run: .\bin\ouc.cmd help
+      - name: Background app and daily sync (ouc install, status, stop, uninstall)
+        shell: bash
+        run: |
+          node bin/ouc.mjs install
+          # the first start builds the app data, so give it a moment
+          for i in $(seq 1 30); do node bin/ouc.mjs status > status.txt; grep -q "App running at" status.txt && break; sleep 2; done
+          cat status.txt
+          grep -q "App running at" status.txt
+          grep -q "Daily eClass sync scheduled" status.txt
+          node bin/ouc.mjs stop
+          node bin/ouc.mjs uninstall
+          ! schtasks //Query //TN "OUC Study eClass sync" > /dev/null 2>&1

@@ -22,7 +22,7 @@ apps/web/             React + Vite + Tailwind study app (dashboard, timeline, co
 packages/content/     builds apps/web/public/data/*.json from semesters/ (npm run content)
 packages/eclass-sync/ eClass web-service client: daily.mjs (what changed), pull.mjs (download files), moodle.mjs
 packages/ai/          AI backends (providers.mjs), study actions (actions.mjs), /api/ai for the app's Ask AI panel (api.mjs, stream.mjs)
-bin/                  ouc (command line), setup.mjs (installer), server.mjs (background app)
+bin/                  ouc.mjs (command line, macOS/Windows/Linux; lib/background.mjs), setup.mjs (installer), server.mjs (background app)
 semesters/<id>/       ← personal, git-ignored
   semester.json       course registry
   _meta/              eclass-meta.json (course structure), submissions.json, live.json, exams.json, resources.json (study links)

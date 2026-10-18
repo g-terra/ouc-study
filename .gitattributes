@@ -1,0 +1,5 @@
+# Same line endings on every OS: LF, so shell scripts, shebangs and the Markdown parsers work
+# on a Windows checkout too; Windows batch files need CRLF.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf

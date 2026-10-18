@@ -4,7 +4,7 @@
 // handed to them. Zero dependencies.
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, win32 } from "node:path";
 
 export const TOOL_LABEL = {
   claude: "Claude Code",
@@ -21,10 +21,51 @@ export const INSTALL_HINT = {
 // Older configs used Codex's --oss mode for local models; opencode replaces it.
 export const ALIASES = { "codex-oss": "opencode" };
 
+/** Every match on PATH, best first (`where` on Windows lists claude.cmd and claude.exe, one per line). */
+export function whichAll(bin, platform = process.platform, env = process.env) {
+  const r = spawnSync(platform === "win32" ? "where" : "which", [bin], { encoding: "utf8", env });
+  return r.status === 0 ? r.stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean) : [];
+}
 const which = (bin) => {
-  const r = spawnSync(process.platform === "win32" ? "where" : "which", [bin], { encoding: "utf8" });
-  return r.status === 0 ? r.stdout.trim().split("\n")[0] : null;
+  const all = whichAll(bin);
+  return all.find((p) => /\.(exe|com|cmd|bat)$/i.test(p)) ?? all[0] ?? null;
 };
+
+// ---------- starting a CLI on any OS ----------
+// On Windows, npm installs the agent CLIs as .cmd shims, which Node can't start without a shell
+// (and a shell would mangle a multi-line prompt). The shim only runs `node <script> %*`, so we run
+// that script with this Node instead; .exe installs (Claude's native installer) start directly.
+/** The script or program an npm .cmd shim runs: { node: true, target } or { node: false, target }, or null. */
+export function parseCmdShim(text, shimPath) {
+  const dir = win32.dirname(shimPath);
+  const node = text.match(/"%_prog%"\s+"%(?:~)?dp0%?\\([^"]+)"\s+%\*/i);
+  if (node) return { node: true, target: win32.resolve(dir, node[1]) };
+  const exe = text.match(/"%(?:~)?dp0%?\\([^"]+\.(?:exe|com))"\s+%\*/i);
+  return exe ? { node: false, target: win32.resolve(dir, exe[1]) } : null;
+}
+/** cmd.exe quoting for the rare shim we can't read (last resort: newlines can't survive cmd.exe). */
+const cmdQuote = (a) => `"${String(a).replace(/[\r\n]+/g, " ").replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, "$1$1")}"`;
+/**
+ * [file, args, spawnOptions] that starts `bin args` on this OS. A path to a .mjs/.js script runs
+ * with this Node everywhere (tests use a fake agent script).
+ */
+export function resolveCommand(bin, args = [], { platform = process.platform, env = process.env, find = whichAll, read = (f) => readFileSync(f, "utf8") } = {}) {
+  if (/\.[cm]?js$/i.test(bin)) return [process.execPath, [bin, ...args], {}];
+  if (platform !== "win32") return [bin, args, {}];
+  const found = /[\\/]/.test(bin) ? [bin] : find(bin, platform, env);
+  const exe = found.find((p) => /\.(exe|com)$/i.test(p));
+  if (exe) return [exe, args, {}];
+  const shim = found.find((p) => /\.(cmd|bat)$/i.test(p));
+  if (!shim) return [bin, args, {}];
+  let parsed = null;
+  try { parsed = parseCmdShim(read(shim), shim); } catch {}
+  if (parsed?.node) return [process.execPath, [parsed.target, ...args], {}];
+  if (parsed) return [parsed.target, args, {}];
+  return [`"${shim}" ${args.map(cmdQuote).join(" ")}`, [], { shell: true }];
+}
+/** spawn / spawnSync that also work with the Windows .cmd shims (same arguments as node's). */
+export const spawnCli = (bin, args, opts = {}) => { const [f, a, o] = resolveCommand(bin, args, { env: opts.env }); return spawn(f, a, { ...opts, ...o }); };
+export const spawnCliSync = (bin, args, opts = {}) => { const [f, a, o] = resolveCommand(bin, args, { env: opts.env }); return spawnSync(f, a, { ...opts, ...o }); };
 async function getJson(url, ms = 1500) {
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(ms) });
@@ -104,7 +145,7 @@ export function parseLogin(tool, { status, stdout = "", stderr = "" }) {
 export function loginStatus(tool) {
   if (!LOGIN_CMD[tool]) return null;
   const [bin, args] = LOGIN_CMD[tool];
-  const r = spawnSync(bin, args, { encoding: "utf8", env: agentEnv(tool), timeout: 15000 });
+  const r = spawnCliSync(bin, args, { encoding: "utf8", env: agentEnv(tool), timeout: 15000 });
   return r.error ? null : parseLogin(tool, r);
 }
 /** Same as loginStatus, without blocking (for the app server). */
@@ -113,7 +154,7 @@ export function loginStatusAsync(tool, ms = 8000) {
   const [bin, args] = LOGIN_CMD[tool];
   return new Promise((done) => {
     let stdout = "", stderr = "";
-    const p = spawn(bin, args, { env: agentEnv(tool) });
+    const p = spawnCli(bin, args, { env: agentEnv(tool) });
     const t = setTimeout(() => { p.kill(); done({ loggedIn: false, subscription: false, how: "", unknown: true }); }, ms);
     p.stdout.on("data", (d) => (stdout += d));
     p.stderr.on("data", (d) => (stderr += d));
@@ -124,7 +165,7 @@ export function loginStatusAsync(tool, ms = 8000) {
 /** Runs the tool's own browser sign-in (Claude account / ChatGPT account). */
 export function login(tool) {
   const [bin, args] = tool === "claude" ? ["claude", ["auth", "login"]] : ["codex", ["login"]];
-  return spawnSync(bin, args, { stdio: "inherit", env: agentEnv(tool) }).status === 0;
+  return spawnCliSync(bin, args, { stdio: "inherit", env: agentEnv(tool) }).status === 0;
 }
 
 // ---------- opencode on a local model ----------
@@ -155,7 +196,7 @@ export function writeOpencodeConfig(root, local) {
 }
 
 // ---------- agent tools ----------
-const CLAUDE_TOOLS = "Read,Write,Edit,Glob,Grep,Bash(node packages/ai/validate.mjs *),Bash(python3 tools/extract_text.py *),Bash(ls *),Bash(grep *),Bash(date),Bash(bash bin/ouc sync*),Bash(bash bin/ouc pull*)";
+const CLAUDE_TOOLS = "Read,Write,Edit,Glob,Grep,Bash(node packages/ai/validate.mjs *),Bash(python3 tools/extract_text.py *),Bash(python tools/extract_text.py *),Bash(ls *),Bash(grep *),Bash(date),Bash(node bin/ouc sync*),Bash(node bin/ouc pull*)";
 /**
  * [bin, args] for an agent run. interactive: the tool's own terminal UI.
  * json: one-shot run that prints machine-readable events (used by the study app), optionally
@@ -182,7 +223,7 @@ export function agentCommand(cfg, prompt, { interactive = false, json = false, r
 export function runAgent(root, cfg, prompt, opts = {}) {
   const [bin, args] = agentCommand(cfg, prompt, opts);
   return new Promise((res) => {
-    const p = spawn(bin, args, { cwd: root, stdio: "inherit", env: agentEnv(cfg.tool) });
+    const p = spawnCli(bin, args, { cwd: root, stdio: "inherit", env: agentEnv(cfg.tool) });
     p.on("error", (e) => { console.error(`✗ Couldn't start ${bin}: ${e.message}`); res(127); });
     p.on("exit", (code) => res(code ?? 1));
   });
