@@ -4,6 +4,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { findCourse, noteFileName, read, weekNumber } from "./context.mjs";
+import { loadReview, reviewDir, reviewFile } from "./review.mjs";
 
 // The inputs each known skill asks for in the app; other skills just take a free-text request.
 const FIELDS = {
@@ -15,13 +16,15 @@ const FIELDS = {
   "find-material": [{ key: "topic", kind: "text", label: "What are you looking for?", required: true, placeholder: "e.g. the slide about d′" }, { key: "course", kind: "course", label: "Course" }],
   "assignment-helper": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "assignment-prep": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
+  "assignment-review": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "sync-eclass": [],
 };
 const TITLE = {
   "make-notes": "Make notes", "quiz-me": "Quiz me", "plan-week": "Plan my week", "research-topic": "Research a topic",
-  "find-material": "Find material", "assignment-helper": "Assignment help", "assignment-prep": "Prep an assignment", "sync-eclass": "Sync eClass",
+  "find-material": "Find material", "assignment-helper": "Assignment help", "assignment-prep": "Prep an assignment",
+  "assignment-review": "Review my draft", "sync-eclass": "Sync eClass",
 };
-const ICON = { "make-notes": "📒", "quiz-me": "❓", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "sync-eclass": "🔄" };
+const ICON = { "make-notes": "📒", "quiz-me": "❓", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄" };
 // What a plain local model (no file or web tools) can do from the app.
 const CHAT_OK = new Set(["quiz-me"]);
 
@@ -96,6 +99,38 @@ export function prepPrompt(semId, a, mode = "new") {
     "Explain and give hints, but never write answers the student could submit.";
 }
 
+/**
+ * The prompt for reviewing the student's uploaded draft (version `v`, default the latest), with the
+ * paths of everything about the subject the reviewer should read first.
+ */
+export function reviewPrompt(root, semId, data, a, v) {
+  const { versions } = loadReview(root, semId, a);
+  const ver = v ? versions.find((x) => String(x.v) === String(v)) : versions.at(-1);
+  if (!ver) throw new Error("Upload your .docx on the assignment page first.");
+  const prev = versions.filter((x) => x.v < ver.v).at(-1);
+  const sem = `semesters/${semId}`;
+  const course = data.courses.find((c) => c.code === a.code);
+  const week = course?.weeks.find((w) => w.index === a.weekIndex);
+  const fromHref = (h) => `${sem}/${decodeURIComponent(h.split("/").slice(3).join("/"))}`;
+  const briefs = a.briefs.map((f) => fromHref(f.href));
+  const rubric = [...briefs, ...(course?.weeks.find((w) => w.index === 0)?.items ?? []).filter((i) => i.href?.startsWith("/files/")).map((i) => fromHref(i.href))]
+    .filter((p) => /rubric|marking|criteria|grading|assessment|αξιολόγ/i.test(p.split("/").pop()));
+  const weekFiles = (week?.items ?? []).filter((i) => i.kind === "file" && i.href?.startsWith("/files/")).map((i) => fromHref(i.href));
+  const notes = data.notes.filter((n) => n.code === a.code).sort((x, y) => Math.abs(x.weekIndex - a.weekIndex) - Math.abs(y.weekIndex - a.weekIndex)).slice(0, 4)
+    .map((n) => `${sem}/notes/${n.code}/${n.slug}.md`);
+  const prep = a.prep ? `${sem}/assignments/${a.id}/PREP.md` : null;
+  const list = (label, xs) => (xs.length ? `\n- ${label}: ${xs.map((x) => `\`${x}\``).join(", ")}` : "");
+  return "Use the assignment-review skill (ai/skills/assignment-review/SKILL.md) and act as the assignment reviewer (ai/agents/assignment-reviewer.md). " +
+    "Do the review yourself in this conversation: the student will discuss it with you next. " +
+    `Review version ${ver.v} of the student's own work for ${a.fullTitle} (${a.code}${a.due ? `, due ${a.due}` : ""}), uploaded as "${ver.name}" (${ver.words} words). ` +
+    `Read its text in \`${reviewDir(semId, a)}/v${ver.v}.md\` (the original is \`${reviewDir(semId, a)}/v${ver.v}.docx\`; never change either).\n\nContext about the subject, read first:` +
+    list("the brief", briefs.length ? briefs : [`${sem}/assignments/${a.id}/`]) + (a.question ? "\n- the question text on eClass, in the assignment's entry in `" + sem + "/_meta/eclass-meta.json`" : "") +
+    list("rubric or marking criteria", rubric) + (rubric.length ? "" : "\n- rubric: none found; look for marking criteria in the brief and the syllabus in `" + sem + "/courses/` (00-General)") +
+    list(`material of ${week?.name ?? "its week"} (text copies in \`${sem}/text/\`)`, weekFiles) + list("the student's notes", notes) + list("the prep pack", prep ? [prep] : []) +
+    (prev ? `\n- the previous round: version ${prev.v} \`${reviewDir(semId, a)}/v${prev.v}.md\` and its review \`${reviewFile(semId, a, prev.v)}\`: say what was fixed and what is still open` : "") +
+    `\n\nSave the review as \`${reviewFile(semId, a, ver.v)}\`. Give feedback and say what to fix and why, but never write replacement answers or text the student could paste in.`;
+}
+
 // Said once at the start of every chat from the app: nobody can answer a question mid-run.
 export const APP_PREAMBLE = "You are running from the OUC Study app, one turn at a time: the student reads your reply in the app and answers in the next message. " +
   "Don't wait for confirmation in the middle of a task; make sensible choices and finish it. Keep the reply short, use Markdown, and name the repo-relative path of every file you write or point to in `backticks` (the app turns them into links). " +
@@ -147,6 +182,11 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       const a = data.assignments.find((x) => x.id === params.assignment);
       if (!a) throw new Error("That assignment isn't in the app data.");
       body = prepPrompt(semId, a, params.mode) + extra; break;
+    }
+    case "assignment-review": {
+      const a = data.assignments.find((x) => x.id === params.assignment);
+      if (!a) throw new Error("That assignment isn't in the app data.");
+      body = reviewPrompt(root, semId, data, a, params.version) + extra; break;
     }
     default:
       if (!existsSync(join(root, "ai/skills", action, "SKILL.md"))) throw new Error(`Unknown action "${action}".`);

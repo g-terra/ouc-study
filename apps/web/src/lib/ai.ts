@@ -141,3 +141,24 @@ export function visualsOf(msg: ChatMessage): string[] {
   return [...new Set([...(msg.files ?? []), ...named].filter((f) => VISUAL.test(f) && !/^https?:/i.test(f)))];
 }
 export const viewUrl = (path: string) => `/api/ai/view?path=${encodeURIComponent(path)}`;
+
+// ---------- pre-submission review (packages/ai/review.mjs) ----------
+export type Verdict = "ready" | "almost" | "needs-work";
+export interface ReviewVersion {
+  v: number; name: string; size: number; words: number; uploaded: string; href: string; textPath: string;
+  review?: { chatId?: string; by?: string; started?: string; finished?: string; ok?: boolean; body?: string; verdict?: Verdict; path: string; running: boolean };
+}
+export interface ReviewState { versions: ReviewVersion[]; approved?: { v: number; pdf: string; at: string; with: string; href: string }; converter: string | null }
+const reviewQuery = (sem: string, assignment: string) => `sem=${encodeURIComponent(sem)}&assignment=${encodeURIComponent(assignment)}`;
+async function reviewCall(res: Response): Promise<ReviewState & { version?: ReviewVersion }> {
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) { if (res.status === 403) refreshAi(true); throw new Error(j.error ?? `The app server answered ${res.status}.`); }
+  return j;
+}
+export const getReview = (sem: string, assignment: string) => fetch(`/api/ai/review?${reviewQuery(sem, assignment)}`).then(reviewCall);
+/** Uploads the student's .docx as the next version. */
+export const uploadDraft = async (sem: string, assignment: string, file: File) =>
+  reviewCall(await fetch(`/api/ai/review/upload?${reviewQuery(sem, assignment)}&name=${encodeURIComponent(file.name)}`, { method: "POST", headers: { "X-OUC-AI": await token() }, body: file }));
+/** Approves version v: the server turns that .docx into a PDF. */
+export const approveDraft = async (sem: string, assignment: string, v: number) =>
+  reviewCall(await fetch("/api/ai/review/approve", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ sem, assignment, v }) }));

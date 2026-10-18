@@ -8,4 +8,4 @@ About the student (personal, git-ignored; created by `ouc setup`):
 
 @STUDENT.md
 
-Claude-specific: the four study agents are subagents in `.claude/agents/`, and the skills are in `.claude/skills/` (both generated from `ai/` by `ouc ai install`).
+Claude-specific: the study agents are subagents in `.claude/agents/`, and the skills are in `.claude/skills/` (both generated from `ai/` by `ouc ai install`).
