@@ -14,7 +14,8 @@
  *   updates/<YYYY-MM-DD>.json   the changes found that day (appended on repeat runs)
  *   updates/status.json         last run time, success or error
  *   _meta/sync-state.json       snapshot used to detect changes next time
- *   _meta/live.json             latest grades / submission status / feedback / due dates (merged into the app)
+ *   _meta/live.json             latest grades / submission status / feedback / due dates, and per course the
+ *                               Webconference join link and your teaching groups (merged into the app)
  * Zero dependencies: plain Node 18+.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, appendFileSync, statSync } from "node:fs";
@@ -118,7 +119,7 @@ async function gather() {
   const courses = SEM.courses.filter((c) => c.eclassId);
   const byId = Object.fromEntries(courses.map((c) => [c.eclassId, c.code]));
   const courseids = courses.map((c) => c.eclassId);
-  const snap = { userid, user: info.fullname, grades: {}, assignments: {}, modules: {}, files: {}, discussions: {}, notifications: {}, events: {} };
+  const snap = { userid, user: info.fullname, grades: {}, assignments: {}, modules: {}, files: {}, discussions: {}, notifications: {}, events: {}, courses: {} };
   const warnings = [];
   const soft = async (label, fn) => { try { await fn(); } catch (e) { if (e.fatal) throw e; warnings.push(`${label}: ${e.message}`); } };
 
@@ -166,6 +167,8 @@ async function gather() {
       for (const s of secs ?? []) {
         for (const m of s.modules ?? []) {
           if (m.modname === "label") continue;
+          // the live classes' join link (an LTI tool named "Webconference" / "Τηλεσυναντήσεις")
+          if (m.modname === "lti" && /web\s*-?\s*confer|τηλεσυν/i.test(m.name ?? "") && m.url) (snap.courses[c.code] ??= {}).joinUrl ??= m.url;
           snap.modules[m.id] = { code: c.code, name: strip(m.name), type: m.modname, section: strip(s.name), url: m.url ?? `${SITE}/course/view.php?id=${c.eclassId}` };
           for (const f of m.contents ?? []) {
             if (f.type !== "file") continue;
@@ -173,6 +176,14 @@ async function gather() {
           }
         }
       }
+    });
+  }
+  // teaching groups (a course split into sections meets at different times, e.g. "2026_COS512_F.03")
+  for (const c of courses) {
+    await soft(`groups ${c.code}`, async () => {
+      const g = await call("core_group_get_course_user_groups", { courseid: c.eclassId, userid }).catch((e) => { if (e.skip) return {}; throw e; });
+      const names = (g.groups ?? []).map((x) => strip(x.name)).filter(Boolean);
+      if (names.length) (snap.courses[c.code] ??= {}).groups = names;
     });
   }
   // forums: announcements & discussions
@@ -279,6 +290,7 @@ function diff(prev, cur) {
       updated: now.toISOString(),
       assignments: snap.assignments,
       grades: Object.values(snap.grades),
+      courses: snap.courses,
     }, null, 1));
     writeStatus({ ok: true, found: fresh.length, warnings });
     writeConnection({ ok: true, state: "connected", user: snap.user });

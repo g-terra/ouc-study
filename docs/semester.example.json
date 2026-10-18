@@ -2,6 +2,7 @@
   "label": "Fall 2026",
   "start": "2026-09-07",
   "end": "2027-01-17",
+  "timezone": "Europe/Nicosia",
   "courses": [
     {
       "code": "COS511",
@@ -14,7 +15,12 @@
         "mode": "title"
       },
       "label": "firstResource",
-      "_comment": "dating.mode 'title': week dates are read from the section names on eClass"
+      "_comment": "dating.mode 'title': week dates are read from the section names on eClass",
+      "classes": {
+        "day": "Mon",
+        "time": "18:00",
+        "_comment": "weekly live class (webconference); eClass has no dated schedule, see README 'Live classes'"
+      }
     },
     {
       "code": "COS512",
@@ -29,7 +35,24 @@
         "pattern": "^Week (\\d+)"
       },
       "label": "stripWeek",
-      "_comment": "dating.mode 'weekly': sections are 'Week 1', 'Week 2'… and week 1 starts on 'first'"
+      "_comment": "dating.mode 'weekly': sections are 'Week 1', 'Week 2'… and week 1 starts on 'first'",
+      "classes": {
+        "day": "Tue",
+        "time": "19:00",
+        "groups": {
+          "F.02": {
+            "time": "20:00"
+          },
+          "F.03": {}
+        },
+        "changes": [
+          {
+            "date": "2026-09-29",
+            "to": "2026-10-01T20:00",
+            "note": "moved by the tutor"
+          }
+        ]
+      }
     }
   ]
 }

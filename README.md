@@ -133,13 +133,27 @@ How it runs in the background: on macOS two LaunchAgents (`~/Library/LaunchAgent
 
 ## Pages
 
-- **Dashboard**: next deadline with a countdown, the final exams, what's new on eClass, the next 14 days, and progress per course.
-- **Timeline**: the semester at a glance, then week by week, with filters per course.
-- **Courses**: each course week by week (slides, videos, assignments, your notes) plus your grades.
+- **Dashboard**: next deadline with a countdown, the final exams, the next live class of each course, what's new on eClass, the next 14 days, and progress per course.
+- **Timeline**: the semester at a glance, then week by week (deadlines, live classes, exams), with filters per course.
+- **Courses**: each course week by week (slides, videos, assignments, your notes, the week's live class) plus your grades.
 - **Notes**: visual notes with diagrams, LaTeX formulas, comparison tables and flip-card self-tests.
 - **Assignments**: the question, files, PDF preview, study links, grade and feedback.
 - **Updates**: what changed on eClass each day, with a live 🟢 connection status, **Re-check** and **Sync now**.
 - **Ask AI** (button in the top bar, on every page): talk to your AI assistant from the app. See [Ask AI in the app](#ask-ai-in-the-app).
+
+### Live classes
+
+eClass has one **Webconference** link per course but no dated schedule, so the class time comes from your semester settings. `ouc setup` asks for it (e.g. `Mon 18:00`); to add or change it later, edit the course in `semesters/<id>/semester.json`:
+
+```json
+"classes": {
+  "day": "Tue", "time": "19:00",
+  "groups": { "F.02": { "time": "20:00" }, "F.03": {} },
+  "changes": [{ "date": "2026-09-29", "to": "2026-10-01T20:00", "note": "moved by the tutor" }, { "date": "2026-12-08", "cancelled": true }]
+}
+```
+
+Times are Cyprus time (set `"timezone"` at the top of the file to change that); the app shows them in your computer's time zone. If a course is split into teaching groups with different times, the daily sync reads your group from eClass (or set `"group": "F.03"`). Each class links to the join link and to that week's notes, slides and readings (and the meeting agenda when the tutor posts one), so you can prepare. A one-off change announced on eClass goes in `changes`.
 
 ## Daily updates
 

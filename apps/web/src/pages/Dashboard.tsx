@@ -5,6 +5,7 @@ import { at, daysBetween, fmtFull, relative } from "../lib/dates";
 import { ORDER, SyncStatus, UpdateRow } from "./Updates";
 import { Card, CourseBadge, CourseDot, PageHeader, ProgressRing, SectionTitle, StatePill, cx } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
+import { ClassCard, nextClassPerCourse } from "../components/Classes";
 
 export function Dashboard({ data }: { data: SemesterData }) {
   const now = new Date();
@@ -15,6 +16,7 @@ export function Dashboard({ data }: { data: SemesterData }) {
   const finals = data.exams.filter((e) => e.kind === "Final exam" && at(e.at) >= now);
   const nextExam = finals[0];
   const next = open[0];
+  const classes = nextClassPerCourse(data, now);
   const hour = now.getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
@@ -77,6 +79,15 @@ export function Dashboard({ data }: { data: SemesterData }) {
           </Card>
         )}
       </div>
+
+      {classes.length > 0 && (
+        <>
+          <SectionTitle right={<Link to={`${base}/timeline`} className="text-sm text-muted hover:text-ink">All classes →</Link>}>Next live classes</SectionTitle>
+          <div className="grid gap-3 md:grid-cols-3">
+            {classes.map((c) => <ClassCard key={c.code} c={c} data={data} now={now} />)}
+          </div>
+        </>
+      )}
 
       {(() => {
         const latest = data.updates.days[0];

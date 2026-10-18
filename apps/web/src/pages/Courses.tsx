@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import type { SemesterData, Week } from "@ouc/content/types";
+import type { ClassSession, SemesterData, Week } from "@ouc/content/types";
 import { Link, enc, useRouter } from "../lib/router";
 import { currentWeek, stateOf } from "../lib/data";
-import { at, day, fmtFull, fmtShort, relative } from "../lib/dates";
+import { at, day, fmtDay, fmtFull, fmtShort, fmtTime, relative } from "../lib/dates";
 import { Card, Empty, PageHeader, ProgressRing, SectionTitle, StatePill, cx, kindIcon } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
+import { ClassCard, JoinButton, upcomingClasses } from "../components/Classes";
 
 export function Courses({ data }: { data: SemesterData }) {
   const base = `/${enc(data.id)}`;
@@ -55,6 +56,8 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
   const notes = data.notes.filter((n) => n.code === code);
   const exams = data.exams.filter((e) => e.code === code);
   const upcoming = as.filter((a) => !a.submitted && a.due && at(a.due) >= now);
+  const classes = (data.classes ?? []).filter((x) => x.code === code);
+  const nextClass = upcomingClasses(data, now).find((x) => x.code === code && x.status !== "cancelled");
   const toggle = (i: number) => setOpen((o) => { const n = new Set(o); n.has(i) ? n.delete(i) : n.add(i); return n; });
 
   return (
@@ -67,6 +70,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
           <span className="rounded-full bg-white/20 px-3 py-1">{as.filter((a) => a.submitted).length}/{as.length} assignments submitted</span>
           <span className="rounded-full bg-white/20 px-3 py-1">📒 {notes.length} notes</span>
           {exams.filter((e) => e.kind === "Final exam").map((e) => <span key={e.at} className="rounded-full bg-white/20 px-3 py-1">🎓 Final {fmtFull(at(e.at))}</span>)}
+          {c.joinUrl && <a href={c.joinUrl} target="_blank" rel="noreferrer" className="rounded-full bg-white/20 px-3 py-1 hover:bg-white/30">🎥 Webconference ↗</a>}
           {c.eclassUrl && <a href={c.eclassUrl} target="_blank" rel="noreferrer" className="rounded-full bg-white px-3 py-1 font-semibold" style={{ color: c.color }}>Open on eClass ↗</a>}
         </div>
       </div>
@@ -75,10 +79,16 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
         <section>
           <SectionTitle right={<button className="text-sm text-muted hover:text-ink" onClick={() => setOpen(open.size > 1 ? new Set() : new Set(c.weeks.map((w) => w.index)))}>{open.size > 1 ? "Collapse all" : "Expand all"}</button>}>Week by week</SectionTitle>
           <Card className="overflow-hidden">
-            {c.weeks.map((w) => <WeekRow key={w.index} w={w} isOpen={open.has(w.index)} isNow={w.index === cur?.index} color={c.color} onToggle={() => toggle(w.index)} base={base} code={code} />)}
+            {c.weeks.map((w) => <WeekRow key={w.index} w={w} isOpen={open.has(w.index)} isNow={w.index === cur?.index} color={c.color} onToggle={() => toggle(w.index)} base={base} code={code} classes={classes.filter((x) => x.weekIndex === w.index)} />)}
           </Card>
         </section>
         <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+          {nextClass && (
+            <div>
+              <SectionTitle>Next live class</SectionTitle>
+              <ClassCard c={nextClass} data={data} now={now} showCourse={false} />
+            </div>
+          )}
           <div>
             <SectionTitle>Upcoming</SectionTitle>
             {upcoming.length ? (
@@ -122,7 +132,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
   );
 }
 
-function WeekRow({ w, isOpen, isNow, color, onToggle, base, code }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string }) {
+function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string; classes: ClassSession[] }) {
   const dates = w.start ? `${fmtShort(day(w.start))} – ${fmtShort(day(w.end!))}${w.estimated ? " (est.)" : ""}` : "";
   const counts = w.items.reduce<Record<string, number>>((m, i) => ((m[i.kind] = (m[i.kind] ?? 0) + 1), m), {});
   return (
@@ -133,7 +143,11 @@ function WeekRow({ w, isOpen, isNow, color, onToggle, base, code }: { w: Week; i
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate font-semibold">{w.label}</span>
-          <span className="block text-xs text-muted">{dates}{isNow && <b className="ml-2 uppercase tracking-wider text-accent">This week</b>}</span>
+          <span className="block text-xs text-muted">
+            {dates}
+            {classes.map((x) => <span key={x.at} className={cx("ml-2", x.status === "cancelled" && "line-through")}>🎥 {fmtDay(at(x.at))} {fmtTime(at(x.at))}</span>)}
+            {isNow && <b className="ml-2 uppercase tracking-wider text-accent">This week</b>}
+          </span>
         </span>
         <span className="hidden gap-2 text-xs text-muted sm:flex">
           {counts.note && <span>📒{counts.note}</span>}
@@ -146,6 +160,14 @@ function WeekRow({ w, isOpen, isNow, color, onToggle, base, code }: { w: Week; i
       {isOpen && (
         <div className="px-4 pb-4 pl-[3.75rem]">
           {w.summary && <p className="mb-3 text-sm text-muted">{w.summary}</p>}
+          {classes.map((x) => (
+            <div key={x.at} className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
+              <span className={cx(x.status === "cancelled" && "line-through")}>🎥 Live class {fmtDay(at(x.at))}, {fmtTime(at(x.at))}</span>
+              {x.status !== "scheduled" && <span className="text-xs text-warn">{x.status}{x.note ? ` · ${x.note}` : ""}</span>}
+              {x.extras.map((f) => <a key={f.href} href={f.href} target="_blank" rel="noreferrer" className="text-xs underline">{f.title}</a>)}
+              <JoinButton c={x} className="ml-auto" />
+            </div>
+          ))}
           <ul className="grid gap-1">
             {w.items.map((it, i) => {
               const href = it.kind === "note" ? `${base}/notes/${enc(code)}/${enc(it.noteSlug!)}`
