@@ -8,7 +8,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, posix, win32 } from "node:path";
 
 export const APP_LABEL = "cy.ouc.study.app";
 export const SYNC_LABEL = "cy.ouc.study.eclass-sync";
@@ -87,6 +87,7 @@ export function syncTaskXml({ launcher, time, user }) {
 
 // ---------- where things go ----------
 export function paths({ platform = process.platform, home = homedir(), env = process.env } = {}) {
+  const { join } = platform === "win32" ? win32 : posix;   // that OS's paths, whatever OS this runs on
   if (platform === "darwin") {
     const agents = join(home, "Library/LaunchAgents");
     return { logs: join(home, "Library/Logs/OUC-Study"), appPlist: join(agents, `${APP_LABEL}.plist`), syncPlist: join(agents, `${SYNC_LABEL}.plist`) };
