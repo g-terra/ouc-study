@@ -95,10 +95,10 @@ function unlinkCmd() {
   }
 }
 
-// Move to the newest release (--latest: the newest code on this branch), then refresh dependencies and AI skills
+// Move to the newest release (--main or --latest: the newest code on this branch), then refresh dependencies and AI skills
 // if they changed. Never touches local edits. Details in lib/update.mjs.
 function updateCode(opts = {}) {
-  return applyUpdate(ROOT, { latest: args.includes("--latest"), log: (kind, text) => (kind === "ok" ? ok : warn)(text), ...opts });
+  return applyUpdate(ROOT, { latest: args.includes("--main") || args.includes("--latest"), log: (kind, text) => (kind === "ok" ? ok : warn)(text), ...opts });
 }
 /** One line when a newer release is out (checked at most once a day). */
 async function updateHint() {
@@ -159,8 +159,9 @@ const HELP = () => `${paint("1", "ouc: OUC Study app & eClass sync")}
   ouc install      start the app automatically at login + daily eClass sync + this command
   ouc start        start the app in the background (${URL_})
   ouc stop         stop it
-  ouc restart      stop, update to the latest release, start again (--no-update: just restart)
-  ouc update       update to the latest release without restarting (--latest: newest code on main;
+  ouc restart      stop, update to the latest release, start again (--main: newest code on main
+                   instead; --no-update: just restart)
+  ouc update       update to the latest release without restarting (--main: newest code on main;
                    --check: only say whether there is one)
   ouc open         open the app in your browser (starts it if needed)
   ouc sync         check eClass now (grades, feedback, materials…) and refresh the app

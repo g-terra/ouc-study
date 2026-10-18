@@ -38,6 +38,9 @@ jobs:
       - name: Nothing personal is committed
         run: npm run check:public
 
+  smoke:
+    uses: ./.github/workflows/smoke.yml
+
   windows:
     name: Windows (Node 22)
     runs-on: windows-latest

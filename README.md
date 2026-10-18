@@ -124,7 +124,7 @@ The key is saved in `.eclass-token`, readable only by you and never committed. *
 | `ouc setup` | add courses, start a new semester, or replace your key |
 | `ouc status` | is the app running, is the daily sync scheduled, when was the last sync |
 | `ouc start` · `ouc stop` · `ouc restart` | control the background app |
-| `ouc update` | update to the latest release (`ouc restart` does this too; `--check` only looks, `--latest` follows main) |
+| `ouc update` | update to the latest release (`ouc restart` does this too; `--check` only looks, `--main` follows main instead of releases) |
 | `ouc logs` · `ouc logs sync` | follow the logs (macOS `~/Library/Logs/OUC-Study/`, Windows `%LOCALAPPDATA%\OUC-Study\Logs\`) |
 | `ouc check-public` | before pushing to GitHub: is anything personal included? |
 | `ouc uninstall` | turn off auto-start and the daily sync |
@@ -225,7 +225,7 @@ Run `ouc check-public` before you push.
 
 New versions are published as [GitHub releases](https://github.com/g-terra/ouc-study/releases). The app checks for one once a day; when there is one, a bar under the top menu says **Update available**, with what's new and an **Update now** button. It moves your copy to that release, reinstalls what changed, and restarts the app; the page reloads when it's back. Your semesters, notes and memory are never touched.
 
-From Terminal: `ouc update --check` (is there one?), `ouc update` (update), `ouc restart` (update and restart). If you changed the code yourself, it doesn't update; commit or stash your changes first.
+From Terminal: `ouc update --check` (is there one?), `ouc update` (update), `ouc restart` (update and restart). Both follow releases; add `--main` to get the newest code on main instead. If you changed the code yourself, it doesn't update; commit or stash your changes first.
 
 ## Contributing
 
