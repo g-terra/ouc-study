@@ -10,4 +10,4 @@ _Paths: `<sem>` = the current semester folder (named in STUDENT.md; otherwise th
 1. `grep -ril "<term>" <sem>/text/` to find files mentioning it; then `grep -n -i -C2 "<term>" <file>` for context. Text files keep the course/week path of the original, e.g. `<sem>/text/COS514-.../05-.../COS514_WM-Lecture 4.pdf.txt` ↔ `<sem>/courses/COS514-.../05-.../COS514_WM-Lecture 4.pdf`.
 2. For PPTX text, slide boundaries are marked `--- slide N ---`; for PDFs, pages are separated by form feeds (`\f`), so count them to give a page number.
 3. Check `<sem>/courses/<course>/README.md` for videos and external links (they're not files), and `<sem>/_meta/eclass-meta.json` for forum posts.
-4. Answer with exact paths plus the slide/page number and a one-line description of each hit, best match first.
+4. Answer with exact repo-relative paths in `backticks` (the app turns them into links) plus the slide/page number and a one-line description of each hit, best match first.

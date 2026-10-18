@@ -1,5 +1,8 @@
 /** Talks to /api/ai (packages/ai/api.mjs): AI tool status, study actions and chats. */
 import { useEffect, useState } from "react";
+import type { SemesterData } from "@ouc/content/types";
+import { fileLink } from "./links";
+export { fileLink, linkPaths } from "./links";
 
 export type ToolState = "connected" | "signedout" | "apikey" | "missing" | "noserver" | "unknown";
 export interface AiTool { id: string; label: string; state: ToolState; detail?: string; fix?: string; chosen: boolean }
@@ -77,6 +80,7 @@ export const getChat = (id: string): Promise<Chat | null> => fetch(`/api/ai/chat
 /** Background AI work (missing notes and prep packs): what's running, what's queued, how far along. */
 export interface PrepStatus {
   enabled: boolean; busy: boolean; running: { id: string; chatId: string }[]; queue: string[];
+  finished: { id: string; chatId: string; ok: boolean }[];
   total: number; done: number; error: string | null;
 }
 let prepNow: PrepStatus | null = null;
@@ -84,6 +88,12 @@ const prepListeners = new Set<(s: PrepStatus | null) => void>();
 let prepTimer: number | undefined;
 export const refreshPrep = () => fetch("/api/ai/prep").then((r) => (r.ok ? r.json() : null)).catch(() => null)
   .then((j) => { prepNow = j; prepListeners.forEach((l) => l(j)); });
+/** "Notes · Short name" or "Prep · CODE title" for a background job id. */
+export function workLabel(id: string, data?: SemesterData | null): string {
+  if (id.startsWith("notes:")) { const c = data?.courses.find((x) => x.code === id.slice(6)); return `Notes · ${c?.short ?? id.slice(6)}`; }
+  const a = data?.assignments.find((x) => x.id === id);
+  return `Prep · ${a ? `${a.code} ${a.title}` : id.split("/").pop()}`;
+}
 export function usePrepStatus(): PrepStatus | null {
   const [s, setS] = useState(prepNow);
   useEffect(() => {
@@ -122,46 +132,6 @@ export async function runTurn(body: { sem: string; tool?: string; chatId?: strin
       if (block.startsWith("data: ")) { try { onEvent(JSON.parse(block.slice(6))); } catch { /* ignore a broken line */ } }
     }
   }
-}
-
-const enc = (s: string) => s.split("/").map(encodeURIComponent).join("/");
-const TOP = /^(notes|courses|assignments|text|plans|research|updates|_meta|visuals)\//;
-/**
- * Where a path an agent wrote or named opens in the app: a note page, an assignment page, or the file
- * itself (in a new tab). Takes repo-relative or absolute paths, and paths inside the semester folder
- * when `sem` is given ("notes/COS514/x.md"). Null when the app can't open it.
- */
-export function fileLink(path: string, sem?: string): { to: string; internal: boolean } | null {
-  let p = path.trim().replace(/^\.\//, "").replace(/[),.;:]+$/, "");
-  const at = p.indexOf("semesters/");
-  if (at > 0 && p[at - 1] === "/") p = p.slice(at);   // an absolute path inside the study folder
-  else if (sem && TOP.test(p)) p = `semesters/${sem}/${p}`;
-  const m = p.match(/^semesters\/([^/]+)\/(.+)$/);
-  if (!m) return null;
-  const [, s, rest] = m;
-  const note = rest.match(/^notes\/([^/]+)\/([^/]+)\.md$/);
-  if (note) return { to: `/${encodeURIComponent(s)}/notes/${encodeURIComponent(note[1])}/${encodeURIComponent(note[2])}`, internal: true };
-  // an assignment's folder, its working notes or its prep pack open the assignment page; its files open as files
-  const asg = rest.match(/^assignments\/([^/]+)\/([^/]+)(?:\/(README\.md|PREP\.md)?)?$/);
-  if (asg) return { to: `/${encodeURIComponent(s)}/assignments/${encodeURIComponent(asg[1])}/${encodeURIComponent(asg[2])}`, internal: true };
-  if (!/\.\w{1,6}$/.test(rest)) return null;   // a folder
-  return { to: `/files/${s}/${enc(rest)}`, internal: false };
-}
-
-const unescape = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
-const attr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-/** Turns `paths` in a reply's HTML (and links to paths) into links to the app's pages and files. */
-export function linkPaths(html: string, sem?: string): string {
-  return html
-    .replace(/<a href="([^"]+)"/g, (all, href) => {
-      const l = /^[a-z]+:/i.test(href) || href.startsWith("/files/") ? null : fileLink(decodeURIComponent(unescape(href)), sem);
-      return l ? `<a href="${attr(l.to)}"${l.internal ? " data-internal" : ' target="_blank" rel="noreferrer"'}` : all;
-    })
-    .replace(/(<a [^>]*>[\s\S]*?<\/a>)|<code>([^<]+)<\/code>/g, (all, link, code) => {
-      if (link) return all;   // already a link
-      const l = fileLink(unescape(code), sem);
-      return l ? `<a href="${attr(l.to)}"${l.internal ? " data-internal" : ' target="_blank" rel="noreferrer"'} title="${l.internal ? "Open in the app" : "Open the file"}"><code>${code}</code></a>` : all;
-    });
 }
 
 const VISUAL = /\.(html?|svg|png|jpe?g|gif|webp)$/i;

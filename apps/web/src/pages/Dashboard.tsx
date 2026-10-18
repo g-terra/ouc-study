@@ -102,7 +102,7 @@ export function Dashboard({ data }: { data: SemesterData }) {
 
       <SectionTitle right={<Link to={`${base}/timeline`} className="text-sm text-muted hover:text-ink">Full timeline →</Link>}>Coming up · next 14 days</SectionTitle>
       {soon.length ? (
-        <div className="grid gap-2">
+        <div className="grid grid-cols-1 gap-2">
           {soon.map((a) => {
             const st = stateOf(a, now);
             return (

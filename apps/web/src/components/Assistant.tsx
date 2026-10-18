@@ -7,7 +7,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import type { SemesterData } from "@ouc/content/types";
 import { Link, useRouter } from "../lib/router";
 import { mdToHtml } from "../lib/markdown";
-import { TOOL_STATE, fileLink, linkPaths, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
+import { TOOL_STATE, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
 import { refreshData } from "../lib/data";
 import { cx } from "./ui";
 
@@ -204,13 +204,17 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<ChatSummary[] | null>(null);
   const end = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLElement>(null);
   const last = a.chat?.messages[a.chat.messages.length - 1];
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [a.chat?.messages.length, last?.text, last?.steps?.length]);
   useEffect(() => {
     if (!a.open) return;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && a.setOpen(false);
+    // it's a popup: a click on the page closes it (chats keep running; the robot button brings it back)
+    const away = (e: MouseEvent) => { const t = e.target as HTMLElement; if (!box.current?.contains(t) && !t.closest?.("[data-ask-ai]")) a.setOpen(false); };
     window.addEventListener("keydown", esc);
-    return () => window.removeEventListener("keydown", esc);
+    document.addEventListener("mousedown", away);
+    return () => { window.removeEventListener("keydown", esc); document.removeEventListener("mousedown", away); };
   }, [a.open]);
   if (!a.open) return null;
 
@@ -233,8 +237,8 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
   };
 
   return (
-    <aside role="dialog" aria-label="Ask AI"
-      className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-line bg-bg shadow-2xl sm:w-[440px] lg:shadow-none">
+    <aside ref={box} role="dialog" aria-label="Ask AI"
+      className="fixed inset-0 z-50 flex flex-col bg-bg shadow-2xl sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[min(78vh,760px)] sm:w-[440px] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-line">
       <header className="flex items-center gap-2 border-b border-line px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="font-serif text-lg font-semibold leading-tight">Ask AI</div>
@@ -397,19 +401,13 @@ function ActionForm({ data, action, params, onChange }: { data: SemesterData; ac
 }
 
 /** A reply in Markdown; file paths in it link to the app's pages (notes, assignments) or open the file. */
-function Markdown({ text, className, sem }: { text: string; className?: string; sem?: string }) {
-  const { navigate } = useRouter();
+export function Markdown({ text, className, sem }: { text: string; className?: string; sem?: string }) {
   const { setOpen } = useAssistant();
   return (
     <div className={cx("text-sm leading-relaxed [&_a]:underline [&_a_code]:text-accent [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:break-all [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_ul]:list-disc", className)}
-      onClick={(e) => {
-        const a = (e.target as HTMLElement).closest("a[data-internal]");
-        if (!a || e.metaKey || e.ctrlKey) return;
-        e.preventDefault();
-        navigate(a.getAttribute("href")!);
-        if (!window.matchMedia("(min-width: 1024px)").matches) setOpen(false); // on small screens the panel covers the page
-      }}
-      dangerouslySetInnerHTML={{ __html: linkPaths(mdToHtml(text), sem) }} />
+      // file paths open their page (the router follows the link); on phones the chat covers the page, so close it
+      onClick={(e) => { if ((e.target as HTMLElement).closest("a[data-internal]") && !window.matchMedia("(min-width: 640px)").matches) setOpen(false); }}
+      dangerouslySetInnerHTML={{ __html: mdToHtml(text, sem) }} />
   );
 }
 

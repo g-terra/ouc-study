@@ -1,6 +1,7 @@
 import { micromark } from "micromark";
 import { math, mathHtml } from "micromark-extension-math";
 import { gfmTable, gfmTableHtml } from "micromark-extension-gfm-table";
+import { linkPaths } from "./links";
 import { gfmAutolinkLiteral, gfmAutolinkLiteralHtml } from "micromark-extension-gfm-autolink-literal";
 
 const opts = {
@@ -9,9 +10,15 @@ const opts = {
   htmlExtensions: [mathHtml({ throwOnError: false, strict: false }), gfmTableHtml(), gfmAutolinkLiteralHtml()],
 };
 
-/** Markdown (with $math$, $$display$$, tables, autolinks) → HTML. External links open in a new tab. */
-export function mdToHtml(src: string): string {
-  return micromark(src, opts).replace(/<a href="(https?:[^"]+)"/g, '<a target="_blank" rel="noreferrer" href="$1"');
+/** The semester the page is showing, for paths written relative to it ("notes/COS514/x.md"). */
+const pageSem = () => decodeURIComponent(window.location.pathname.split("/")[1] ?? "") || undefined;
+
+/**
+ * Markdown (with $math$, $$display$$, tables, autolinks) → HTML. External links open in a new tab;
+ * file paths in `backticks` become links to the note, assignment or file (the router follows them).
+ */
+export function mdToHtml(src: string, sem = pageSem()): string {
+  return linkPaths(micromark(src, opts).replace(/<a href="(https?:[^"]+)"/g, '<a target="_blank" rel="noreferrer" href="$1"'), sem);
 }
 
 /** Same, but without the wrapping <p> (for short inline strings in cards/tables). */

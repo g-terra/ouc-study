@@ -10,7 +10,7 @@ export function Courses({ data }: { data: SemesterData }) {
   const base = `/${enc(data.id)}`;
   return (
     <>
-      <PageHeader title="Courses" eyebrow={data.label}>{data.courses.length} courses this semester. Add more by listing them in <code>semesters/{data.id}/semester.json</code>.</PageHeader>
+      <PageHeader title="Courses" eyebrow={data.label}>{data.courses.length} courses this semester.</PageHeader>
       <div className="grid gap-4 md:grid-cols-3">
         {data.courses.map((c) => {
           const as = data.assignments.filter((a) => a.code === c.code);

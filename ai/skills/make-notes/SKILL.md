@@ -11,4 +11,4 @@ _Paths: `<sem>` = the current semester folder (named in STUDENT.md; otherwise th
 2. Read the plain-text copies in `<sem>/text/<course>/` (fast to grep). For maths-heavy slides or the COS514 "math" images, open the original file to read the equations.
 3. Write it in the **visual format** from `docs/NOTE_FORMAT.md` (cards, mermaid diagram, LaTeX formula cards, compare tables, steps, flashcards). Follow `ai/agents/note-taker.md`, or delegate to the **note-taker** agent when several weeks are requested (one agent per course, run in parallel).
 4. Update `memory/glossary.md`, `memory/learning-log.md` and `memory/progress.md`.
-5. Reply with the note's path and its 3 key takeaways. It appears in the app under Notes and in the course's week list.
+5. Reply with the note's path in `backticks` and its 3 key takeaways. It appears in the app under Notes and in the course's week list.

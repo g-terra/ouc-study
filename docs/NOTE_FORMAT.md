@@ -25,7 +25,7 @@ tags: action potential, ion channels, ODEs
 4. Topic sections: use `compare`, `steps`, `formula` and short Markdown.
 5. `## Key terms`: a `terms` block.
 6. `## Check yourself`: a `flashcards` block (4–6 cards; hints, not assignment answers).
-7. `> [!LINK] Connects to`: links to other weeks and courses.
+7. `> [!LINK] Connects to`: links to other weeks and courses. Name course files and other notes by their repo-relative path in `backticks` (e.g. `semesters/2026-Fall/notes/COS512/week-04-transformers.md`); the app turns them into links showing just the file name.
 8. `## Go deeper`: a `links` block.
 
 ## Math

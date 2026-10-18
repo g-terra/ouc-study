@@ -1,17 +1,26 @@
 /**
  * Tiny history-based router (no dependency). Routes are patterns like "/:sem/courses/:code".
  */
-import { createContext, useContext, useEffect, useState, type AnchorHTMLAttributes, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type AnchorHTMLAttributes, type ReactNode } from "react";
 
 type Params = Record<string, string>;
 const RouterCtx = createContext<{ path: string; navigate: (to: string) => void }>({ path: "/", navigate: () => {} });
 
 export function RouterProvider({ children }: { children: ReactNode }) {
   const [path, setPath] = useState(() => window.location.pathname + window.location.hash);
+  const navigateRef = useRef((_to: string) => {});
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname + window.location.hash);
     window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    // links that Markdown turned from file paths into app pages (lib/links.ts) open here, without a reload
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement).closest?.("a[data-internal]");
+      if (!a || e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      navigateRef.current(a.getAttribute("href")!);
+    };
+    document.addEventListener("click", onClick);
+    return () => { window.removeEventListener("popstate", onPop); document.removeEventListener("click", onClick); };
   }, []);
   const navigate = (to: string) => {
     if (to === window.location.pathname + window.location.hash) return;
@@ -19,6 +28,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
     setPath(to);
     if (!to.includes("#")) window.scrollTo({ top: 0 });
   };
+  navigateRef.current = navigate;
   return <RouterCtx.Provider value={{ path, navigate }}>{children}</RouterCtx.Provider>;
 }
 
