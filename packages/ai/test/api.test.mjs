@@ -151,3 +151,24 @@ test("visuals the AI saved are served sandboxed, and nothing else is", async (t)
     assert.equal((await fetch(`${base}/api/ai/view?path=${encodeURIComponent(bad)}`)).status, 404, bad);
   }
 });
+
+test("ticking a task in a week plan writes it to the plan file", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  mkdirSync(join(root, "semesters/2026-Fall/plans"), { recursive: true });
+  const file = join(root, "semesters/2026-Fall/plans/2026-W42.md");
+  writeFileSync(file, "# Week 42\n\n## Next actions\n- [ ] Read the brief\n- [ ] Draft question 1\n");
+  const { token } = await (await fetch(`${base}/api/ai/status`)).json();
+  const tick = (body, headers = { "X-OUC-AI": token }) => fetch(`${base}/api/ai/plan/task`, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
+
+  assert.equal((await tick({ sem: "2026-Fall", week: "2026-W42", line: 4, done: true }, {})).status, 403);   // no token
+  assert.equal((await tick({ sem: "2026-Fall", week: "2026-W42", line: 4, done: true })).status, 200);
+  assert.equal(readFileSync(file, "utf8"), "# Week 42\n\n## Next actions\n- [x] Read the brief\n- [ ] Draft question 1\n");
+  await tick({ sem: "2026-Fall", week: "2026-W42", line: 4, done: false });
+  assert.match(readFileSync(file, "utf8"), /- \[ \] Read the brief/);
+
+  assert.equal((await tick({ sem: "2026-Fall", week: "2026-W42", line: 3, done: true })).status, 409);    // a heading
+  for (const bad of [{ sem: "..", week: "2026-W42", line: 4 }, { sem: "2026-Fall", week: "../../x", line: 4 }, { sem: "2026-Fall", week: "2026-W42", line: "4" }]) {
+    assert.equal((await tick(bad)).status, 400, JSON.stringify(bad));
+  }
+});

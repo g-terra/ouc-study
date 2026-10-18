@@ -4,6 +4,7 @@
  *   semesters/<id>/semester.json        course registry (codes, names, colours, how weeks are dated)
  *   semesters/<id>/_meta/*.json         eClass scrape, submissions, exams, study resources
  *   semesters/<id>/notes/<CODE>/*.md    visual notes (docs/NOTE_FORMAT.md)
+ *   semesters/<id>/plans/<YYYY>-W<NN>.md week plans (ai/skills/plan-week)
  *   semesters/<id>/assignments/...      one folder per assignment (brief + my-submission/)
  *   semesters/<id>/courses/...          the downloaded course files
  *
@@ -13,6 +14,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parsePlan } from "./plan.mjs";
 import type {
   UpdatesFeed, GradeItem,
   Assignment, Prep, Course, Exam, FileRef, Note, Resource, SemesterData, SemesterIndex, SemesterSummary, Week, WeekItem,
@@ -282,9 +284,14 @@ function buildSemester(id: string): SemesterData | undefined {
       .filter((d) => d.items.length),
   };
 
+  // week plans (plan-week skill), newest first
+  const pd = join(dir, "plans");
+  const plans = listFiles(pd).filter((f) => /^\d{4}-W\d{1,2}\.md$/.test(f)).sort().reverse()
+    .map((f) => parsePlan(readFileSync(join(pd, f), "utf8"), f));
+
   return {
     id, label: cfg.label, start: cfg.start, end: cfg.end, generated: new Date().toISOString(),
-    courses, assignments, exams, notes, updates,
+    courses, assignments, exams, notes, updates, plans,
   };
 }
 

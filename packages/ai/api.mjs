@@ -7,6 +7,7 @@
 //   POST /api/ai/stop          { chatId }
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
 //   GET  /api/ai/view?path=…  a visual the AI saved (HTML, SVG or image), sandboxed, for the chat to show inline
+//   POST /api/ai/plan/task     { sem, week, line, done } ticks a task in semesters/<sem>/plans/<week>.md
 //   GET  /api/ai/prep          background notes/prep work: { enabled, busy, running/finished: [{ id, chatId, ok? }], queue, total, done, error }
 //   GET  /api/ai/review?sem=…&assignment=…          pre-submission review rounds of an assignment (see review.mjs)
 //   POST /api/ai/review/upload?sem=…&assignment=…&name=…   the student's .docx as the body → the next version
@@ -28,6 +29,7 @@ import { buildPrompt, chatSystem, listActions, prepPath, weeksWithoutNotes } fro
 import { currentSemesterId, loadData, read } from "./context.mjs";
 import { runAgentTurn, runChatTurn } from "./stream.mjs";
 import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview, reviewState } from "./review.mjs";
+import { setTask } from "../content/src/plan.mjs";
 
 // The background app starts with a minimal PATH; add the usual install places of the agent CLIs
 // (on Windows: npm's global folder, Claude's native installer in ~/.local/bin, Ollama, LM Studio).
@@ -392,6 +394,15 @@ export function createAiApi(root, opts = {}) {
         return chat ? json(res, { ...chat, running: runs.has(id) }) : json(res, { error: "Not found" }, 404);
       }
       if (p === "/api/ai/run" && req.method === "POST") return await run(req, res);
+      if (p === "/api/ai/plan/task" && req.method === "POST") {
+        const { sem, week, line, done } = await readBody(req);
+        if (!/^\w[\w.-]*$/.test(sem ?? "") || !/^\d{4}-W\d{1,2}$/.test(week ?? "") || !Number.isInteger(line)) return json(res, { error: "Bad request" }, 400);
+        const abs = join(root, "semesters", sem, "plans", `${week}.md`);
+        const next = existsSync(abs) ? setTask(readFileSync(abs, "utf8"), line, !!done) : null;
+        if (next === null) return json(res, { error: "The plan changed. Reload it and try again." }, 409);
+        writeFileSync(abs, next);
+        return json(res, { ok: true });
+      }
       if (p === "/api/ai/stop" && req.method === "POST") {
         const { chatId } = await readBody(req);
         runs.get(chatId)?.stop();

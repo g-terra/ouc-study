@@ -9,6 +9,7 @@ import { CoursePage, Courses } from "./pages/Courses";
 import { NotePage, NotesIndex } from "./pages/Notes";
 import { AssignmentPage, AssignmentsPage } from "./pages/Assignments";
 import { UpdatesPage } from "./pages/Updates";
+import { PlanPage } from "./pages/Plan";
 import { AiWorkPage } from "./pages/AiWork";
 import type { SemesterData } from "@ouc/content/types";
 
@@ -40,6 +41,8 @@ export default function App() {
             routes={[
               ["/", () => <Home />],
               ["/:sem", (p) => <Semester sem={p.sem} page={(d) => <Dashboard data={d} />} />],
+              ["/:sem/plan", (p) => <Semester sem={p.sem} page={(d) => <PlanPage data={d} />} />],
+              ["/:sem/plan/:week", (p) => <Semester sem={p.sem} page={(d) => <PlanPage key={p.week} data={d} week={p.week} />} />],
               ["/:sem/timeline", (p) => <Semester sem={p.sem} page={(d) => <Timeline data={d} />} />],
               ["/:sem/courses", (p) => <Semester sem={p.sem} page={(d) => <Courses data={d} />} />],
               ["/:sem/courses/:code", (p) => <Semester sem={p.sem} page={(d) => <CoursePage data={d} code={p.code} />} />],
