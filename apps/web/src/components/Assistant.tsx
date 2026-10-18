@@ -7,7 +7,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import type { SemesterData } from "@ouc/content/types";
 import { Link } from "../lib/router";
 import { mdToHtml } from "../lib/markdown";
-import { fileLink, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatSummary } from "../lib/ai";
+import { TOOL_STATE, fileLink, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatSummary } from "../lib/ai";
 import { cx } from "./ui";
 
 interface Draft { action: string; params: Record<string, string> }
@@ -18,6 +18,8 @@ interface Ctx {
   /** Opens the panel with an action picked (and its inputs filled in). */
   start: (action: string, params?: Record<string, string>) => void;
   send: (sem: string, message: string, title?: string) => Promise<void>;
+  /** The coding tool picked in the panel (null = the one from `ouc ai setup`). */
+  tool: string | null; setTool: (t: string | null) => void;
   stop: () => void; reset: () => void; load: (id: string) => Promise<void>;
 }
 const AssistantCtx = createContext<Ctx | null>(null);
@@ -33,6 +35,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [tool, setToolState] = useState<string | null>(() => { try { return localStorage.getItem("ouc-ai-tool"); } catch { return null; } });
+  const setTool = (t: string | null) => { setToolState(t); try { t ? localStorage.setItem("ouc-ai-tool", t) : localStorage.removeItem("ouc-ai-tool"); } catch { /* private mode */ } };
   const poll = useRef<number | undefined>(undefined);
 
   const reset = () => { if (busy) return; setChat(null); setDraft(null); setError(undefined); };
@@ -69,7 +73,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
 
   const send = async (sem: string, message: string, title?: string) => {
     if (busy) return;
-    const body = chat ? { sem, chatId: chat.id, message } : { sem, action: draft?.action, params: draft?.params, message };
+    const body = { ...(chat ? { sem, chatId: chat.id, message } : { sem, action: draft?.action, params: draft?.params, message }), ...(tool ? { tool } : {}) };
     setError(undefined); setBusy(true);
     const user = message.trim() || null;
     let id = chat?.id;
@@ -110,7 +114,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   };
   const stop = () => { if (chat?.id) stopRun(chat.id); };
 
-  return <AssistantCtx.Provider value={{ open, setOpen, chat, busy, error, draft, setDraft, start, send, stop, reset, load }}>{children}</AssistantCtx.Provider>;
+  return <AssistantCtx.Provider value={{ open, setOpen, chat, busy, error, draft, setDraft, start, send, stop, reset, load, tool, setTool }}>{children}</AssistantCtx.Provider>;
 }
 
 /** A small button that opens the panel with an action ready to go. */
@@ -145,8 +149,15 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
   if (!a.open) return null;
 
   const meta = actions.find((x) => x.id === (a.draft?.action ?? a.chat?.action));
-  const blocked = ai.state === "ok" && !ai.ready ? ai.reason : ai.state === "unavailable" ? "The AI only works in the app on your computer (npm run dev or ouc open)." : undefined;
-  const needsAgent = meta?.agentOnly && ai.state === "ok" && !ai.agentic ? `"${meta.title}" needs Claude Code, Codex or opencode.` : undefined;
+  // the tool picked in the panel, if it's still there; else the one from `ouc ai setup`
+  const picked = ai.tools.find((t) => t.id === a.tool && t.state !== "missing") ?? ai.tools.find((t) => t.chosen);
+  const ready = picked?.state === "connected";
+  const agentic = picked ? picked.id !== "local" : ai.agentic !== false;
+  const blocked = ai.state === "unavailable" ? "The AI only works in the app on your computer (npm run dev or ouc open)."
+    : ai.state !== "ok" ? undefined
+    : !picked ? (ai.reason || "No AI chosen yet. In Terminal, run: ouc ai setup")
+    : !ready ? `${picked.label}: ${picked.detail ?? "not ready"}${picked.fix ? `. Fix: ${picked.fix}` : ""}` : undefined;
+  const needsAgent = meta?.agentOnly && ai.state === "ok" && !agentic ? `"${meta.title}" needs Claude Code, Codex or opencode.` : undefined;
   const canSend = !a.busy && !blocked && !needsAgent && (a.chat ? !!input.trim() : !!a.draft || !!input.trim());
   const submit = async () => {
     if (!canSend) return;
@@ -162,8 +173,17 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
         <div className="min-w-0 flex-1">
           <div className="font-serif text-lg font-semibold leading-tight">Ask AI</div>
           <div className="flex items-center gap-1.5 truncate text-xs text-muted">
-            <span className={cx("inline-block size-2 rounded-full", ai.state === "checking" ? "animate-pulse bg-muted" : ai.ready ? "bg-ok" : "bg-warn")} />
-            {ai.state === "checking" ? "Checking your AI…" : ai.label ?? "No AI chosen"}
+            <span className={cx("inline-block size-2 shrink-0 rounded-full", ai.state === "checking" ? "animate-pulse bg-muted" : ready ? "bg-ok" : "bg-warn")} />
+            {ai.state === "ok" && ai.tools.some((t) => t.state !== "missing") ? (
+              <select aria-label="Which AI answers" value={picked?.id ?? ""} disabled={a.busy}
+                onChange={(e) => a.setTool(ai.tools.find((t) => t.id === e.target.value)?.chosen ? null : e.target.value)}
+                className="-ml-1 min-w-0 truncate rounded bg-transparent py-0.5 pr-1 text-xs text-muted hover:text-ink">
+                {!picked && <option value="">Choose an AI</option>}
+                {ai.tools.filter((t) => t.state !== "missing").map((t) => (
+                  <option key={t.id} value={t.id}>{t.id === "opencode" || t.id === "local" ? `${t.label}${t.detail && t.state === "connected" ? ` · ${t.detail}` : ""}` : t.label}{t.state === "connected" ? "" : ` (${TOOL_STATE[t.state].text.toLowerCase()})`}</option>
+                ))}
+              </select>
+            ) : ai.state === "checking" ? "Checking your AI…" : ai.label ?? "No AI chosen"}
           </div>
         </div>
         <button type="button" className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-ink" disabled={a.busy}
@@ -179,7 +199,7 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
         ) : !a.chat ? (
           <>
             {!a.draft && <Intro />}
-            <ActionPicker actions={actions} agentic={ai.agentic !== false} picked={a.draft?.action} onPick={(id) => a.setDraft(id === a.draft?.action ? null : { action: id, params: {} })} />
+            <ActionPicker actions={actions} agentic={agentic} picked={a.draft?.action} onPick={(id) => a.setDraft(id === a.draft?.action ? null : { action: id, params: {} })} />
             {a.draft && meta && <ActionForm data={data} action={meta} params={a.draft.params} onChange={(params) => a.setDraft({ action: meta.id, params })} />}
           </>
         ) : (
@@ -241,10 +261,15 @@ const FIELD = "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm
 function ActionForm({ data, action, params, onChange }: { data: SemesterData; action: AiAction; params: Record<string, string>; onChange: (p: Record<string, string>) => void }) {
   const set = (k: string, v: string) => {
     const next = { ...params, [k]: v };
-    if (k === "course") delete next.week;
+    if (k === "course") {
+      delete next.week;
+      if (v && next.assignment && !next.assignment.startsWith(`${v}/`)) delete next.assignment;
+    }
     onChange(next);
   };
   const course = data.courses.find((c) => c.code === params.course);
+  const week = course && params.week ? course.weeks.find((w) => String(w.index) === params.week) : undefined;
+  const assignments = data.assignments.filter((x) => !params.course || x.code === params.course);
   return (
     <div className="mt-4 rounded-2xl border border-line bg-surface p-4">
       <div className="mb-1 font-semibold">{action.icon} {action.title}</div>
@@ -256,18 +281,13 @@ function ActionForm({ data, action, params, onChange }: { data: SemesterData; ac
             <span className="text-xs font-semibold text-muted">{f.label}{f.required ? "" : " (optional)"}</span>
             {f.kind === "course" ? (
               <select className={FIELD} value={params.course ?? ""} onChange={(e) => set("course", e.target.value)}>
-                <option value="">{f.required ? "Choose a course" : "Any course"}</option>
+                <option value="">{f.placeholder ?? (f.required ? "Choose a course" : "Any course")}</option>
                 {data.courses.map((c) => <option key={c.code} value={c.code}>{c.short} · {c.code}</option>)}
-              </select>
-            ) : f.kind === "week" ? (
-              <select className={FIELD} value={params.week ?? ""} onChange={(e) => set("week", e.target.value)} disabled={!course}>
-                <option value="">{f.placeholder ?? "Any week"}</option>
-                {course?.weeks.filter((w) => w.index > 0).map((w) => <option key={w.index} value={String(w.index)}>{w.label}</option>)}
               </select>
             ) : f.kind === "assignment" ? (
               <select className={FIELD} value={params.assignment ?? ""} onChange={(e) => set("assignment", e.target.value)}>
                 <option value="">Choose an assignment</option>
-                {data.assignments.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.title}{x.submitted ? " (submitted)" : ""}</option>)}
+                {assignments.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.title}{x.submitted ? " (submitted)" : ""}</option>)}
               </select>
             ) : (
               <input className={FIELD} value={params[f.key] ?? ""} placeholder={f.placeholder} onChange={(e) => set(f.key, e.target.value)} />
@@ -275,6 +295,13 @@ function ActionForm({ data, action, params, onChange }: { data: SemesterData; ac
           </label>
         ))}
       </div>
+      {week && (
+        <p className="mt-3 flex items-center gap-2 text-xs text-muted">
+          <span>Week: <b className="text-ink">{week.label}</b></span>
+          <button type="button" className="underline" onClick={() => set("week", "")}>{action.id === "make-notes" ? "all weeks without notes" : "whole course"}</button>
+        </p>
+      )}
+      {action.id === "make-notes" && !week && <p className="mt-3 text-xs text-muted">Makes notes for every week{course ? ` of ${course.short}` : ""} that has material and no notes yet.</p>}
     </div>
   );
 }

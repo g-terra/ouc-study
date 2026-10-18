@@ -55,7 +55,7 @@ export async function aiStatus(root) {
     { id: "codex", label: TOOL_LABEL.codex, ...signed("codex", codex) },
     { id: "opencode", label: "opencode", ...(d.opencode ? await server(ocServer) : { state: "missing", fix: INSTALL_HINT.opencode }) },
   ];
-  if (chosen === "local") tools.push({ id: "local", label: TOOL_LABEL.local, ...(await server(cfg.local)) });
+  if (cfg?.local) tools.push({ id: "local", label: TOOL_LABEL.local, ...(await server(cfg.local)) });
   for (const t of tools) t.chosen = t.id === chosen;
   const pick = tools.find((t) => t.chosen);
   return {
@@ -107,9 +107,12 @@ export function createAiApi(root, opts = {}) {
 
   async function run(req, res) {
     const body = await readBody(req);
-    const cfg = loadConfig(root);
-    const tool = cfg?.tool ? (ALIASES[cfg.tool] ?? cfg.tool) : null;
+    const cfg = loadConfig(root) ?? {};
+    // the panel can pick another installed tool for this message; otherwise the one from `ouc ai setup`
+    const tool = body.tool ?? (cfg.tool ? (ALIASES[cfg.tool] ?? cfg.tool) : null);
     if (!tool) return json(res, { error: "No AI chosen yet. In Terminal, run: ouc ai setup" }, 400);
+    if (!AGENTIC.has(tool) && !(tool === "local" && cfg.local)) return json(res, { error: `Unknown AI "${tool}".` }, 400);
+    if (tool === "opencode" && !cfg.opencode && !existsSync(join(root, ".opencode/opencode.json"))) return json(res, { error: "opencode has no local model set up yet. In Terminal, run: ouc ai setup" }, 400);
     cfg.tool = tool;
     const semId = body.sem && existsSync(join(root, "semesters", body.sem)) ? body.sem : currentSemesterId(root);
     let data;
@@ -130,12 +133,13 @@ export function createAiApi(root, opts = {}) {
     catch (e) { return json(res, { error: e.message }, 400); }
     // a follow-up after switching tools starts a new conversation with that tool
     if (chat && !sameTool) chat = { ...chat, sessionId: undefined, tool };
-    const shown = String(body.message ?? "").trim() || `${meta?.title ?? "Request"}${params.topic ? `: ${params.topic}` : ""}`;
+    const what = params.topic || data.assignments.find((x) => x.id === params.assignment)?.title || data.courses.find((c) => c.code === params.course)?.short || (meta?.id === "make-notes" ? "all courses" : "");
+    const shown = String(body.message ?? "").trim() || `${meta?.title ?? "Request"}${what ? `: ${what}` : ""}`;
     const now = new Date().toISOString();
     chat ??= { id: randomUUID(), title: shown.slice(0, 80), tool, action, params, sem: semId, createdAt: now, messages: [] };
     chat.updatedAt = now;
     chat.messages.push({ role: "user", text: shown, prompt, at: now });
-    const reply = { role: "assistant", text: "", steps: [], files: [], at: now, by: describe(cfg) };
+    const reply = { role: "assistant", text: "", steps: [], files: [], at: now, by: tool === "opencode" && !cfg.opencode ? "opencode" : describe(cfg) };
     chat.messages.push(reply);
 
     res.statusCode = 200;
