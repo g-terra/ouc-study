@@ -115,6 +115,14 @@ export async function setPlanTask(sem: string, week: string, line: number, done:
   return (await res?.json().catch(() => null))?.error ?? "Couldn't save that. Is the app running on your computer?";
 }
 
+/** Saves a course's weekly live-class time (semester.json "classes"); the app rebuilds its data after. */
+export async function saveClassTime(sem: string, code: string, slot: { day: string; time: string; group?: string }): Promise<string | null> {
+  const res = await fetch("/api/ai/classes", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ sem, code, ...slot }) }).catch(() => null);
+  if (res?.ok) return null;
+  if (res?.status === 403) refreshAi(true);
+  return (await res?.json().catch(() => null))?.error ?? "Couldn't save that. Is the app running on your computer?";
+}
+
 export async function stopRun(chatId: string) {
   await fetch("/api/ai/stop", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ chatId }) });
 }

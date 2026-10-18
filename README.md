@@ -145,7 +145,7 @@ How it runs in the background: on macOS two LaunchAgents (`~/Library/LaunchAgent
 
 eClass has one **Webconference** link per course but no dated schedule. The sync reads the weekly class time from eClass itself: the Webconference description (for example a table of teaching groups and their times) and the tutors' announcements ("our meeting will be on Thursdays at 6pm"). It also picks up posts that move a class ("rescheduled for Thursday, 1 October, at 20:00"), and reads your teaching group, so you see your group's time. Each class has the join link and links to that week's notes, slides and readings (and the meeting agenda when the tutor posts one), so you can prepare. The course page shows which sentence the time came from.
 
-Times are Cyprus time (set `"timezone"` at the top of `semesters/<id>/semester.json` to change that); the app shows them in your computer's time zone. If a time is wrong or missing, set it for the course in `semester.json`, which wins over what was read from eClass:
+Times are Cyprus time (set `"timezone"` at the top of `semesters/<id>/semester.json` to change that); the app shows them in your computer's time zone. If a time is wrong or missing (for example a time agreed in class and never posted), press **Wrong time? Fix it** under the next class on the course page and type the time as it shows in your own calendar; the app converts it and saves it in `semester.json`, where it wins over what was read from eClass. You can also edit it there:
 
 ```json
 "classes": {

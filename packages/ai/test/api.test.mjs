@@ -172,3 +172,20 @@ test("ticking a task in a week plan writes it to the plan file", async (t) => {
     assert.equal((await tick(bad)).status, 400, JSON.stringify(bad));
   }
 });
+
+test("fixing a class time writes it to semester.json", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  mkdirSync(join(root, "semesters/2026-Fall"), { recursive: true });
+  const file = join(root, "semesters/2026-Fall/semester.json");
+  writeFileSync(file, JSON.stringify({ label: "Fall", start: "2026-09-07", end: "2027-01-17", courses: [{ code: "X1", title: "X", short: "X" }] }));
+  const { token } = await (await fetch(`${base}/api/ai/status`)).json();
+  const save = (body, headers = { "X-OUC-AI": token }) => fetch(`${base}/api/ai/classes`, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
+
+  assert.equal((await save({ sem: "2026-Fall", code: "X1", day: "Thu", time: "19:00" }, {})).status, 403); // no token
+  assert.equal((await save({ sem: "2026-Fall", code: "X1", day: "Thu", time: "19:00" })).status, 200);
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")).courses[0].classes, { day: "Thu", time: "19:00", groups: {} });
+  assert.equal((await save({ sem: "2026-Fall", code: "X1", day: "Thu", time: "nope" })).status, 400);
+  assert.equal((await save({ sem: "../x", code: "X1", day: "Thu", time: "19:00" })).status, 400);
+  assert.equal((await save({ sem: "2027-Spring", code: "X1", day: "Thu", time: "19:00" })).status, 404);
+});

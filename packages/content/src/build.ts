@@ -282,7 +282,7 @@ function buildSemester(id: string): SemesterData | undefined {
     }));
     courses.push({
       code: cc.code, title: cc.title, short: cc.short, color: cc.color, weeks, grades, joinUrl,
-      classTimeFrom: cc.classes ? "semester.json" : found?.source ? `eClass: “${found.source}”` : undefined,
+      classTimeFrom: cc.classes ? "your settings" : found?.source ? `eClass: “${found.source}”` : undefined,
       eclassUrl: cc.eclassId ? `https://eclass.ouc.ac.cy/course/view.php?id=${cc.eclassId}` : "",
     });
   }
@@ -310,7 +310,7 @@ function buildSemester(id: string): SemesterData | undefined {
 
   return {
     id, label: cfg.label, start: cfg.start, end: cfg.end, generated: new Date().toISOString(),
-    courses, assignments, exams, classes, notes, updates, plans,
+    courses, assignments, exams, classes, notes, updates, plans, timezone: cfg.timezone ?? "Europe/Nicosia",
   };
 }
 

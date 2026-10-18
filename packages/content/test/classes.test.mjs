@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildClasses, detectClasses, findTime, pickGroup, weekday, zoned } from "../src/classes.mjs";
+import { buildClasses, detectClasses, findTime, pickGroup, setClassTime, weekday, zoned } from "../src/classes.mjs";
 
 // made-up course: three dated weeks (Mon–Sun) plus the undated General section
 const weeks = [
@@ -128,4 +128,13 @@ test("detectClasses turns a reschedule post into a change for that group, once",
 
 test("detectClasses finds nothing without a weekday and a time", () => {
   assert.equal(detectClasses({ secs: [{ acts: [forum(post("We will start tomorrow at 6pm."))] }] }), undefined);
+});
+
+test("setClassTime writes the student's correction into semester.json, keeping changes", () => {
+  const cfg = { courses: [{ code: "X1", classes: { day: "Thu", time: "18:00", changes: [{ date: "2026-12-03", cancelled: true }] } }] };
+  setClassTime(cfg, "X1", { day: "thu", time: "19:00", group: "F.02" });
+  assert.deepEqual(cfg.courses[0].classes, { day: "Thu", time: "19:00", groups: {}, group: "F.02", changes: [{ date: "2026-12-03", cancelled: true }] });
+  assert.throws(() => setClassTime(cfg, "NOPE", { day: "Mon", time: "18:00" }), /No course/);
+  assert.throws(() => setClassTime(cfg, "X1", { day: "Someday", time: "18:00" }), /Pick a day/);
+  assert.throws(() => setClassTime(cfg, "X1", { day: "Mon", time: "25:00" }), /Pick a day/);
 });

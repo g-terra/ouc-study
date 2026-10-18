@@ -25,3 +25,4 @@ export function buildClasses(o: {
 }): ClassSession[];
 export function findTime(s: string): string | undefined;
 export function detectClasses(meta: unknown): (ClassesConfig & { source?: string }) | undefined;
+export function setClassTime(cfg: unknown, code: string, slot: { day: string; time: string; group?: string }): unknown;

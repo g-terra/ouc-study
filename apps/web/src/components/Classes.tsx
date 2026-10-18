@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { ClassSession, SemesterData } from "@ouc/content/types";
+import { saveClassTime } from "../lib/ai";
 import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { at, fmtDay, fmtTime, relative } from "../lib/dates";
@@ -86,5 +88,51 @@ export function ClassCard({ c, data, now = new Date(), showCourse = true }: { c:
         </div>
       )}
     </Card>
+  );
+}
+
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** A weekday + time on this computer → the same moment in the semester's time zone ("Thu", "19:00"). */
+export function toZone(day: string, time: string, timeZone: string, now = new Date()): { day: string; time: string } {
+  const [h, m] = time.split(":").map(Number);
+  const want = (WEEKDAYS.indexOf(day) + 1) % 7;
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + ((want - now.getDay() + 7) % 7), h, m);
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d).map((p) => [p.type, p.value]));
+  return { day: parts.weekday, time: `${parts.hour}:${parts.minute}` };
+}
+
+/** "Wrong time? Fix it": the student corrects the weekly class time (saved in semester.json). */
+export function ClassTimeEditor({ data, code, current, source }: { data: SemesterData; code: string; current?: ClassSession; source?: string }) {
+  const start = current ? at(current.at) : undefined;
+  const [open, setOpen] = useState(false);
+  const [day, setDay] = useState(start ? WEEKDAYS[(start.getDay() + 6) % 7] : "Mon");
+  const [time, setTime] = useState(start ? `${pad2(start.getHours())}:${pad2(start.getMinutes())}` : "18:00");
+  const [msg, setMsg] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true); setMsg(undefined);
+    const err = await saveClassTime(data.id, code, { ...toZone(day, time, data.timezone ?? "Europe/Nicosia"), group: current?.group });
+    setBusy(false);
+    if (err) setMsg(err); else { setOpen(false); setMsg("Saved. The classes update in a moment."); }
+  };
+  return (
+    <div className="mt-1.5 px-1 text-[11px] leading-snug text-muted">
+      {source && <span>Time from {source} · </span>}
+      {!open && <button className="underline hover:text-ink" onClick={() => setOpen(true)}>{current ? "Wrong time? Fix it" : "Add the class time"}</button>}
+      {open && (
+        <span className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-ink">
+          <select value={day} onChange={(e) => setDay(e.target.value)} className="rounded-md border border-line bg-surface px-1.5 py-1">
+            {WEEKDAYS.map((d) => <option key={d}>{d}</option>)}
+          </select>
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="rounded-md border border-line bg-surface px-1.5 py-1" />
+          <button disabled={busy} onClick={save} className="rounded-full bg-ink px-3 py-1 font-semibold text-bg disabled:opacity-50">Save</button>
+          <button onClick={() => setOpen(false)} className="text-muted hover:text-ink">Cancel</button>
+          <span className="basis-full text-[11px] text-muted">Your own time, as in your calendar. Every week from now on{current?.group ? `, for group ${current.group}` : ""}.</span>
+        </span>
+      )}
+      {msg && <span className="block text-[11px]">{msg}</span>}
+    </div>
   );
 }

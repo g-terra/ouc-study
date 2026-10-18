@@ -5,7 +5,7 @@ import { currentWeek, stateOf } from "../lib/data";
 import { at, day, fmtDay, fmtFull, fmtShort, fmtTime, relative } from "../lib/dates";
 import { Card, Empty, PageHeader, ProgressRing, SectionTitle, StatePill, cx, kindIcon } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
-import { ClassCard, JoinButton, upcomingClasses } from "../components/Classes";
+import { ClassCard, ClassTimeEditor, JoinButton, upcomingClasses } from "../components/Classes";
 
 export function Courses({ data }: { data: SemesterData }) {
   const base = `/${enc(data.id)}`;
@@ -87,7 +87,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
             <div>
               <SectionTitle>Next live class</SectionTitle>
               <ClassCard c={nextClass} data={data} now={now} showCourse={false} />
-              {c.classTimeFrom && <p className="mt-1.5 px-1 text-[11px] leading-snug text-muted" title="Change it in semester.json (&quot;classes&quot;) if it's wrong">Time from {c.classTimeFrom}</p>}
+              <ClassTimeEditor data={data} code={code} current={nextClass} source={c.classTimeFrom} />
             </div>
           )}
           <div>

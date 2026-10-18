@@ -170,6 +170,7 @@ export interface SemesterData extends SemesterSummary {
   assignments: Assignment[];
   exams: Exam[];
   classes: ClassSession[];
+  timezone: string;       // of the class times on eClass (semester.json "timezone", default Europe/Nicosia)
   notes: Note[];
   plans: Plan[];          // newest first
 }

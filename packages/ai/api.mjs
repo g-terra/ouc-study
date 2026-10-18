@@ -30,6 +30,7 @@ import { currentSemesterId, loadData, read } from "./context.mjs";
 import { runAgentTurn, runChatTurn } from "./stream.mjs";
 import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview, reviewState } from "./review.mjs";
 import { setTask } from "../content/src/plan.mjs";
+import { setClassTime } from "../content/src/classes.mjs";
 
 // The background app starts with a minimal PATH; add the usual install places of the agent CLIs
 // (on Windows: npm's global folder, Claude's native installer in ~/.local/bin, Ollama, LM Studio).
@@ -401,6 +402,18 @@ export function createAiApi(root, opts = {}) {
         const next = existsSync(abs) ? setTask(readFileSync(abs, "utf8"), line, !!done) : null;
         if (next === null) return json(res, { error: "The plan changed. Reload it and try again." }, 409);
         writeFileSync(abs, next);
+        return json(res, { ok: true });
+      }
+      // "Fix the time" on a course page: the weekly live class, in the semester's time zone
+      if (p === "/api/ai/classes" && req.method === "POST") {
+        const { sem, code, day, time, group } = await readBody(req);
+        if (!/^\w[\w.-]*$/.test(sem ?? "")) return json(res, { error: "Bad request" }, 400);
+        const abs = join(root, "semesters", sem, "semester.json");
+        if (!existsSync(abs)) return json(res, { error: "No semester.json for that semester." }, 404);
+        let cfg;
+        try { cfg = setClassTime(JSON.parse(readFileSync(abs, "utf8")), String(code ?? ""), { day, time, group }); }
+        catch (e) { return json(res, { error: e.message }, 400); }
+        writeFileSync(abs, `${JSON.stringify(cfg, null, 2)}\n`);
         return json(res, { ok: true });
       }
       if (p === "/api/ai/stop" && req.method === "POST") {

@@ -190,3 +190,21 @@ export function detectClasses(meta) {
   }
   return { ...found, ...(changes.length ? { changes } : {}) };
 }
+
+/**
+ * The student's own correction from the app ("Fix the time"): sets the course's "classes" slot in a parsed
+ * semester.json, keeping any changes already written there. Returns the new config, or throws on bad input.
+ * @param {any} cfg  parsed semester.json
+ * @param {string} code
+ * @param {{ day: string, time: string, group?: string }} slot  time in the semester's time zone
+ */
+export function setClassTime(cfg, code, { day, time, group }) {
+  const course = cfg?.courses?.find((c) => c.code === code);
+  if (!course) throw new Error(`No course ${code} in semester.json`);
+  if (weekday(day) < 0 || !/^\d{1,2}:\d{2}$/.test(String(time)) || Number(String(time).split(":")[0]) > 23) throw new Error("Pick a day and a time like 18:00");
+  if (group && !/^[\w.-]{1,20}$/.test(group)) throw new Error("Bad group name");
+  const day3 = DAYS[weekday(day)];
+  // groups: {} so a time read from eClass for another teaching group doesn't win over yours
+  course.classes = { ...course.classes, day: day3[0].toUpperCase() + day3.slice(1), time: String(time).padStart(5, "0"), groups: {}, ...(group ? { group } : {}) };
+  return cfg;
+}
