@@ -7,22 +7,11 @@ import { TOOL_STATE, refreshAi, useAiStatus, usePrepStatus, workLabel } from "..
 import { useAssistant } from "./Assistant";
 import { THEMES, setTheme, useTheme, type ThemeChoice } from "../lib/theme";
 
-/** Footer status: eClass and the AI coding tool in one dot; click for the details. */
-function ConnectionDot({ to }: { to: string }) {
+/** eClass and the AI coding tools: one summary dot, plus the details shown in Settings. */
+function useConnectionSummary() {
   const c = useConnection();
   const ai = useAiStatus();
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", away);
-    document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
-  }, [open]);
   const l = CONN_LABEL[c.state];
-  const when = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "");
   const eclassOk = c.state === "connected";
   const aiKnown = ai.state === "ok";
   const aiOk = aiKnown && !!ai.ready;
@@ -30,50 +19,43 @@ function ConnectionDot({ to }: { to: string }) {
   const dot = c.state === "checking" || ai.state === "checking" ? "bg-muted animate-pulse"
     : (eclassOk || c.state === "nokey" || c.state === "unavailable") && (aiOk || !aiKnown || !ai.chosen) ? (eclassOk || aiOk ? "bg-ok" : "bg-muted") : "bg-warn";
   const word = c.syncing ? "Syncing…" : eclassOk && aiOk ? "Connected" : eclassOk ? (aiKnown && ai.chosen ? "AI not ready" : "Connected") : l.text;
-  const tip = `${eclassOk ? `eClass: ${c.user ?? "connected"}` : l.text}${aiKnown ? ` · AI: ${aiOk ? ai.label : ai.reason || "not set up"}` : ""}`;
+  return { c, ai, l, eclassOk, aiKnown, dot, word };
+}
+
+function ConnectionDetails({ to, onNavigate }: { to: string; onNavigate: () => void }) {
+  const { c, ai, l, eclassOk, aiKnown } = useConnectionSummary();
+  const when = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "");
   return (
-    <div ref={box} className="relative">
-      <button type="button" onClick={() => { setOpen(!open); if (!open) refreshAi(); }} title={tip} aria-label={tip} aria-expanded={open}
-        className="flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm whitespace-nowrap hover:border-muted">
-        <span className="relative flex size-2.5">
-          {eclassOk && aiOk && <span className="absolute inline-flex size-full animate-ping rounded-full bg-ok opacity-40" />}
-          <span className={cx("relative inline-flex size-2.5 rounded-full", dot)} />
-        </span>
-        <span className={cx(eclassOk && (aiOk || !aiKnown) ? "text-ok" : l.tone)}>{word}</span>
-      </button>
-      {open && (
-        <div className="absolute bottom-full left-0 z-40 mb-2 w-80 rounded-2xl border border-line bg-surface p-3 text-sm shadow-xl">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">eClass</div>
-          <Link to={to} onClick={() => setOpen(false)} className="mb-3 flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2">
-            <span className={cx("size-2 shrink-0 rounded-full", l.dot)} />
-            <span className="min-w-0 flex-1 truncate">{eclassOk ? `Connected as ${c.user ?? "you"}` : l.text}</span>
-            <span className="text-xs text-muted">{when(c.checkedAt)}</span>
-          </Link>
-          <div className="mb-1 flex items-center text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-            <span className="flex-1">AI coding tools</span>
-            {aiKnown && <button type="button" className="normal-case tracking-normal text-muted underline hover:text-ink" onClick={() => refreshAi(true)}>Check again</button>}
-          </div>
-          {ai.state === "checking" && <p className="px-2 py-1.5 text-muted">Checking…</p>}
-          {ai.state === "unavailable" && <p className="px-2 py-1.5 text-muted">Only shown when the app runs on your computer (npm run dev or ouc open).</p>}
-          {aiKnown && (
-            <ul className="flex flex-col">
-              {ai.tools.map((t) => (
-                <li key={t.id} className={cx("rounded-lg px-2 py-1.5", t.chosen && "bg-surface-2")}>
-                  <div className="flex items-center gap-2">
-                    <span className={cx("size-2 shrink-0 rounded-full", TOOL_STATE[t.state].dot)} />
-                    <span className="flex-1 font-semibold">{t.label}{t.chosen && <span className="ml-1.5 text-xs font-normal text-muted">in use</span>}</span>
-                    <span className="text-xs text-muted">{TOOL_STATE[t.state].text}</span>
-                  </div>
-                  {(t.detail || t.fix) && t.state !== "missing" && <div className="ml-4 text-xs text-muted">{t.detail}</div>}
-                  {t.fix && t.state !== "connected" && <code className="ml-4 mt-0.5 block truncate text-[11px] text-muted" title={t.fix}>{t.fix}</code>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {aiKnown && !ai.chosen && <p className="mt-2 px-2 text-xs text-muted">Choose one in Terminal: <code>ouc ai setup</code></p>}
-        </div>
+    <>
+      <div className="mb-1 px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">eClass</div>
+      <Link to={to} onClick={onNavigate} className="mb-3 flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2">
+        <span className={cx("size-2 shrink-0 rounded-full", l.dot)} />
+        <span className="min-w-0 flex-1 truncate">{eclassOk ? `Connected as ${c.user ?? "you"}` : l.text}</span>
+        <span className="text-xs text-muted">{when(c.checkedAt)}</span>
+      </Link>
+      <div className="mb-1 flex items-center px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+        <span className="flex-1">AI coding tools</span>
+        {aiKnown && <button type="button" className="normal-case tracking-normal text-muted underline hover:text-ink" onClick={() => refreshAi(true)}>Check again</button>}
+      </div>
+      {ai.state === "checking" && <p className="px-2 py-1.5 text-muted">Checking…</p>}
+      {ai.state === "unavailable" && <p className="px-2 py-1.5 text-muted">Only shown when the app runs on your computer (npm run dev or ouc open).</p>}
+      {aiKnown && (
+        <ul className="flex flex-col">
+          {ai.tools.map((t) => (
+            <li key={t.id} className={cx("rounded-lg px-2 py-1.5", t.chosen && "bg-surface-2")}>
+              <div className="flex items-center gap-2">
+                <span className={cx("size-2 shrink-0 rounded-full", TOOL_STATE[t.state].dot)} />
+                <span className="flex-1 font-semibold">{t.label}{t.chosen && <span className="ml-1.5 text-xs font-normal text-muted">in use</span>}</span>
+                <span className="text-xs text-muted">{TOOL_STATE[t.state].text}</span>
+              </div>
+              {(t.detail || t.fix) && t.state !== "missing" && <div className="ml-4 text-xs text-muted">{t.detail}</div>}
+              {t.fix && t.state !== "connected" && <code className="ml-4 mt-0.5 block truncate text-[11px] text-muted" title={t.fix}>{t.fix}</code>}
+            </li>
+          ))}
+        </ul>
       )}
-    </div>
+      {aiKnown && !ai.chosen && <p className="mt-2 px-2 text-xs text-muted">Choose one in Terminal: <code>ouc ai setup</code></p>}
+    </>
   );
 }
 
@@ -88,9 +70,30 @@ function Swatch({ colors }: { colors: readonly string[] }) {
 
 const SYSTEM_SWATCH = [THEMES[0].swatch[0], THEMES[1].swatch[0]];
 
-/** Colour theme picker, a floating button at the bottom left (mirrors Ask AI on the right): System (follows the computer), Light, Dark and a few extras; remembered in this browser. */
-function ThemeSwitch() {
-  const { choice, theme } = useTheme();
+/** Colour theme picker: System (follows the computer), Light, Dark and a few extras; remembered in this browser. */
+function ThemePicker() {
+  const { choice } = useTheme();
+  const options: { id: ThemeChoice; label: string; hint?: string; swatch: readonly string[] }[] = [
+    { id: "system", label: "System", hint: "Follows your computer", swatch: SYSTEM_SWATCH },
+    ...THEMES.map((t) => ({ id: t.id, label: t.label, swatch: t.swatch })),
+  ];
+  return (
+    <div role="radiogroup" aria-label="Colour theme" className="grid grid-cols-2 gap-1">
+      {options.map((o) => (
+        <button key={o.id} type="button" role="radio" aria-checked={choice === o.id} onClick={() => setTheme(o.id)}
+          className={cx("flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-ink hover:bg-surface-2", o.hint && "col-span-2", choice === o.id && "bg-surface-2 font-semibold")}>
+          <Swatch colors={o.swatch} />
+          <span className="flex-1">{o.label}{o.hint && <span className="ml-1.5 text-xs font-normal text-muted">{o.hint}</span>}</span>
+          {choice === o.id && <span aria-hidden className="text-accent">✓</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Settings: a floating gear at the bottom left (mirrors Ask AI on the right) with the connection status and the colour theme. */
+function SettingsFab({ to }: { to: string }) {
+  const { dot, word } = useConnectionSummary();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -101,31 +104,24 @@ function ThemeSwitch() {
     document.addEventListener("keydown", esc);
     return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
   }, [open]);
-  const current = THEMES.find((t) => t.id === theme)!;
-  const options: { id: ThemeChoice; label: string; hint?: string; swatch: readonly string[] }[] = [
-    { id: "system", label: "System", hint: "Follows your computer", swatch: SYSTEM_SWATCH },
-    ...THEMES.map((t) => ({ id: t.id, label: t.label, swatch: t.swatch })),
-  ];
-  const label = choice === "system" ? `System (${current.label})` : current.label;
   return (
     <div ref={box} className="fixed bottom-20 left-4 z-40 sm:bottom-6 sm:left-6">
-      <button type="button" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={`Colour theme: ${label}`} aria-label={`Colour theme: ${label}`}
+      <button type="button" onClick={() => { setOpen(!open); if (!open) refreshAi(); }} aria-haspopup="dialog" aria-expanded={open}
+        aria-label={`Settings · ${word}`} title={`Settings · ${word}`}
         className="flex items-center gap-2 rounded-full bg-ink py-3 pl-3.5 pr-4 text-sm font-semibold whitespace-nowrap text-bg shadow-xl transition hover:scale-105">
-        <span aria-hidden className="text-xl leading-none">🎨</span>
-        <span>{label}</span>
+        <span aria-hidden className="relative text-xl leading-none">
+          ⚙️
+          <span className={cx("absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-ink", dot)} />
+        </span>
+        <span>Settings</span>
       </button>
       {open && (
-        <div role="menu" aria-label="Colour theme" className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-2xl border border-line bg-surface p-2 text-sm shadow-xl">
-          <div className="mb-1 px-2 pt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Colour theme</div>
-          {options.map((o) => (
-            <button key={o.id} type="button" role="menuitemradio" aria-checked={choice === o.id}
-              onClick={() => { setTheme(o.id); setOpen(false); }}
-              className={cx("flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-ink hover:bg-surface-2", choice === o.id && "bg-surface-2 font-semibold")}>
-              <Swatch colors={o.swatch} />
-              <span className="flex-1">{o.label}{o.hint && <span className="block text-xs font-normal text-muted">{o.hint}</span>}</span>
-              {choice === o.id && <span aria-hidden className="text-accent">✓</span>}
-            </button>
-          ))}
+        <div role="dialog" aria-label="Settings"
+          className="absolute bottom-full left-0 z-50 mb-2 max-h-[calc(100vh-8rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-line bg-surface p-3 text-sm shadow-xl">
+          <div className="mb-2 px-2 font-serif text-lg font-semibold">Settings</div>
+          <ConnectionDetails to={to} onNavigate={() => setOpen(false)} />
+          <div className="mt-4 mb-1 border-t border-line px-2 pt-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Colour theme</div>
+          <ThemePicker />
         </div>
       )}
     </div>
@@ -224,11 +220,10 @@ export function Layout({ sem, children }: { sem: string; children: ReactNode }) 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-12 pt-8">{children}</main>
       <footer className="border-t border-line pb-20">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 text-xs text-muted">
-          <ConnectionDot to={`${base}/updates`} />
           <Link to={`${base}/ai-work`} className="hover:text-ink">AI background work</Link>
         </div>
       </footer>
-      <ThemeSwitch />
+      <SettingsFab to={`${base}/updates`} />
       <AskAiFab />
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
         {NAV.map(([seg, label], i) => (

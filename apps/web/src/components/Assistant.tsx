@@ -5,9 +5,9 @@
  */
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { SemesterData } from "@ouc/content/types";
-import { Link, useRouter } from "../lib/router";
+import { Link, useRouter, enc } from "../lib/router";
 import { mdToHtml } from "../lib/markdown";
-import { TOOL_STATE, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
+import { TOOL_STATE, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
 import { refreshData } from "../lib/data";
 import { cx } from "./ui";
 
@@ -262,6 +262,7 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
           onClick={() => { a.reset(); setHistory(null); }}>New chat</button>
         <button type="button" aria-label="Close" className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-ink" onClick={() => a.setOpen(false)}>✕</button>
       </header>
+      <RunningTasks sem={data.id} />
       {a.sessions.length > 1 && <Tabs actions={actions} onPick={() => setHistory(null)} />}
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -397,6 +398,21 @@ function ActionForm({ data, action, params, onChange }: { data: SemesterData; ac
       {action.id === "assignment-prep" && params.mode && PREP_MODE[params.mode] && <p className="mt-3 text-xs text-muted">{PREP_MODE[params.mode]}</p>}
       {action.id === "make-notes" && !week && <p className="mt-3 text-xs text-muted">Makes notes for every week{course ? ` of ${course.short}` : ""} that has material and no notes yet.</p>}
     </div>
+  );
+}
+
+/** A strip under the Ask AI header, only while background AI work runs: how many tasks; opens the live page with all of them in a new window. */
+function RunningTasks({ sem }: { sem: string }) {
+  const st = usePrepStatus();
+  const n = st?.busy ? st.running.length + st.queue.length : 0;
+  if (!n) return null;
+  return (
+    <a href={`/${enc(sem)}/ai-work`} target="_blank" rel="noreferrer" title="See the AI's background tasks in a new window"
+      className="flex items-center gap-2 border-b border-line bg-surface-2 px-4 py-1.5 text-xs hover:text-ink">
+      <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-accent" />
+      <span className="flex-1 font-semibold">{n} background {n === 1 ? "task" : "tasks"} running</span>
+      <span className="text-muted">See them ↗</span>
+    </a>
   );
 }
 
