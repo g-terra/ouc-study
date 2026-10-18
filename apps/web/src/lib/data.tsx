@@ -5,15 +5,32 @@ import { at, day } from "./dates";
 const IndexCtx = createContext<SemesterIndex | null>(null);
 const cache = new Map<string, Promise<SemesterData>>();
 
+// Bumped when the data files are rebuilt (a note was written, eClass synced…), so pages re-fetch.
+let version = 0;
+const watchers = new Set<(v: number) => void>();
+export function refreshData() {
+  cache.clear();
+  version++;
+  watchers.forEach((w) => w(version));
+}
+function useDataVersion() {
+  const [v, setV] = useState(version);
+  useEffect(() => { watchers.add(setV); return () => { watchers.delete(setV); }; }, []);
+  return v;
+}
+// the dev server / app server tells the page when it rebuilt the data (apps/web/vite.config.ts)
+import.meta.hot?.on("ouc:data", refreshData);
+
 export function DataProvider({ children }: { children: ReactNode }) {
   const [index, setIndex] = useState<SemesterIndex | null>(null);
   const [error, setError] = useState<string>();
+  const v = useDataVersion();
   useEffect(() => {
-    fetch("/data/index.json")
+    fetch("/data/index.json", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then(setIndex)
       .catch((e) => setError(String(e)));
-  }, []);
+  }, [v]);
   if (error) return <Problem msg={`Couldn't load the study data (${error}). Run “npm run content” and reload.`} />;
   if (!index) return <Loading />;
   if (!index.semesters.length) return <Welcome />;
@@ -31,12 +48,13 @@ export function currentSemesterId(index: SemesterIndex): string {
 
 export function useSemester(id: string): SemesterData | null | undefined {
   const [data, setData] = useState<SemesterData | null>();
+  const v = useDataVersion();
   useEffect(() => {
     let alive = true;
-    if (!cache.has(id)) cache.set(id, fetch(`/data/${encodeURIComponent(id)}.json`).then((r) => (r.ok ? r.json() : Promise.reject())));
+    if (!cache.has(id)) cache.set(id, fetch(`/data/${encodeURIComponent(id)}.json`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject())));
     cache.get(id)!.then((d) => alive && setData(d)).catch(() => alive && setData(null));
     return () => { alive = false; };
-  }, [id]);
+  }, [id, v]);
   return data;
 }
 

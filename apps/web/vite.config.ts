@@ -1,7 +1,7 @@
 import { defineConfig, type Plugin, type Connect } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -102,7 +102,10 @@ function semesterFiles(): Plugin {
       server.middlewares.use(handler);
       // Rebuild the data when notes, metadata or semester config change.
       let timer: NodeJS.Timeout | undefined;
-      server.watcher.add([`${SEMESTERS}/*/notes/**/*.md`, `${SEMESTERS}/*/_meta/*.json`, `${SEMESTERS}/*/semester.json`, `${SEMESTERS}/*/updates/*.json`]);
+      // Vite's watcher takes paths, not globs: watch these folders of every semester (the handler below filters files)
+      const sems = existsSync(SEMESTERS) ? readdirSync(SEMESTERS).filter((d) => existsSync(resolve(SEMESTERS, d, "semester.json"))) : [];
+      for (const d of sems) mkdirSync(resolve(SEMESTERS, d, "notes"), { recursive: true }); // so the first note is seen
+      server.watcher.add(sems.flatMap((d) => ["notes", "_meta", "updates", "semester.json"].map((x) => resolve(SEMESTERS, d, x))));
       // Check eClass for news when the app starts (only if a key has been set up).
       if (existsSync(resolve(HERE, "../../.eclass-token")) && !process.env.NO_SYNC) {
         spawn(process.execPath, [resolve(HERE, "../../packages/eclass-sync/daily.mjs"), "--quiet"], { cwd: resolve(HERE, "../.."), stdio: "inherit" });
@@ -113,7 +116,8 @@ function semesterFiles(): Plugin {
         timer = setTimeout(() => {
           // use this same Node + local tsx (works in the background service where npm isn't on PATH)
           const p = spawn(process.execPath, [resolve(HERE, "../../node_modules/tsx/dist/cli.mjs"), "packages/content/src/build.ts"], { cwd: resolve(HERE, "../.."), stdio: "inherit" });
-          p.on("exit", () => server.ws.send({ type: "full-reload" }));
+          // the app re-reads its data in place (no page reload, so an Ask AI run on screen isn't interrupted)
+          p.on("exit", () => server.ws.send({ type: "custom", event: "ouc:data" }));
         }, 300);
       });
     },

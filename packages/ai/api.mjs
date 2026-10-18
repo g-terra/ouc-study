@@ -139,7 +139,7 @@ export function createAiApi(root, opts = {}) {
     chat ??= { id: randomUUID(), title: shown.slice(0, 80), tool, action, params, sem: semId, createdAt: now, messages: [] };
     chat.updatedAt = now;
     chat.messages.push({ role: "user", text: shown, prompt, at: now });
-    const reply = { role: "assistant", text: "", steps: [], files: [], at: now, by: tool === "opencode" && !cfg.opencode ? "opencode" : describe(cfg) };
+    const reply = { role: "assistant", text: "", updates: [], steps: [], files: [], at: now, by: tool === "opencode" && !cfg.opencode ? "opencode" : describe(cfg) };
     chat.messages.push(reply);
 
     res.statusCode = 200;
@@ -157,10 +157,12 @@ export function createAiApi(root, opts = {}) {
 
     const onEvent = (e) => {
       if (e.type === "text") {
-        // agent tools send whole messages, local models send pieces: the app always gets pieces
-        const piece = e.delta ? e.text : `${reply.text ? "\n\n" : ""}${e.text}`;
-        reply.text += piece;
-        return send({ type: "text", text: piece });
+        // local models send pieces of one answer; agent tools send whole messages, and only the
+        // latest is the answer: the ones before it are kept as progress updates
+        if (e.delta) { reply.text += e.text; return send({ type: "text", text: e.text }); }
+        if (reply.text) reply.updates.push(reply.text);
+        reply.text = e.text;
+        return send({ type: "text", text: e.text, replace: true });
       }
       if (e.type === "session") chat.sessionId = e.id;
       else if (e.type === "tool") reply.steps.push(e.label);
