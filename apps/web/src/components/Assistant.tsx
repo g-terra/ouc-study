@@ -204,6 +204,9 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<ChatSummary[] | null>(null);
   const end = useRef<HTMLDivElement>(null);
+  // the reply box starts at four lines and grows with what's typed (up to its max height, then it scrolls)
+  const field = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { const t = field.current; if (t) { t.style.height = "auto"; t.style.height = `${t.scrollHeight + 2}px`; } }, [input]);
   const box = useRef<HTMLElement>(null);
   const last = a.chat?.messages[a.chat.messages.length - 1];
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [a.chat?.messages.length, last?.text, last?.steps?.length]);
@@ -291,10 +294,10 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
         )}
         {(meta?.id === "assignment-helper" || meta?.id === "assignment-prep") && <p className="mb-2 text-xs text-muted">The AI explains, hints and reviews; it won't write answers for you to submit.</p>}
         <div className="flex items-end gap-2">
-          <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={2}
+          <textarea ref={field} value={input} onChange={(e) => setInput(e.target.value)} rows={4}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
             placeholder={a.chat ? "Reply…" : a.draft ? "Anything to add? (optional)" : "Ask anything about your courses…"}
-            className="min-h-[2.75rem] flex-1 resize-none rounded-xl border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-muted" />
+            className="max-h-64 min-h-[6.5rem] flex-1 resize-none rounded-xl border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-muted" />
           {a.busy
             ? <button type="button" onClick={a.stop} className="rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold">Stop</button>
             : <button type="button" onClick={submit} disabled={!canSend} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-bg disabled:opacity-40">{!a.chat && a.draft ? "Start" : "Send"}</button>}
