@@ -20,6 +20,17 @@ export const c = {
 const ANSI = /\x1b\[[0-9;]*m/g;
 export const width = (s) => [...String(s).replace(ANSI, "")].length;
 const cols = () => Math.min(out.columns || 80, 92);
+// cut a line to the terminal width so it never wraps: menus redraw by moving up one row per line
+const fit = (s) => {
+  const max = (out.columns || 80) - 1;
+  if (width(s) <= max) return s;
+  let n = 0, res = "";
+  for (const part of String(s).split(/(\x1b\[[0-9;]*m)/)) {
+    if (part.startsWith("\x1b[")) { res += part; continue; }
+    for (const ch of part) { if (n >= max - 1) break; res += ch; n++; }
+  }
+  return `${res}…${COLOR ? "\x1b[0m" : ""}`;
+};
 
 export const sym = {
   ok: c.green("✓"), no: c.red("✗"), warn: c.yellow("!"), dot: c.gray("·"), arrow: c.cyan("›"),
@@ -183,7 +194,7 @@ export async function select(q, choices, { initial = 0 } = {}) {
     if (drawn) out.write(`\x1b[${drawn}A\x1b[J`);
     const lines = [`  ${c.cyan("?")} ${c.bold(q)} ${c.gray("↑↓ to move, enter to choose")}`,
       ...choices.map((ch, j) => `   ${j === i ? c.cyan("❯") : " "} ${j === i ? c.bold(ch.label) : ch.label}${ch.hint ? `  ${c.gray(ch.hint)}` : ""}`)];
-    out.write(`${lines.join("\n")}\n`);
+    out.write(`${lines.map(fit).join("\n")}\n`);
     drawn = lines.length;
   };
   out.write("\x1b[?25l"); render();
@@ -215,7 +226,7 @@ export async function multiselect(q, choices, { min = 1 } = {}) {
     const lines = [`  ${c.cyan("?")} ${c.bold(q)}`, `    ${c.gray("↑↓ move · space select · a all · enter confirm")}`,
       ...choices.map((ch, j) => `   ${j === i ? c.cyan("❯") : " "} ${sel[j] ? sym.on : sym.off} ${j === i ? c.bold(ch.label) : ch.label}${ch.hint ? `  ${c.gray(ch.hint)}` : ""}`),
       msg ? `    ${c.red(msg)}` : ""];
-    out.write(`${lines.join("\n")}\n`);
+    out.write(`${lines.map(fit).join("\n")}\n`);
     drawn = lines.length;
   };
   out.write("\x1b[?25l"); render();
