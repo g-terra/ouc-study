@@ -400,6 +400,7 @@ function ActionForm({ data, action, params, onChange }: { data: SemesterData; ac
         </p>
       )}
       {action.id === "assignment-prep" && params.mode && PREP_MODE[params.mode] && <p className="mt-3 text-xs text-muted">{PREP_MODE[params.mode]}</p>}
+      {action.id === "assignment-review" && <p className="mt-3 text-xs text-muted">Reviews {params.version ? `version ${params.version}` : "the latest version"} of the .docx you uploaded on the assignment page: feedback and what to fix, never rewritten answers.</p>}
       {action.id === "make-notes" && !week && <p className="mt-3 text-xs text-muted">Makes notes for every week{course ? ` of ${course.short}` : ""} that has material and no notes yet.</p>}
     </div>
   );

@@ -8,6 +8,9 @@ out({ type: "system", subtype: "init", session_id: resume ?? "sess-1" });
 // a prep pack request: write the file it names, like a real agent would
 const prep = prompt.match(/save the pack as (\S+PREP\.md)/)?.[1];
 if (prep) (await import("node:fs")).writeFileSync(`${process.cwd()}/${prep}`, `# Prep\n\nHints for ${prep}\n`);
+// a draft review: write the review it asks for
+const review = prompt.match(/Save the review as `(\S+REVIEW-v\d+\.md)`/)?.[1];
+if (review) (await import("node:fs")).writeFileSync(`${process.cwd()}/${review}`, "---\nverdict: almost\n---\n\n## Verdict\nNearly there.\n");
 if (prompt.includes("FAIL")) { console.error("boom: something broke"); process.exit(3); }
 out({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: `${process.cwd()}/memory/progress.md` } }] } });
 out({ type: "assistant", message: { content: [{ type: "tool_use", name: "Write", input: { file_path: `${process.cwd()}/semesters/2026-Fall/plans/2026-W42.md`, content: "x" } }] } });

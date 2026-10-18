@@ -181,8 +181,9 @@ You can also just open the folder in the tool itself (`claude`, `codex` or `open
 | study-planner | plans weekly study and deliverables, and flags risks |
 | researcher | finds and checks papers, chapters, videos and tutorials, with citations |
 | tutor | explains, quizzes, reviews drafts, and logs weak spots |
+| assignment-reviewer | reviews your draft before you submit it, against the brief, the rubric and the course material |
 
-Skills: `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `assignment-helper`, `assignment-prep`, `sync-eclass`. They live in `ai/`; `ouc ai install` copies them to `.claude/` (Claude Code), `.agents/skills/` (Codex and opencode) and `.opencode/agents/` (opencode subagents). Run it again after editing them.
+Skills: `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `assignment-helper`, `assignment-prep`, `assignment-review`, `sync-eclass`. They live in `ai/`; `ouc ai install` copies them to `.claude/` (Claude Code), `.agents/skills/` (Codex and opencode) and `.opencode/agents/` (opencode subagents). Run it again after editing them.
 
 Try: "plan my week" · "make notes on lecture 7" · "find material on signal detection theory" · "quiz me on Naive Bayes" · "help me approach the term project" · "what's new on eClass?"
 
@@ -196,6 +197,7 @@ Press **✨ Ask AI** in the top bar. Pick an action (Make notes, Quiz me, Plan m
 - The AI edits files in this folder without asking each time (like `ouc notes`), with the same limits as the command line. Claude Code and opencode are blocked from reading your eClass key, and every AI is told never to touch it.
 - With "a local model directly" you can chat and quiz; the other actions need Claude Code, Codex or opencode.
 - **Prep packs:** every assignment you haven't submitted (including ones not open yet) gets a `PREP.md` in its folder (what it asks, key ideas, hints, course material, extra reading, a plan), shown on the assignment page. The app makes them on its own when it starts and after each sync. On the assignment page you can ask another AI to **Review & improve** it, **Add more**, or **Start over**. To turn the automatic part off, add `"autoPrep": false` to `.ouc/ai.json`.
+- **Review before submitting:** on the assignment page, upload your solution as a Word `.docx`. Your AI reviews it against the brief, the marking criteria, that week's material and your notes, and says what to fix and why (it never rewrites your answers). Discuss it in Ask AI, upload the fixed version for another round (every round is kept), and when you're happy press **Approve**: your `.docx` becomes a PDF, unchanged, ready to upload on eClass. Making the PDF uses [LibreOffice](https://www.libreoffice.org/download/) (free; on a Mac `brew install --cask libreoffice`). Your drafts stay in the assignment's `review/` folder, never shared.
 - **Sync now** (Updates page) also downloads new course files, then has your AI make every missing note (all weeks with files, started or not) and prep pack. A bar under the top menu shows the progress; click a running item to watch it. Up to 3 run at once; set `"parallel": 5` (1–8) in `.ouc/ai.json` to change that.
 - Chats are saved on your computer in `.ouc/chats/` (never committed). **History** in the panel reopens them.
 - It only works in the app running on your computer (`ouc open` or `npm run dev`), and only pages from that app can use it.
