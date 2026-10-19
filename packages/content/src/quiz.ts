@@ -10,6 +10,8 @@ type Raw = any;
 export const QUESTION_TYPES = ["true-false", "single", "multiple"] as const;
 /** "All of the above", "None of the above", "Both of the above": these stay last when options are shuffled. */
 export const PINNED_OPTION = /^(all|none|both|neither) of the (above|options)\b/i;
+/** An explanation that sends the student to the material instead of explaining ("see slide 9", "the lecture says"). */
+const POINTS_TO_MATERIAL = /\b(see|on|in) (the )?(slide|page|lecture|notes?)\b|\bslides? \d|\bthe (lecture|slides?|notes?|reading) (says|said|contrasts|explains|shows|mentions|states)\b|\.(md|pdf|pptx)\b/i;
 
 /**
  * Checks a quiz file and returns it in the app's shape (`id` and `code` come from where the file is).
@@ -39,7 +41,8 @@ export function parseQuiz(src: string | Raw, where: { code: string; name: string
     need(text, 'needs "question" (the text).');
     const base = { question: text, explanation: str(q?.explanation) || undefined, source: str(q?.source) || undefined };
     if (!base.explanation) warnings.push(`${at}: no "explanation" (why the answer is right helps the student learn).`);
-    if (!base.source) warnings.push(`${at}: no "source" (which file or slide the question comes from).`);
+    else if (base.explanation.split(/\s+/).length < 15) warnings.push(`${at}: the "explanation" is short; explain fully why the answer is right (and why the tempting wrong ones are wrong).`);
+    if (base.explanation && POINTS_TO_MATERIAL.test(base.explanation)) warnings.push(`${at}: the "explanation" points to the material; explain the idea itself instead.`);
     if (q?.type === "true-false") {
       if (need(typeof q.answer === "boolean", '"answer" must be true or false (no quotes).')) questions.push({ type: "true-false", ...base, answer: q.answer });
       return;

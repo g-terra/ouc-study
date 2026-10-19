@@ -241,7 +241,6 @@ export function QuizPage({ data, code, name }: { data: SemesterData; code: strin
               <div className="flex gap-2"><span aria-hidden>{results[j] ? "✅" : "❌"}</span><span className="font-semibold">{x.question}</span></div>
               {!results[j] && <div className="mt-1 pl-7">Answer: <b>{rightAnswer(x)}</b></div>}
               {x.explanation && <div className="mt-1 pl-7 text-muted">{x.explanation}</div>}
-              {x.source && <div className="mt-1 pl-7 text-xs text-muted">📄 {x.source}</div>}
             </li>
           ))}
         </ol>
@@ -272,7 +271,6 @@ export function QuizPage({ data, code, name }: { data: SemesterData; code: strin
           <div className={cx("mt-5 rounded-xl px-4 py-3 text-sm", right ? "bg-ok-bg" : "bg-bad-bg")} role="status">
             <div className={cx("font-semibold", right ? "text-ok" : "text-bad")}>{right ? "Right!" : `Not quite. The answer: ${rightAnswer(q)}`}</div>
             {q.explanation && <p className="mt-1">{q.explanation}</p>}
-            {q.source && <p className="mt-1 text-xs text-muted">📄 {q.source}</p>}
           </div>
         )}
         <div className="mt-6 flex justify-end">

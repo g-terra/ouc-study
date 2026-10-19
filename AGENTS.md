@@ -31,7 +31,7 @@ semesters/<id>/       ← personal, git-ignored
   text/               plain-text copies of every PDF/PPTX/DOCX/notebook. **grep these**
   assignments/<CODE>/<MM-DD>_<name>/   brief files, my-submission/, README.md (working notes), PREP.md (AI prep pack), review/ (drafts uploaded for review: vN.docx, vN.md text, REVIEW-vN.md, approved PDF)
   notes/<CODE>/*.md   visual notes (format: docs/NOTE_FORMAT.md)
-  quizzes/<CODE>/*.json  scored quizzes from the course material (format: docs/QUIZ_FORMAT.md); quizzes/attempts.json = the student's scores
+  quizzes/<CODE>/*.json  scored quizzes on the course's topics (format: docs/QUIZ_FORMAT.md); quizzes/attempts.json = the student's scores
   plans/, research/   weekly plans, research digests
   updates/            daily eClass change feed
 memory/               long-term memory, shared across semesters (personal, git-ignored)
