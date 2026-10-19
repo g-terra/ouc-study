@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # the release workflow starts this on release-please's PR, which GitHub doesn't run CI on by itself
+  workflow_dispatch:
 
 permissions:
   contents: read
