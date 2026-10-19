@@ -11,7 +11,10 @@ const opts = {
 };
 
 /** The semester the page is showing, for paths written relative to it ("notes/COS514/x.md"). */
-const pageSem = () => decodeURIComponent(window.location.pathname.split("/")[1] ?? "") || undefined;
+const pageSem = () => {
+  const seg = window.location.pathname.split("/");
+  return decodeURIComponent(seg[1] === "v2" ? seg[2] ?? "" : seg[1] ?? "") || undefined;
+};
 
 /**
  * Markdown (with $math$, $$display$$, tables, autolinks) → HTML. External links open in a new tab;

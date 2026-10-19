@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { RouterProvider, Routes, useRouter, enc } from "./lib/router";
+import { RouterProvider, Routes, setLinkRewrite, useRouter, enc } from "./lib/router";
 import { DataProvider, Loading, Problem, currentSemesterId, useIndex, useSemester } from "./lib/data";
 import { Layout } from "./components/Layout";
 import { AssistantPanel, AssistantProvider } from "./components/Assistant";
@@ -13,7 +13,17 @@ import { PlanPage } from "./pages/Plan";
 import { AiWorkPage } from "./pages/AiWork";
 import { QuizPage, QuizzesPage } from "./pages/Quizzes";
 import { SlidesPage } from "./pages/Slides";
+import { Shell } from "./v2/Shell";
+import { preferredLook } from "./v2/look";
+import { Today } from "./v2/Today";
+import { CourseList, CourseView } from "./v2/Courses";
+import { Calendar } from "./v2/Calendar";
+import { Inbox } from "./v2/Inbox";
+import { isV2, toV2 } from "./v2/paths";
 import type { SemesterData } from "@ouc/content/types";
+
+// while a v2 page is open, links to classic pages open their v2 version
+setLinkRewrite((to) => (isV2(window.location.pathname) ? toV2(to) : to));
 
 function Semester({ sem, page }: { sem: string; page: (d: SemesterData) => ReactNode }) {
   const data = useSemester(sem);
@@ -26,11 +36,24 @@ function Semester({ sem, page }: { sem: string; page: (d: SemesterData) => React
   );
 }
 
-function Home() {
+/** The v2 preview: the same data and detail pages in a simpler frame (src/v2/). */
+function V2Semester({ sem, page }: { sem: string; page: (d: SemesterData) => ReactNode }) {
+  const data = useSemester(sem);
+  useEffect(() => { document.title = data ? `${data.label} · OUC Study` : "OUC Study"; }, [data]);
+  return (
+    <Shell sem={sem} data={data}>
+      {data === undefined ? <Loading /> : data === null ? <Problem msg={`No data for semester “${sem}”.`} /> : page(data)}
+      {data && <AssistantPanel data={data} />}
+    </Shell>
+  );
+}
+
+/** "/" (and "/v2"): the current semester, in the look chosen last. */
+function Home({ v2 = false }: { v2?: boolean }) {
   const index = useIndex();
   const { navigate } = useRouter();
   const id = currentSemesterId(index);
-  useEffect(() => { if (id) navigate(`/${enc(id)}`); }, [id]);
+  useEffect(() => { if (id) navigate(`${v2 || preferredLook() === "v2" ? "/v2" : ""}/${enc(id)}`, { raw: true }); }, [id]);
   return id ? <Loading /> : <Problem msg="No semesters found. Add one under semesters/ (see README)." />;
 }
 
@@ -42,6 +65,20 @@ export default function App() {
           <Routes
             routes={[
               ["/", () => <Home />],
+              ["/v2", () => <Home v2 />],
+              ["/v2/:sem", (p) => <V2Semester sem={p.sem} page={(d) => <Today data={d} />} />],
+              ["/v2/:sem/courses", (p) => <V2Semester sem={p.sem} page={(d) => <CourseList data={d} />} />],
+              ["/v2/:sem/courses/:code", (p) => <V2Semester sem={p.sem} page={(d) => <CourseView key={p.code} data={d} code={p.code} />} />],
+              ["/v2/:sem/calendar", (p) => <V2Semester sem={p.sem} page={(d) => <Calendar data={d} />} />],
+              ["/v2/:sem/inbox", (p) => <V2Semester sem={p.sem} page={(d) => <Inbox data={d} />} />],
+              // detail pages are shared with the classic look
+              ["/v2/:sem/plan", (p) => <V2Semester sem={p.sem} page={(d) => <PlanPage data={d} />} />],
+              ["/v2/:sem/plan/:week", (p) => <V2Semester sem={p.sem} page={(d) => <PlanPage key={p.week} data={d} week={p.week} />} />],
+              ["/v2/:sem/notes/:code/:slug", (p) => <V2Semester sem={p.sem} page={(d) => <NotePage key={p.slug} data={d} code={p.code} slug={p.slug} />} />],
+              ["/v2/:sem/quizzes/:code/:name", (p) => <V2Semester sem={p.sem} page={(d) => <QuizPage key={`${p.code}/${p.name}`} data={d} code={p.code} name={p.name} />} />],
+              ["/v2/:sem/slides/:file", (p) => <V2Semester sem={p.sem} page={(d) => <SlidesPage key={p.file} data={d} file={p.file} />} />],
+              ["/v2/:sem/ai-work", (p) => <V2Semester sem={p.sem} page={(d) => <AiWorkPage data={d} />} />],
+              ["/v2/:sem/assignments/:code/:folder", (p) => <V2Semester sem={p.sem} page={(d) => <AssignmentPage key={p.folder} data={d} id={`${p.code}/${p.folder}`} />} />],
               ["/:sem", (p) => <Semester sem={p.sem} page={(d) => <Dashboard data={d} />} />],
               ["/:sem/plan", (p) => <Semester sem={p.sem} page={(d) => <PlanPage data={d} />} />],
               ["/:sem/plan/:week", (p) => <Semester sem={p.sem} page={(d) => <PlanPage key={p.week} data={d} week={p.week} />} />],

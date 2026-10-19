@@ -163,7 +163,7 @@ export function PlanCard({ data, className }: { data: SemesterData; className?: 
   return (
     <Card className={cx("p-5", className)}>
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[12rem] flex-1">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted">This week's plan · Week {weekNo(plan)}</div>
           <div className="mt-0.5 font-serif text-xl font-semibold">{actions?.title ?? "Next up"}</div>
         </div>

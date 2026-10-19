@@ -143,7 +143,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
 }
 
 /** Links to quizzes with the best score so far. */
-function QuizLinks({ sem, quizzes, withScope = false }: { sem: string; quizzes: Quiz[]; withScope?: boolean }) {
+export function QuizLinks({ sem, quizzes, withScope = false }: { sem: string; quizzes: Quiz[]; withScope?: boolean }) {
   const { stats } = useAttempts(sem);
   return (
     <div className="grid gap-1.5">
@@ -161,7 +161,7 @@ function QuizLinks({ sem, quizzes, withScope = false }: { sem: string; quizzes: 
   );
 }
 
-function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes, quizzes, data }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string; classes: ClassSession[]; quizzes: Quiz[]; data: SemesterData }) {
+export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes, quizzes, data }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string; classes: ClassSession[]; quizzes: Quiz[]; data: SemesterData }) {
   const dates = w.start ? `${fmtShort(day(w.start))} – ${fmtShort(day(w.end!))}${w.estimated ? " (est.)" : ""}` : "";
   const counts = w.items.reduce<Record<string, number>>((m, i) => ((m[i.kind] = (m[i.kind] ?? 0) + 1), m), {});
   return (

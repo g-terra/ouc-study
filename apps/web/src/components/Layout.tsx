@@ -7,9 +7,11 @@ import { TOOL_STATE, refreshAi, useAiStatus, usePrepStatus, workLabel } from "..
 import { useAssistant } from "./Assistant";
 import { THEMES, setTheme, useTheme, type ThemeChoice } from "../lib/theme";
 import { releaseHighlights, useUpdate } from "../lib/update";
+import { rememberLook } from "../v2/look";
+import { toV2 } from "../v2/paths";
 
 /** eClass and the AI coding tools: one summary dot, plus the details shown in Settings. */
-function useConnectionSummary() {
+export function useConnectionSummary() {
   const c = useConnection();
   const ai = useAiStatus();
   const l = CONN_LABEL[c.state];
@@ -23,7 +25,7 @@ function useConnectionSummary() {
   return { c, ai, l, eclassOk, aiKnown, dot, word };
 }
 
-function ConnectionDetails({ to, onNavigate }: { to: string; onNavigate: () => void }) {
+export function ConnectionDetails({ to, onNavigate }: { to: string; onNavigate: () => void }) {
   const { c, ai, l, eclassOk, aiKnown } = useConnectionSummary();
   const when = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "");
   return (
@@ -72,7 +74,7 @@ function Swatch({ colors }: { colors: readonly string[] }) {
 const SYSTEM_SWATCH = [THEMES[0].swatch[0], THEMES[1].swatch[0]];
 
 /** Colour theme picker: System (follows the computer), Light, Dark and a few extras; remembered in this browser. */
-function ThemePicker() {
+export function ThemePicker() {
   const { choice } = useTheme();
   const options: { id: ThemeChoice; label: string; hint?: string; swatch: readonly string[] }[] = [
     { id: "system", label: "System", hint: "Follows your computer", swatch: SYSTEM_SWATCH },
@@ -132,7 +134,7 @@ function SettingsFab({ to }: { to: string }) {
 }
 
 /** The installed version, the newest release, and the update button when there is one. */
-function AppVersion() {
+export function AppVersion() {
   const { info, phase, start, check, checking } = useUpdate();
   if (!info) return <p className="px-2 text-muted">Checking…</p>;
   const ahead = !info.available && info.latest && info.current !== info.latest;
@@ -162,7 +164,7 @@ function AppVersion() {
 }
 
 /** Ask AI: a round robot button at the bottom right; it opens the chat as a popup over the page. */
-function AskAiFab() {
+export function AskAiFab() {
   const { open, setOpen, sessions } = useAssistant();
   const busy = sessions.some((x) => x.busy);
   const ai = useAiStatus();
@@ -179,7 +181,7 @@ function AskAiFab() {
 }
 
 /** While the AI makes missing notes and prep packs in the background: a progress bar and what's running. */
-function AiWorkBar({ sem }: { sem: string }) {
+export function AiWorkBar({ sem }: { sem: string }) {
   const st = usePrepStatus();
   const data = useSemester(sem);
   const { load, setOpen } = useAssistant();
@@ -212,7 +214,7 @@ function AiWorkBar({ sem }: { sem: string }) {
 }
 
 /** A newer release is out: what's new, and a button that updates and restarts the app. */
-function UpdateBar() {
+export function UpdateBar() {
   const { info, phase, start } = useUpdate();
   const [open, setOpen] = useState(false);
   // ✕ hides this release's bar for the rest of the browser session
@@ -282,6 +284,8 @@ export function Layout({ sem, children }: { sem: string; children: ReactNode }) 
             ))}
           </nav>
           <span className="flex-1 sm:hidden" />
+          <button type="button" onClick={() => { rememberLook("v2"); navigate(toV2(path)); }} title="A simpler layout with four places: Today, Courses, Calendar, Inbox"
+            className="whitespace-nowrap rounded-full border border-accent/50 px-3 py-1.5 text-sm font-semibold text-accent hover:bg-surface-2">✨ <span className="hidden md:inline">Try the </span>new look</button>
           <select aria-label="Semester" value={sem} onChange={(e) => navigate(`/${enc(e.target.value)}`)}
             className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm">
             {index.semesters.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
