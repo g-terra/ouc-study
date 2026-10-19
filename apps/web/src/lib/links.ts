@@ -23,7 +23,15 @@ export function fileLink(path: string, sem?: string): { to: string; internal: bo
   const asg = rest.match(/^assignments\/([^/]+)\/([^/]+)(?:\/(README\.md|PREP\.md)?)?$/);
   if (asg) return { to: `/${encodeURIComponent(s)}/assignments/${encodeURIComponent(asg[1])}/${encodeURIComponent(asg[2])}`, internal: true };
   if (!/\.\w{1,6}$/.test(rest)) return null;   // a folder
-  return { to: `/files/${s}/${enc(rest)}`, internal: false };
+  const href = `/files/${s}/${enc(rest)}`;
+  return slidesPage(href) ? { to: slidesPage(href)!, internal: true } : { to: href, internal: false };
+}
+
+/** PowerPoint files open in the app's slide viewer: /files/<sem>/<path>.pptx → /<sem>/slides/<path>. Null for other files. */
+export function slidesPage(href?: string): string | null {
+  const m = href?.match(/^\/files\/([^/]+)\/(.+\.(?:pptx|ppsx|ppt|pps|odp))$/i);
+  if (!m) return null;
+  try { return `/${m[1]}/slides/${encodeURIComponent(decodeURIComponent(m[2]))}`; } catch { return null; }
 }
 
 /** What a link to a path shows: the file (or folder) name; a note's slug, an assignment's folder, "Week 42 plan". */

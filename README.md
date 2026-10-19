@@ -136,6 +136,7 @@ How it runs in the background: on macOS two LaunchAgents (`~/Library/LaunchAgent
 - **Dashboard**: next deadline with a countdown, the final exams, the next live class of each course, what's new on eClass, the next 14 days, and progress per course.
 - **Timeline**: the semester at a glance, then week by week (deadlines, live classes, exams), with filters per course.
 - **Courses**: each course week by week (slides, videos, assignments, your notes, the week's live class) plus your grades.
+- **Slides**: click a PowerPoint on a course week and it opens right in the app, slide by slide (arrow keys, full screen), with no download. Slides with recorded narration have a 🔊 player under them; tick **Play as a lecture** to hear each slide and move on by itself. The app makes a PDF copy the first time you open a deck (a few seconds; kept in `.ouc/slides/`) using [LibreOffice](https://www.libreoffice.org/download/) (free; `ouc setup` offers to install it, or on a Mac `brew install --cask libreoffice`, on Windows `winget install TheDocumentFoundation.LibreOffice`). Animations and videos inside the slides don't play there: use **Download** for those.
 - **Notes**: visual notes with diagrams, LaTeX formulas, comparison tables and flip-card self-tests.
 - **Assignments**: the question, files, PDF preview, study links, grade and feedback.
 - **Updates**: what changed on eClass each day, with a live 🟢 connection status, **Re-check** and **Sync now**.
