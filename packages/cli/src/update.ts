@@ -7,7 +7,9 @@ import { dirname, join } from "node:path";
 import { installDeps, missingDeps, npmRunner } from "./deps.ts";
 
 const DEFAULT_REPO = "g-terra/ouc-study";
-const DAY = 24 * 60 * 60_000;
+// how long a GitHub answer is reused: short enough that a new release shows within the hour,
+// long enough to stay far under GitHub's 60 calls an hour per network
+const CACHE_MS = 60 * 60_000;
 
 /** What the newest release is, as cached in .ouc/update.json. */
 export interface Release { latest: string; notes: string; url: string; publishedAt?: string | null; checkedAt: string }
@@ -50,14 +52,15 @@ const cacheFile = (root: string) => join(root, ".ouc/update.json");
 
 /**
  * Is a newer release out? { current, latest, available, notes, url, checkedAt, error? }
- * Asks GitHub at most once a day (fresh: now), so the app and `ouc status` can call it freely.
+ * Asks GitHub at most once an hour (fresh: now), so the app and `ouc status` can call it freely.
  */
 export async function checkForUpdate(root: string, { fresh = false, fetchImpl = fetch as FetchLike, now = Date.now() } = {}): Promise<UpdateCheck> {
   const current = localVersion(root);
   let cached: Release | undefined;
   try { cached = JSON.parse(readFileSync(cacheFile(root), "utf8")); } catch {}
   let rel = cached;
-  if (!rel || fresh || now - Date.parse(rel.checkedAt ?? "") > DAY) {
+  // an answer older than this copy (it was updated since) is stale too
+  if (!rel || fresh || now - Date.parse(rel.checkedAt ?? "") > CACHE_MS || isNewer(current ?? "", rel.latest ?? "")) {
     try {
       const r = await fetchImpl(`https://api.github.com/repos/${repoSlug(root)}/releases/latest`, {
         headers: { Accept: "application/vnd.github+json", "User-Agent": "ouc-study" }, signal: AbortSignal.timeout(8000),

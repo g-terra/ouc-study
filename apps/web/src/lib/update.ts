@@ -1,4 +1,4 @@
-/** "Update available": a newer release of the app on GitHub (checked by /api/update, at most once a day). */
+/** "Update available": a newer release of the app on GitHub (checked by /api/update, at most once an hour). */
 import { useEffect, useState } from "react";
 
 export interface UpdateInfo {
