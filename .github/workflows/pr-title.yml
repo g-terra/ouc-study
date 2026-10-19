@@ -4,6 +4,8 @@ name: PR title
 on:
   pull_request_target:
     types: [opened, edited, reopened, synchronize]
+  # the release workflow starts this on release-please's PR, which GitHub doesn't run checks on by itself
+  workflow_dispatch:
 
 permissions:
   pull-requests: read
@@ -14,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: amannn/action-semantic-pull-request@v6
+        if: github.event_name == 'pull_request_target'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -32,3 +35,12 @@ jobs:
           subjectPattern: ^(?![A-Z]).+$
           subjectPatternError: |
             Start the subject in lower case, e.g. "feat(web): add a week filter to the timeline".
+      - name: Check the title of the open PR from this branch
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          title=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json title --jq '.[0].title')
+          echo "PR title: $title"
+          echo "$title" | grep -qE '^(feat|fix|perf|refactor|docs|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: [^A-Z]'
