@@ -6,7 +6,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createAiApi, needsPrep, readPrepMeta } from "../src/api.ts";
+import { createAiApi, needsPrep, readPrepMeta, stampQuiz } from "../src/api.ts";
 import { json, portOf, type Ev } from "./helpers.ts";
 import type { Server } from "node:http";
 
@@ -190,4 +190,60 @@ test("fixing a class time writes it to semester.json", async (t) => {
   assert.equal((await save({ sem: "2026-Fall", code: "X1", day: "Thu", time: "nope" })).status, 400);
   assert.equal((await save({ sem: "../x", code: "X1", day: "Thu", time: "19:00" })).status, 400);
   assert.equal((await save({ sem: "2027-Spring", code: "X1", day: "Thu", time: "19:00" })).status, 404);
+});
+
+/** A semester "S" with one course and one week with a note (the material a quiz is made from). */
+function quizSemester(root: string) {
+  mkdirSync(join(root, "semesters/S/notes/AAA"), { recursive: true });
+  writeFileSync(join(root, "semesters/S/semester.json"), JSON.stringify({ start: "2000-01-01", end: "2999-01-01", courses: [] }));
+  writeFileSync(join(root, "semesters/S/notes/AAA/week-01-intro.md"), "---\ntitle: Intro\n---\nThe sky is blue.\n");
+  mkdirSync(join(root, "apps/web/public/data"), { recursive: true });
+  writeFileSync(join(root, "apps/web/public/data/S.json"), JSON.stringify({
+    courses: [{ code: "AAA", short: "AAA", title: "AAA course", weeks: [{ index: 1, name: "Week 1", label: "Intro", items: [] }] }],
+    notes: [{ code: "AAA", weekIndex: 1, slug: "week-01-intro", title: "Intro", body: "The sky is blue." }], assignments: [],
+  }));
+}
+
+test("make a quiz with an agent: it writes the file, the app notes which AI made it", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  quizSemester(root);
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  await sse(await fetch(`${base}/api/ai/run`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify({ sem: "S", action: "make-quiz", params: { course: "AAA", week: "1" } }) }));
+  const quiz = JSON.parse(readFileSync(join(root, "semesters/S/quizzes/AAA/week-01-intro.json"), "utf8"));
+  assert.equal(quiz.by, "Claude Code");
+  assert.ok(quiz.created);
+  assert.equal(quiz.questions.length, 1);
+  assert.equal(stampQuiz(root, "semesters/S/quizzes/AAA/week-01-intro.json", "Codex"), false);   // already stamped
+});
+
+test("make a quiz with a local model: it answers with the JSON and the app saves it", async (t) => {
+  let answer = "";
+  const model = http.createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "text/event-stream" });
+    res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: answer } }] })}\n\n`);
+    res.end("data: [DONE]\n\n");
+  });
+  await new Promise<void>((ok) => model.listen(0, "127.0.0.1", ok));
+  const { root, server, base } = await setup();
+  t.after(() => { server.close(); model.close(); });
+  quizSemester(root);
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "local", local: { kind: "openai", baseUrl: `http://127.0.0.1:${portOf(model)}/v1`, model: "m" } }));
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const run = async (body: object) => sse(await fetch(`${base}/api/ai/run`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) }));
+
+  answer = 'Here it is:\n```json\n{ "title": "Intro", "scope": "course", "questions": [{ "type": "single", "question": "Colour?", "options": [{ "text": "Blue", "correct": false }] }] }\n```';
+  let ev = await run({ sem: "S", action: "make-quiz", params: { course: "AAA" } });
+  assert.match(ev.filter((e) => e.type === "text").at(-1)?.text, /couldn't be saved: Question 1: "options" must be a list of 2 to 8/);
+  const chatId = ev.find((e) => e.type === "chat")?.id;
+
+  // asked to fix it, it answers again in the same chat: saved where the first try was meant to go
+  answer = '{ "title": "Intro", "scope": "course", "questions": [{ "type": "true-false", "question": "Blue?", "answer": true }] }';
+  ev = await run({ sem: "S", chatId, message: "Fix it" });
+  assert.match(ev.filter((e) => e.type === "text").at(-1)?.text, /Saved the quiz `semesters\/S\/quizzes\/AAA\/course-aaa\.json`: 1 questions/);
+  assert.ok(ev.some((e) => e.type === "file" && e.path === "semesters/S/quizzes/AAA/course-aaa.json"));
+  const quiz = JSON.parse(readFileSync(join(root, "semesters/S/quizzes/AAA/course-aaa.json"), "utf8"));
+  assert.equal(quiz.questions[0].answer, true);
+  assert.ok(quiz.by && quiz.created);
+  assert.match(JSON.parse(readFileSync(join(root, ".ouc/chats", `${chatId}.json`), "utf8")).quiz, /course-aaa\.json$/);
 });

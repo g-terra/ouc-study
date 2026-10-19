@@ -1,7 +1,7 @@
 // The note / prep pack checker: LaTeX quoting, prep packs, --fix.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fixQuotedLatex, validateNote } from "../src/validate.ts";
+import { fixQuotedLatex, validateNote, validateQuiz } from "../src/validate.ts";
 
 const PREP = `---
 by: Codex
@@ -34,4 +34,11 @@ test("a prep pack with LaTeX in double quotes is flagged, and --fix repairs only
 
 test("as a note, a prep pack still needs the note front matter", () => {
   assert.ok(validateNote(fixQuotedLatex(PREP)).errors.some((e) => /front matter/i.test(e)));
+});
+
+test("a quiz is checked against docs/QUIZ_FORMAT.md, with the course from its folder", () => {
+  const quiz = JSON.stringify({ title: "Q", course: "AAA", scope: "course", questions: [{ type: "true-false", question: "Q?", answer: true, explanation: "x", source: "y" }] });
+  assert.deepEqual(validateQuiz(quiz, "semesters/S/quizzes/AAA/course-aaa.json"), { errors: [], warnings: [] });
+  assert.match(validateQuiz(quiz, "semesters/S/quizzes/BBB/course.json").errors[0], /BBB folder/);
+  assert.match(validateQuiz(quiz, "semesters/S/notes/AAA/quiz.json").errors[0], /quizzes\/<COURSE CODE>/);
 });

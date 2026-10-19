@@ -5,6 +5,7 @@
  *   semesters/<id>/_meta/*.json         eClass scrape, submissions, exams, study resources
  *   semesters/<id>/notes/<CODE>/*.md    visual notes (docs/NOTE_FORMAT.md)
  *   semesters/<id>/plans/<YYYY>-W<NN>.md week plans (ai/skills/plan-week)
+ *   semesters/<id>/quizzes/<CODE>/*.json quizzes the AI made (docs/QUIZ_FORMAT.md, ai/skills/make-quiz)
  *   semesters/<id>/assignments/...      one folder per assignment (brief + my-submission/)
  *   semesters/<id>/courses/...          the downloaded course files
  *
@@ -16,9 +17,10 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildClasses, detectClasses, type ClassesConfig } from "./classes.ts";
 import { parsePlan } from "./plan.ts";
+import { parseQuiz } from "./quiz.ts";
 import type {
   UpdatesFeed, GradeItem, ClassSession,
-  Assignment, Prep, Course, Exam, FileRef, Note, Resource, SemesterData, SemesterIndex, SemesterSummary, Week, WeekItem,
+  Assignment, Prep, Course, Exam, FileRef, Note, Quiz, Resource, SemesterData, SemesterIndex, SemesterSummary, Week, WeekItem,
 } from "./types.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -120,6 +122,7 @@ function buildSemester(id: string): SemesterData | undefined {
   const assignments: Assignment[] = [];
   const notes: Note[] = [];
   const classes: ClassSession[] = [];
+  const quizzes: Quiz[] = [];
 
   for (const cc of cfg.courses) {
     const m = meta.find((x) => x.code === cc.code) ?? { secs: [] };
@@ -265,6 +268,14 @@ function buildSemester(id: string): SemesterData | undefined {
       if (w && /^Lecture \d+$/.test(w.label) && note.title.includes("·")) w.label = `${w.label} · ${note.title.split("·").pop()!.trim()}`;
     }
 
+    // --- quizzes (a broken file is skipped with a message: node packages/ai/validate.mjs <file> says what to fix)
+    const qd = join(dir, "quizzes", cc.code);
+    for (const f of listFiles(qd).filter((f) => f.endsWith(".json")).sort()) {
+      const { quiz, errors } = parseQuiz(readFileSync(join(qd, f), "utf8"), { code: cc.code, name: f.replace(/\.json$/, "") });
+      if (quiz) quizzes.push(quiz);
+      else console.warn(`! skipped quizzes/${cc.code}/${f}: ${errors[0]}`);
+    }
+
     const grades: GradeItem[] = (live.grades ?? []).filter((g) => g.code === cc.code && g.grade)
       .map((g) => ({ item: g.item, grade: g.grade, feedback: g.feedback || undefined, graded: g.graded }));
     // --- live classes: the Webconference activity on the course page is the join link
@@ -311,7 +322,7 @@ function buildSemester(id: string): SemesterData | undefined {
 
   return {
     id, label: cfg.label, start: cfg.start, end: cfg.end, generated: new Date().toISOString(),
-    courses, assignments, exams, classes, notes, updates, plans, timezone: cfg.timezone ?? "Europe/Nicosia",
+    courses, assignments, exams, classes, notes, updates, plans, quizzes, timezone: cfg.timezone ?? "Europe/Nicosia",
   };
 }
 
@@ -329,6 +340,8 @@ function deadlinesMarkdown(d: SemesterData): string {
     ...(cl.length ? ["## Live classes (webconferences)", "", "_Times read from eClass announcements (or semester.json \"classes\"), shown in this computer's time zone._", "", "| When | Course | Week's topic | Join |", "|---|---|---|---|", ...cl, ""] : [])].join("\n");
 }
 
+const quizzes = (d: SemesterData) => (d.quizzes?.length ? `${d.quizzes.length} quizzes, ` : "");
+
 function main() {
   if (!existsSync(SEMESTERS)) throw new Error(`No semesters folder at ${SEMESTERS}`);
   mkdirSync(OUT, { recursive: true });
@@ -344,7 +357,7 @@ function main() {
       courses: data.courses.map((c) => ({ code: c.code, short: c.short, color: c.color })),
     };
     index.semesters.push(summary);
-    console.log(`✓ ${id}: ${data.courses.length} courses, ${data.assignments.length} assignments, ${data.notes.length} notes, ${data.exams.length} exams, ${data.classes.length} classes`);
+    console.log(`✓ ${id}: ${data.courses.length} courses, ${data.assignments.length} assignments, ${data.notes.length} notes, ${quizzes(data)}${data.exams.length} exams, ${data.classes.length} classes`);
   }
   writeFileSync(join(OUT, "index.json"), JSON.stringify(index, null, 1));
 }

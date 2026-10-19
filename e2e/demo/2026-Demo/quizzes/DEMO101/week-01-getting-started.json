@@ -1,0 +1,42 @@
+{
+  "title": "Week 1 · Getting started",
+  "course": "DEMO101",
+  "scope": "lecture",
+  "section": 1,
+  "description": "A made-up quiz used by the smoke tests.",
+  "by": "Demo",
+  "created": "2026-10-19T09:00:00.000Z",
+  "sources": ["notes/DEMO101/week-01-getting-started.md"],
+  "questions": [
+    {
+      "type": "true-false",
+      "question": "The smoke tests open every page of the app.",
+      "answer": true,
+      "explanation": "That is the big idea of the demo note.",
+      "source": "Week 1 note, big idea"
+    },
+    {
+      "type": "single",
+      "question": "What do the smoke tests run on?",
+      "options": [
+        { "text": "Your own semester", "correct": false },
+        { "text": "The demo semester", "correct": true },
+        { "text": "eClass directly", "correct": false }
+      ],
+      "explanation": "They copy e2e/demo to a temporary folder and never touch your own data.",
+      "source": "Week 1 note, How it fits together"
+    },
+    {
+      "type": "multiple",
+      "question": "Which steps are in the demo diagram? (Select all that apply.)",
+      "options": [
+        { "text": "Demo data", "correct": true },
+        { "text": "App", "correct": true },
+        { "text": "Smoke test", "correct": true },
+        { "text": "None of the above", "correct": false }
+      ],
+      "explanation": "The diagram goes Demo data → App → Smoke test.",
+      "source": "Week 1 note, diagram"
+    }
+  ]
+}

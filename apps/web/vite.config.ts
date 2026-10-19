@@ -7,6 +7,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { createAiApi } from "../../packages/ai/src/api.ts";
+import { addAttempt, readAttempts } from "../../packages/content/src/quiz-store.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { checkForUpdate, restartDetached } from "../../packages/cli/src/update.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
@@ -120,6 +121,44 @@ function updateApi(): Plugin {
   return { name: "update-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
 }
 
+/**
+ * /api/quiz/attempts?sem=… (GET): the quiz scores saved on this computer.
+ * /api/quiz/attempts (POST { sem, quiz, title, results }): saves a finished quiz (points worked out on the server).
+ * Stored in semesters/<sem>/quizzes/attempts.json, see packages/content/src/quiz-store.ts.
+ */
+function quizApi(): Plugin {
+  const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+  const send = (res: any, body: any, status = 200) => { res.statusCode = status; res.setHeader("Content-Type", "application/json"); res.setHeader("Cache-Control", "no-store"); res.end(JSON.stringify(body)); };
+  const semDir = (sem: unknown) => {
+    const id = String(sem ?? "");
+    return /^\w[\w.-]*$/.test(id) && existsSync(resolve(SEMESTERS, id, "semester.json")) ? resolve(SEMESTERS, id) : null;
+  };
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    if (!req.url?.startsWith("/api/quiz/")) return next();
+    // only pages from this app on this computer may save scores
+    const origin = req.headers.origin;
+    if (!LOCAL.test(req.headers.host ?? "") || (origin && !LOCAL.test(origin.replace(/^https?:\/\//, "")))) return send(res, { error: "Forbidden" }, 403);
+    const url = new URL(req.url, "http://x");
+    if (url.pathname !== "/api/quiz/attempts") return send(res, { error: "Not found" }, 404);
+    if (req.method === "GET") {
+      const dir = semDir(url.searchParams.get("sem"));
+      return dir ? send(res, { attempts: readAttempts(dir) }) : send(res, { error: "No such semester." }, 404);
+    }
+    if (req.method !== "POST") return send(res, { error: "Not found" }, 404);
+    let raw = "";
+    req.on("data", (d) => { raw += d; if (raw.length > 50_000) req.destroy(); });
+    req.on("end", () => {
+      try {
+        const body = JSON.parse(raw || "{}");
+        const dir = semDir(body.sem);
+        if (!dir) return send(res, { error: "No such semester." }, 404);
+        send(res, { attempt: addAttempt(dir, body), attempts: readAttempts(dir) });
+      } catch (e) { send(res, { error: (e as Error).message }, 400); }
+    });
+  };
+  return { name: "quiz-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
+}
+
 /** Serves the course files from ../../semesters at /files/<semester>/<path> (dev + preview). */
 function semesterFiles(): Plugin {
   const handler: Connect.NextHandleFunction = (req, res, next) => {
@@ -140,14 +179,14 @@ function semesterFiles(): Plugin {
       let timer: NodeJS.Timeout | undefined;
       // Vite's watcher takes paths, not globs: watch these folders of every semester (the handler below filters files)
       const sems = existsSync(SEMESTERS) ? readdirSync(SEMESTERS).filter((d) => existsSync(resolve(SEMESTERS, d, "semester.json"))) : [];
-      for (const d of sems) for (const x of ["notes", "plans"]) mkdirSync(resolve(SEMESTERS, d, x), { recursive: true }); // so the first note or plan is seen
-      server.watcher.add(sems.flatMap((d) => ["notes", "plans", "_meta", "updates", "assignments", "semester.json"].map((x) => resolve(SEMESTERS, d, x))));
+      for (const d of sems) for (const x of ["notes", "plans", "quizzes"]) mkdirSync(resolve(SEMESTERS, d, x), { recursive: true }); // so the first note, plan or quiz is seen
+      server.watcher.add(sems.flatMap((d) => ["notes", "plans", "quizzes", "_meta", "updates", "assignments", "semester.json"].map((x) => resolve(SEMESTERS, d, x))));
       // Check eClass for news when the app starts (only if a key has been set up).
       if (existsSync(resolve(HERE, "../../.eclass-token")) && !process.env.NO_SYNC) {
         spawn(process.execPath, [resolve(HERE, "../../packages/eclass-sync/daily.mjs"), "--quiet"], { cwd: resolve(HERE, "../.."), stdio: "inherit" });
       }
       server.watcher.on("all", (_event, file) => {
-        if (!file.startsWith(SEMESTERS) || !/(\/notes\/.*\.md|\/plans\/[^/]+\.md|\/assignments\/.*\/PREP\.md|\/_meta\/(?!sync-state).*\.json|\/updates\/(?!connection).*\.json|semester\.json)$/.test(file.replaceAll(sep, "/"))) return;
+        if (!file.startsWith(SEMESTERS) || !/(\/notes\/.*\.md|\/plans\/[^/]+\.md|\/quizzes\/[^/]+\/[^/]+\.json|\/assignments\/.*\/PREP\.md|\/_meta\/(?!sync-state).*\.json|\/updates\/(?!connection).*\.json|semester\.json)$/.test(file.replaceAll(sep, "/"))) return;
         clearTimeout(timer);
         timer = setTimeout(() => {
           // use this same Node + local tsx (works in the background service where npm isn't on PATH)
@@ -173,7 +212,7 @@ function slidesApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi()],
+  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), quizApi()],
   server: { port: 5173 },
   ...(process.env.OUC_PUBLIC ? { publicDir: resolve(process.env.OUC_PUBLIC) } : {}),
 });

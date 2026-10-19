@@ -163,6 +163,35 @@ export interface Plan {
   total: number;
 }
 
+/** A quiz the AI made from the course material (semesters/<id>/quizzes/<CODE>/<name>.json, docs/QUIZ_FORMAT.md). */
+export type QuizQuestion = { question: string; explanation?: string; source?: string } & (
+  | { type: "true-false"; answer: boolean }
+  | { type: "single" | "multiple"; options: { text: string; correct: boolean }[] }
+);
+export interface Quiz {
+  id: string;             // "COS511/lecture-03-attention"
+  code: string;
+  name: string;           // file name without .json
+  title: string;
+  scope: "course" | "lecture";
+  section?: number;       // eClass section of a lecture quiz
+  description?: string;
+  by?: string;            // the AI that made it
+  created?: string;       // ISO datetime
+  sources: string[];      // the material it was made from, relative to the semester folder
+  questions: QuizQuestion[];
+}
+/** One finished attempt (semesters/<id>/quizzes/attempts.json, saved by the app; never committed). */
+export interface QuizAttempt {
+  quiz: string;           // Quiz.id
+  title: string;
+  at: string;             // ISO datetime
+  score: number;          // right answers
+  total: number;
+  points: number;
+  results: boolean[];     // right or wrong, per question
+}
+
 export interface SemesterData extends SemesterSummary {
   generated: string;
   updates: UpdatesFeed;
@@ -173,4 +202,5 @@ export interface SemesterData extends SemesterSummary {
   timezone: string;       // of the class times on eClass (semester.json "timezone", default Europe/Nicosia)
   notes: Note[];
   plans: Plan[];          // newest first
+  quizzes?: Quiz[];       // missing in data built before quizzes existed
 }

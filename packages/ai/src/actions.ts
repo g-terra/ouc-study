@@ -3,7 +3,7 @@
 // ask the AI the same thing. A new skill in ai/skills/ shows up in the app on its own.
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { findCourse, noteFileName, read, weekNumber } from "./context.ts";
+import { findCourse, noteFileName, read, slug, weekMaterial, weekNumber } from "./context.ts";
 import { loadReview, reviewDir, reviewFile } from "./review.ts";
 import type { Assignment, Course, SemesterData, Week } from "../../content/src/types.ts";
 
@@ -19,6 +19,8 @@ const FIELDS: Record<string, Field[]> = {
   // a week can still come from a shortcut button (e.g. "Make notes" on a course week)
   "make-notes": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }],
   "quiz-me": [{ key: "course", kind: "course", label: "Course", required: true }],
+  // a lecture quiz when a week comes from a shortcut button, else the whole course
+  "make-quiz": [{ key: "course", kind: "course", label: "Course", required: true }],
   "plan-week": [],
   "research-topic": [{ key: "topic", kind: "text", label: "Topic", required: true, placeholder: "e.g. signal detection theory" }, { key: "course", kind: "course", label: "Course" }],
   "find-material": [{ key: "topic", kind: "text", label: "What are you looking for?", required: true, placeholder: "e.g. the slide about d′" }, { key: "course", kind: "course", label: "Course" }],
@@ -28,13 +30,14 @@ const FIELDS: Record<string, Field[]> = {
   "sync-eclass": [],
 };
 const TITLE: Record<string, string> = {
-  "make-notes": "Make notes", "quiz-me": "Quiz me", "plan-week": "Plan my week", "research-topic": "Research a topic",
+  "make-notes": "Make notes", "quiz-me": "Quiz me", "make-quiz": "Make a quiz", "plan-week": "Plan my week", "research-topic": "Research a topic",
   "find-material": "Find material", "assignment-helper": "Assignment help", "assignment-prep": "Prep an assignment",
   "assignment-review": "Review my draft", "sync-eclass": "Sync eClass",
 };
-const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄" };
-// What a plain local model (no file or web tools) can do from the app.
-const CHAT_OK = new Set(["quiz-me"]);
+const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄" };
+// What a plain local model (no file or web tools) can do from the app (it gets the material in its
+// prompt; a quiz it answers with is saved by the app server).
+const CHAT_OK = new Set(["quiz-me", "make-quiz"]);
 
 const frontMatter = (md: string): Record<string, string> => Object.fromEntries((md.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "").split("\n")
   .map((l) => l.match(/^(\w+):\s*(.*)$/)).filter((m) => m !== null).map((m) => [m[1], m[2]!.replace(/^["']|["']$/g, "")]));
@@ -87,6 +90,49 @@ export function notesPrompt(semId: string, course: Course, week: Week): { rel: s
     rel,
     prompt: `Use the make-notes skill. Make visual study notes for ${course.title} (${course.code}), eClass section ${week.index} "${week.name}". ` +
       `The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/. Save the note as ${rel} (front matter: course ${course.code}, section ${week.index}, week ${weekNumber(week)}). ` +
+      `When done, run: node packages/ai/validate.mjs ${rel} and fix every error it reports.`,
+  };
+}
+
+// ---------- quizzes (docs/QUIZ_FORMAT.md) ----------
+/** The section and course a quiz request covers: a week from a shortcut button makes it a lecture quiz. */
+export function quizScope(data: Pick<SemesterData, "courses">, params: Params): { course: Course; week: Week | null } {
+  const course = params.course ? findCourse(data, params.course) : null;
+  if (!course) throw new Error("Choose a course first.");
+  const week = params.week !== undefined && params.week !== "" ? course.weeks.find((w) => String(w.index) === String(params.week)) ?? null : null;
+  return { course, week };
+}
+/** Where a new quiz goes (repo-relative): named like the week's note, or course-<short>; never an existing file. */
+export function quizPath(root: string, semId: string, course: Course, week: Week | null): string {
+  const base = week ? noteFileName(course, week).replace(/\.md$/, "") : `course-${slug(course.short, 30)}`;
+  const dir = `semesters/${semId}/quizzes/${course.code}`;
+  let rel = `${dir}/${base}.json`;
+  for (let n = 2; existsSync(join(root, rel)); n++) rel = `${dir}/${base}-${n}.json`;
+  return rel;
+}
+const fileItems = (w: Week) => w.items.filter((i) => i.kind === "file" && i.href?.startsWith("/files/")).map((i) => decodeURIComponent(i.href!.split("/").slice(3).join("/")));
+/** The material a quiz may use: the files of the week (or of every week) and the student's notes on it, relative to the semester folder. */
+export function quizMaterial(data: Pick<SemesterData, "notes">, course: Course, week: Week | null): { files: string[]; notes: string[] } {
+  return {
+    files: (week ? [week] : course.weeks).flatMap(fileItems),
+    notes: data.notes.filter((n) => n.code === course.code && (!week || n.weekIndex === week.index)).map((n) => `notes/${n.code}/${n.slug}.md`),
+  };
+}
+/** The prompt for an agent tool that makes a quiz and saves it at `rel`. */
+export function quizPrompt(root: string, semId: string, data: SemesterData, course: Course, week: Week | null): { rel: string; prompt: string } {
+  const rel = quizPath(root, semId, course, week);
+  const { files, notes } = quizMaterial(data, course, week);
+  const what = week ? `eClass section ${week.index} "${week.name}"` : "the whole course so far";
+  if (!files.length && !notes.length) throw new Error(`No material for ${course.short}${week ? `, ${week.label}` : ""} yet. Download the course files first (ouc pull).`);
+  const sem = `semesters/${semId}`;
+  const shown = files.slice(0, 40).map((f) => `\`${sem}/${f}\``);
+  return {
+    rel,
+    prompt: `Use the make-quiz skill (ai/skills/make-quiz/SKILL.md; format in docs/QUIZ_FORMAT.md). Make a ${week ? "lecture" : "course"} quiz for ${course.title} (${course.code}) covering ${what}. ` +
+      "Questions come only from this material:" +
+      (shown.length ? `\n- files (text copies in \`${sem}/text/\`): ${shown.join(", ")}${files.length > shown.length ? ` and ${files.length - shown.length} more in \`${sem}/courses/\`` : ""}` : "") +
+      (notes.length ? `\n- the student's notes: ${notes.map((n) => `\`${sem}/${n}\``).join(", ")}` : "") +
+      `\n\nSave it as ${rel} ("course": "${course.code}", "scope": "${week ? "lecture" : "course"}"${week ? `, "section": ${week.index}` : ""}). ` +
       `When done, run: node packages/ai/validate.mjs ${rel} and fix every error it reports.`,
   };
 }
@@ -176,6 +222,10 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
     case "quiz-me":
       if (!course) throw new Error("Choose a course first.");
       body = `Use the quiz-me skill: quiz me on ${course.short}${week ? `, ${week.label}` : ""} (${course.code}${week ? `, eClass section ${week.index}` : ""}). Ask one question, then stop and wait for my answer in the next message.${extra}`; break;
+    case "make-quiz": {
+      const { course: c, week: w } = quizScope(data, params);
+      body = quizPrompt(root, semId, data, c, w).prompt + extra; break;
+    }
     case "plan-week":
       body = `Use the plan-week skill: plan my study week.${extra}`; break;
     case "research-topic":
@@ -206,6 +256,15 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
   return first ? `${APP_PREAMBLE}${visuals}\n\n${body}` : body;
 }
 
+/** The text of a quiz's material for a model without file tools: the student's notes, then the files' text copies. */
+export function quizMaterialText(root: string, semId: string, data: SemesterData, course: Course, week: Week | null, budget = 40000): string {
+  const notes = data.notes.filter((n) => n.code === course.code && (!week || n.weekIndex === week.index)).map((n) => `## Notes: ${n.title}\n\n${n.body}`).join("\n\n").slice(0, budget / 2);
+  const weeks = (week ? [week] : course.weeks).filter((w) => fileItems(w).length);
+  const each = Math.floor((budget - notes.length) / Math.max(1, weeks.length));
+  const files = weeks.flatMap((w) => weekMaterial(root, semId, w, each).sources.map((x) => `## ${x.title} (${x.rel})\n\n${x.text}`));
+  return [notes, ...files].filter(Boolean).join("\n\n");
+}
+
 /** System prompt for a plain local model chatting from the app (it has no tools). */
 export function chatSystem({ root, semId, data, action, params = {} }: Omit<PromptInput, "message" | "first">): string {
   const parts = [read(join(root, "AGENTS.md")), "", "# About the student", read(join(root, "STUDENT.md")).trim()];
@@ -214,6 +273,13 @@ export function chatSystem({ root, semId, data, action, params = {} }: Omit<Prom
     const course = findCourse(data, params.course);
     const notes = data.notes.filter((n) => n.code === course?.code && (params.week === undefined || params.week === "" || String(n.weekIndex) === String(params.week)));
     parts.push("", "# How to quiz (skill)", skillBody(root, "quiz-me"), "", "# Material (the student's notes)", notes.map((n) => n.body).join("\n\n").slice(0, 30000) || "_No notes for this yet: quiz from general knowledge of the topic and say so._");
+  }
+  if (action === "make-quiz" && params.course) {
+    const { course, week } = quizScope(data, params);
+    parts.push("", "# How to make a quiz (skill)", skillBody(root, "make-quiz"), "", "# Quiz format", read(join(root, "docs/QUIZ_FORMAT.md")),
+      "", "# Material (use only this)", quizMaterialText(root, semId, data, course, week) || "_No material downloaded for this yet: say so and stop._",
+      "", "You can't save files or run commands. Reply with only the quiz JSON (no other text): the app checks it and saves it for the Quizzes page.");
+    return parts.join("\n");
   }
   parts.push("", "You have no tools in this chat. If a task needs files or the web, say it needs Claude Code, Codex or opencode (`ouc ai setup`), or the `ouc notes` / `ouc plan` commands.");
   return parts.join("\n");
