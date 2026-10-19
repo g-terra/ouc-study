@@ -9,6 +9,7 @@ import { spawn, type SpawnOptions } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { installDeps, missingDeps, npmRunner } from "./deps.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const NODE = process.execPath;
@@ -19,6 +20,12 @@ const say = (m: string) => console.log(`[${stamp()}] ${m}`);
 
 const tsx = join(ROOT, "node_modules/tsx/dist/cli.mjs");
 const vite = join(ROOT, "node_modules/vite/bin/vite.js");
+// new code that needs a package that isn't installed yet (e.g. after a plain `git pull`): install it first
+const missing = missingDeps(ROOT);
+if (missing.length) {
+  say(`Installing dependencies (${missing.length} missing, e.g. ${missing[0]})…`);
+  if (!installDeps(npmRunner(ROOT), say)) say(`Installing dependencies failed. Run "npm ci" in ${ROOT}.`);
+}
 if (!existsSync(vite) || !existsSync(tsx)) {
   say(`Dependencies missing. Run "npm install" in ${ROOT} first.`);
   process.exit(78); // EX_CONFIG: launchd will retry later (ThrottleInterval)
