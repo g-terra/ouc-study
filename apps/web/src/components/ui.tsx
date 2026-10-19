@@ -1,4 +1,6 @@
 import type { ReactNode, CSSProperties } from "react";
+import { Link } from "../lib/router";
+import { slidesPage } from "../lib/links";
 import type { Course, FileRef, ItemKind } from "@ouc/content/types";
 import { STATE_LABEL, type State } from "../lib/data";
 
@@ -69,16 +71,22 @@ const KIND_ICON: Record<ItemKind, string> = { file: "📄", video: "🎬", link:
 const EXT_ICON: Record<string, string> = { pdf: "📕", pptx: "📊", docx: "📘", ipynb: "📓", png: "🖼️", jpg: "🖼️", jpeg: "🖼️", md: "🗒️" };
 export const kindIcon = (k: ItemKind, ext?: string) => (k === "file" && ext && EXT_ICON[ext]) || KIND_ICON[k];
 
+/** A link to a course file: slides open in the app's slide viewer, anything else in a new tab. */
+export function FileLink({ href, className, title, children }: { href?: string; className?: string; title?: string; children: ReactNode }) {
+  const slides = slidesPage(href);
+  return slides ? <Link to={slides} className={className} title={title}>{children}</Link>
+    : <a href={href} target="_blank" rel="noreferrer" className={className} title={title}>{children}</a>;
+}
+
 export function FileCard({ file, label }: { file: FileRef; label: string }) {
   return (
-    <a href={file.href} target="_blank" rel="noreferrer"
-      className="flex items-center gap-3 rounded-xl border border-line bg-surface p-3 transition hover:border-muted">
+    <FileLink href={file.href} className="flex items-center gap-3 rounded-xl border border-line bg-surface p-3 transition hover:border-muted">
       <span className="text-2xl">{EXT_ICON[file.ext] ?? "📄"}</span>
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold">{file.name}</span>
-        <span className="text-xs text-muted">{label} · {file.ext.toUpperCase()} · opens in a new tab</span>
+        <span className="text-xs text-muted">{label} · {file.ext.toUpperCase()} · {slidesPage(file.href) ? "opens in the slide viewer" : "opens in a new tab"}</span>
       </span>
-    </a>
+    </FileLink>
   );
 }
 

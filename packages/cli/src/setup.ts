@@ -16,6 +16,7 @@ import { createClient, readToken, slug, strip, TOKEN_RE, isoDay, SITE, type Mood
 import { pull, reportMarkdown, type PullReport } from "../../eclass-sync/src/pull.ts";
 import { chooseAssistant, installSkills } from "./ai.ts";
 import { describe as describeAI, loadConfig as loadAI } from "../../ai/src/providers.ts";
+import { findConverter } from "../../ai/src/review.ts";
 
 const { c } = ui;
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -257,6 +258,16 @@ async function main() {
     const sp = ui.spinner("Making searchable text copies of the slides…");
     const r = await sh(py, ["tools/extract_text.py", semId]);
     r.code === 0 ? sp.succeed("Searchable text copies in text/ (your AI assistant reads these)") : sp.warn("Text copies skipped (tools/extract_text.py failed)");
+  }
+  // the app shows slides (with their narration) as PDFs, and Approve makes PDFs: both with LibreOffice
+  if (findConverter()?.kind !== "libreoffice") {
+    const how: [string, string[]] | null = MAC && has("brew") ? ["brew", ["install", "--cask", "libreoffice"]]
+      : WIN && has("winget") ? ["winget", ["install", "-e", "--id", "TheDocumentFoundation.LibreOffice", "--accept-package-agreements", "--accept-source-agreements"]] : null;
+    if (how && (await confirm("Install LibreOffice (free) so the app can show your course slides with their narration?", true))) {
+      const sp = ui.spinner("Installing LibreOffice (a big download, this takes a few minutes)…");
+      const r = await sh(...how);
+      r.code === 0 ? sp.succeed("LibreOffice installed: slides open right in the app") : sp.warn(`LibreOffice: ${r.log.trim().split("\n").pop()} (slides still download; install it from https://www.libreoffice.org/download/ )`);
+    } else if (!how) ui.info(`To see slides right in the app, install LibreOffice (free): ${c.cyan("https://www.libreoffice.org/download/")}`);
   }
   {
     const first = !existsSync(join(semDir, "_meta/sync-state.json"));

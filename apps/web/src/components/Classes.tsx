@@ -5,7 +5,7 @@ import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { at, fmtDay, fmtTime, relative } from "../lib/dates";
 import { AskAiButton } from "./Assistant";
-import { Card, CourseBadge, cx, kindIcon } from "./ui";
+import { Card, CourseBadge, FileLink, cx, kindIcon } from "./ui";
 
 /** Classes still to come (or running now), oldest first. */
 export function upcomingClasses(data: SemesterData, now = new Date()): ClassSession[] {
@@ -73,9 +73,9 @@ export function ClassCard({ c, data, now = new Date(), showCourse = true }: { c:
               <li key={n.noteSlug}><Link to={`${base}/notes/${enc(c.code)}/${enc(n.noteSlug!)}`} className="flex gap-2 rounded px-1 py-0.5 font-semibold hover:bg-surface-2">📒 <span className="min-w-0 truncate">My notes: {n.title}</span></Link></li>
             ))}
             {[...c.extras.map((f) => ({ ...f, kind: "file" as const })), ...material].slice(0, 4).map((f, i) => (
-              <li key={i}><a href={f.href} target="_blank" rel="noreferrer" className="flex gap-2 rounded px-1 py-0.5 hover:bg-surface-2">
+              <li key={i}><FileLink href={f.href} className="flex gap-2 rounded px-1 py-0.5 hover:bg-surface-2">
                 {kindIcon(f.kind, f.ext)} <span className="min-w-0 truncate">{f.title}</span>
-              </a></li>
+              </FileLink></li>
             ))}
             {material.length + c.extras.length > 4 && (
               <li><Link to={`${base}/courses/${enc(c.code)}#w${week.index}`} className="px-1 text-xs text-muted hover:text-ink">+{material.length + c.extras.length - 4} more in this week →</Link></li>
