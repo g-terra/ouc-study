@@ -37,7 +37,7 @@ test("as a note, a prep pack still needs the note front matter", () => {
 });
 
 test("a quiz is checked against docs/QUIZ_FORMAT.md, with the course from its folder", () => {
-  const quiz = JSON.stringify({ title: "Q", course: "AAA", scope: "course", questions: [{ type: "true-false", question: "Q?", answer: true, explanation: "x", source: "y" }] });
+  const quiz = JSON.stringify({ title: "Q", course: "AAA", scope: "course", questions: [{ type: "true-false", question: "Q?", answer: true, explanation: "It is true because the made-up rule always holds here, and the usual mix-up is thinking it only holds sometimes.", source: "y" }] });
   assert.deepEqual(validateQuiz(quiz, "semesters/S/quizzes/AAA/course-aaa.json"), { errors: [], warnings: [] });
   assert.match(validateQuiz(quiz, "semesters/S/quizzes/BBB/course.json").errors[0], /BBB folder/);
   assert.match(validateQuiz(quiz, "semesters/S/notes/AAA/quiz.json").errors[0], /quizzes\/<COURSE CODE>/);

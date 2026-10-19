@@ -6,37 +6,60 @@
   "description": "A made-up quiz used by the smoke tests.",
   "by": "Demo",
   "created": "2026-10-19T09:00:00.000Z",
-  "sources": ["notes/DEMO101/week-01-getting-started.md"],
+  "sources": [
+    "notes/DEMO101/week-01-getting-started.md"
+  ],
   "questions": [
     {
       "type": "true-false",
       "question": "The smoke tests open every page of the app.",
       "answer": true,
-      "explanation": "That is the big idea of the demo note.",
-      "source": "Week 1 note, big idea"
+      "explanation": "The point of the smoke tests is to catch a broken page before a release, so they open every page of the app and check that it shows something useful. If a page crashed or came up empty, the test would fail and the release would wait.",
+      "source": "What smoke tests are for"
     },
     {
       "type": "single",
       "question": "What do the smoke tests run on?",
       "options": [
-        { "text": "Your own semester", "correct": false },
-        { "text": "The demo semester", "correct": true },
-        { "text": "eClass directly", "correct": false }
+        {
+          "text": "Your own semester",
+          "correct": false
+        },
+        {
+          "text": "The demo semester",
+          "correct": true
+        },
+        {
+          "text": "eClass directly",
+          "correct": false
+        }
       ],
-      "explanation": "They copy e2e/demo to a temporary folder and never touch your own data.",
-      "source": "Week 1 note, How it fits together"
+      "explanation": "They run on a small made-up semester that is copied to a temporary folder first. Your own semester is never used, so a test can't change or leak your notes or scores, and eClass is never contacted, so the tests work without a key or a network.",
+      "source": "Demo data"
     },
     {
       "type": "multiple",
       "question": "Which steps are in the demo diagram? (Select all that apply.)",
       "options": [
-        { "text": "Demo data", "correct": true },
-        { "text": "App", "correct": true },
-        { "text": "Smoke test", "correct": true },
-        { "text": "None of the above", "correct": false }
+        {
+          "text": "Demo data",
+          "correct": true
+        },
+        {
+          "text": "App",
+          "correct": true
+        },
+        {
+          "text": "Smoke test",
+          "correct": true
+        },
+        {
+          "text": "None of the above",
+          "correct": false
+        }
       ],
-      "explanation": "The diagram goes Demo data → App → Smoke test.",
-      "source": "Week 1 note, diagram"
+      "explanation": "Data flows from the demo semester into the app, and the smoke test drives the app in a browser to check it. All three steps are part of that chain, so \"None of the above\" is wrong.",
+      "source": "How it fits together"
     }
   ]
 }

@@ -129,7 +129,7 @@ export function quizPrompt(root: string, semId: string, data: SemesterData, cour
   return {
     rel,
     prompt: `Use the make-quiz skill (ai/skills/make-quiz/SKILL.md; format in docs/QUIZ_FORMAT.md). Make a ${week ? "lecture" : "course"} quiz for ${course.title} (${course.code}) covering ${what}. ` +
-      "Questions come only from this material:" +
+      "Use this material to decide the topics and the level; the questions can go wider (examples, scenarios, related ideas from the field) and every explanation must be full and self-contained, never a pointer to the material:" +
       (shown.length ? `\n- files (text copies in \`${sem}/text/\`): ${shown.join(", ")}${files.length > shown.length ? ` and ${files.length - shown.length} more in \`${sem}/courses/\`` : ""}` : "") +
       (notes.length ? `\n- the student's notes: ${notes.map((n) => `\`${sem}/${n}\``).join(", ")}` : "") +
       `\n\nSave it as ${rel} ("course": "${course.code}", "scope": "${week ? "lecture" : "course"}"${week ? `, "section": ${week.index}` : ""}). ` +
@@ -277,7 +277,7 @@ export function chatSystem({ root, semId, data, action, params = {} }: Omit<Prom
   if (action === "make-quiz" && params.course) {
     const { course, week } = quizScope(data, params);
     parts.push("", "# How to make a quiz (skill)", skillBody(root, "make-quiz"), "", "# Quiz format", read(join(root, "docs/QUIZ_FORMAT.md")),
-      "", "# Material (use only this)", quizMaterialText(root, semId, data, course, week) || "_No material downloaded for this yet: say so and stop._",
+      "", "# Material (the topics to cover; questions can go wider)", quizMaterialText(root, semId, data, course, week) || "_No material downloaded for this yet: say so and stop._",
       "", "You can't save files or run commands. Reply with only the quiz JSON (no other text): the app checks it and saves it for the Quizzes page.");
     return parts.join("\n");
   }

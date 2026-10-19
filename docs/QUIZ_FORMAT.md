@@ -1,7 +1,7 @@
 # Quiz format
 
 Quizzes live in `semesters/<semester>/quizzes/<COURSE CODE>/<name>.json`. The app plays them under **Quizzes** and keeps the scores in `semesters/<semester>/quizzes/attempts.json` (on this computer only, never committed).
-An AI makes them with the `make-quiz` skill, **only from the course material** (the downloaded files, their text copies and the student's notes).
+An AI makes them with the `make-quiz` skill. The course material (the downloaded files, their text copies and the student's notes) decides the **topics**; the questions can go wider than the material (examples, scenarios, related ideas from the same field) as long as they are accurate.
 
 - A **lecture quiz** covers one eClass section (one week or lecture): `"scope": "lecture"` and its `"section"` index. Name it like the note for that week, e.g. `lecture-03-attention.json`.
 - A **course quiz** covers the whole course so far: `"scope": "course"`, no section. Name it `course-<short-name>.json`.
@@ -19,8 +19,8 @@ An AI makes them with the `make-quiz` skill, **only from the course material** (
       "type": "true-false",
       "question": "Early-selection theories put the attention filter before meaning is analysed.",
       "answer": true,
-      "explanation": "Broadbent's filter selects on physical features (pitch, location) before semantic analysis.",
-      "source": "What determines our attention, slide 9"
+      "explanation": "Broadbent's filter model says the brain first registers only physical features of every message (pitch, loudness, location) and lets one message through to be analysed for meaning. So the filter sits early, before meaning. Late-selection theories put it after meaning has been analysed, which is why hearing your own name in another conversation was a problem for Broadbent's model.",
+      "source": "Early vs late selection"
     },
     {
       "type": "single",
@@ -30,8 +30,8 @@ An AI makes them with the `make-quiz` skill, **only from the course material** (
         { "text": "The cocktail-party effect", "correct": true },
         { "text": "Change blindness", "correct": false }
       ],
-      "explanation": "Hearing your own name in an unattended conversation means it was analysed for meaning.",
-      "source": "slide 14"
+      "explanation": "At a noisy party you follow one conversation, yet you notice your name in another one. That means the ignored speech was still processed far enough to recognise its meaning. The Stroop effect is about reading interfering with naming a colour, and change blindness is failing to see a change in a scene, so neither shows meaning being picked up from an unattended message.",
+      "source": "Cocktail-party effect"
     },
     {
       "type": "multiple",
@@ -42,8 +42,8 @@ An AI makes them with the `make-quiz` skill, **only from the course material** (
         { "text": "Iconic memory", "correct": false },
         { "text": "All of the above", "correct": false }
       ],
-      "explanation": "Iconic memory is a sensory store, not a limit of attention.",
-      "source": "slides 20-24"
+      "explanation": "Inattentional blindness (missing the gorilla while counting passes) and the attentional blink (missing a second target shortly after a first) both show what we fail to notice because attention is limited. Iconic memory is a very brief visual sensory store that holds the whole scene for a fraction of a second, so it is not a limit of attention. Since one option is wrong, \"All of the above\" is wrong too.",
+      "source": "Limits of attention"
     }
   ]
 }
@@ -59,7 +59,7 @@ An AI makes them with the `make-quiz` skill, **only from the course material** (
 
 "All of the above" and "None of the above" are ordinary options: put them **last** (the app shuffles the other options and keeps these at the end) and mark them `correct` when they are.
 
-Every question should have an `explanation` (why the answer is right, shown after answering) and a `source` (the file and slide or page it comes from).
+Every question needs a full `explanation`, shown after answering. It teaches on its own: why the right answer is right and why the tempting wrong ones are wrong, usually 3 to 5 sentences. Don't point to the material instead ("see slide 9", "as the lecture says"). `source` is optional: a short topic label, not a file path.
 
 ## Scoring
 

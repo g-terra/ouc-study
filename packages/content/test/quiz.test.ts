@@ -10,12 +10,13 @@ import type { QuizAttempt, QuizQuestion } from "../src/types.ts";
 
 const where = { code: "AAA", name: "lecture-01-intro" };
 const opt = (text: string, correct = false) => ({ text, correct });
+const why = (x: string) => `${x} is right because of how the made-up idea works, and the other options mix it up with a neighbouring idea that looks similar.`;
 const QUIZ = {
   title: "Lecture 1", course: "AAA", scope: "lecture", section: 2,
   questions: [
-    { type: "true-false", question: "Sky is blue?", answer: true, explanation: "Rayleigh.", source: "slide 1" },
-    { type: "single", question: "Pick B", options: [opt("A"), opt("B", true), opt("All of the above")], explanation: "B.", source: "slide 2" },
-    { type: "multiple", question: "Pick A and C", options: [opt("A", true), opt("B"), opt("C", true)], explanation: "A, C.", source: "slide 3" },
+    { type: "true-false", question: "Sky is blue?", answer: true, explanation: why("True"), source: "slide 1" },
+    { type: "single", question: "Pick B", options: [opt("A"), opt("B", true), opt("All of the above")], explanation: why("B"), source: "slide 2" },
+    { type: "multiple", question: "Pick A and C", options: [opt("A", true), opt("B"), opt("C", true)], explanation: why("A and C"), source: "slide 3" },
   ],
 };
 
@@ -44,7 +45,13 @@ test("broken quizzes say what to fix", () => {
   assert.deepEqual(parseQuiz({ ...QUIZ, scope: "course", section: undefined }, where).errors, []);
   // works, but could be better
   const { warnings } = parseQuiz({ ...QUIZ, questions: [{ type: "multiple", question: "Q", options: [opt("None of the above"), opt("A", true)] }] }, where);
-  assert.equal(warnings.length, 4);   // no explanation, no source, one right option, "None of the above" not last
+  assert.equal(warnings.length, 3);   // no explanation, one right option, "None of the above" not last
+  // explanations must teach on their own
+  const tf = (explanation: string) => parseQuiz({ ...QUIZ, questions: [{ type: "true-false", question: "Q", answer: true, explanation }] }, where).warnings;
+  assert.match(tf("Rayleigh.").join(" "), /explanation" is short/);
+  assert.match(tf("The lecture contrasts private introspective reports with objective behavioural experiments that are easier to repeat and verify.").join(" "), /points to the material/);
+  assert.match(tf("See slide 9 for why this is right, it is all explained there in detail with a long worked example and more.").join(" "), /points to the material/);
+  assert.deepEqual(tf("Introspection is a private report of your own experience, so nobody else can check it directly. Two people can introspect on the same task and report different things, and there is no outside measure to settle who is right."), []);
 });
 
 test("answers: true/false, one option, and exactly the right set for multiple", () => {

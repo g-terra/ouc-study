@@ -52,6 +52,7 @@ test("make a quiz: a lecture quiz from a week's files, or a course quiz; never o
   const quizData = fixture({ courses: [course("AAA", [[0, null, []], [1, "2026-09-01", [slides]], [2, "2026-09-08", []]])], notes: [{ code: "AAA", weekIndex: 1, slug: "week-01-intro" }], assignments: [] });
   const lecture = buildPrompt({ root, semId: "S", data: quizData, action: "make-quiz", params: { course: "AAA", week: "1" }, first: false });
   assert.match(lecture, /lecture quiz for AAA course \(AAA\) covering eClass section 1/);
+  assert.match(lecture, /decide the topics and the level; the questions can go wider[\s\S]*never a pointer to the material/);
   assert.match(lecture, /`semesters\/S\/courses\/AAA-dir\/01-Week-1\/slides\.pdf`/);
   assert.match(lecture, /`semesters\/S\/notes\/AAA\/week-01-intro\.md`/);
   assert.match(lecture, /Save it as semesters\/S\/quizzes\/AAA\/week-01-note\.json \("course": "AAA", "scope": "lecture", "section": 1\)/);
