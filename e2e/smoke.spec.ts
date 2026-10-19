@@ -89,6 +89,13 @@ test("a quiz's progress can be reset; Make a quiz opens a pop-up; Remove asks fi
   await expect(dialog).toBeHidden();
 });
 
+test("settings shows the installed app version", async ({ page }) => {
+  const { version } = JSON.parse(await (await import("node:fs/promises")).readFile(new URL("../package.json", import.meta.url), "utf8"));
+  await page.goto(SEM);
+  await page.getByRole("button", { name: /^Settings/ }).click();
+  await expect(page.getByRole("dialog", { name: "Settings" }).getByTestId("app-version")).toContainText(`v${version}`);
+});
+
 test("the app's local APIs answer", async ({ request }) => {
   const u = await request.get("/api/update");
   expect(u.ok()).toBeTruthy();

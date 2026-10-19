@@ -17,6 +17,7 @@ export function releaseHighlights(notes = "", max = 6): string[] {
 export function useUpdate() {
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [phase, setPhase] = useState<UpdatePhase>("idle");
+  const [checking, setChecking] = useState(false);
   useEffect(() => {
     let alive = true;
     const load = () => fetch("/api/update").then((r) => (r.ok ? r.json() : null)).then((j) => alive && setInfo(j)).catch(() => {});
@@ -40,5 +41,12 @@ export function useUpdate() {
     };
     setTimeout(poll, 5000);
   }
-  return { info, phase, start };
+  /** Ask GitHub now instead of using the answer it gave earlier today. */
+  async function check() {
+    setChecking(true);
+    const j = await fetch("/api/update?fresh=1").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (j) setInfo(j);
+    setChecking(false);
+  }
+  return { info, phase, start, check, checking };
 }

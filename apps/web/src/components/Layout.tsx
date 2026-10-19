@@ -123,8 +123,40 @@ function SettingsFab({ to }: { to: string }) {
           <ConnectionDetails to={to} onNavigate={() => setOpen(false)} />
           <div className="mt-4 mb-1 border-t border-line px-2 pt-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Colour theme</div>
           <ThemePicker />
+          <div className="mt-4 mb-1 border-t border-line px-2 pt-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted">App version</div>
+          <AppVersion />
         </div>
       )}
+    </div>
+  );
+}
+
+/** The installed version, the newest release, and the update button when there is one. */
+function AppVersion() {
+  const { info, phase, start, check, checking } = useUpdate();
+  if (!info) return <p className="px-2 text-muted">Checking…</p>;
+  const ahead = !info.available && info.latest && info.current !== info.latest;
+  return (
+    <div className="space-y-2 px-2" data-testid="app-version">
+      <p><span className="font-semibold">v{info.current ?? "?"}</span>{" "}
+        <span className="text-muted">
+          {info.available ? `· v${info.latest} is available` : ahead ? `· newer than the latest release (v${info.latest})` : info.latest ? "· up to date" : ""}
+        </span>
+      </p>
+      {info.error && <p className="text-xs text-bad">{info.error}</p>}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {info.available && phase === "idle" && (info.canUpdate
+          ? <button type="button" onClick={start} className="rounded-full bg-ink px-3 py-1 font-semibold text-bg hover:opacity-90">Update now</button>
+          : <span className="text-muted">In Terminal: <code>ouc update</code>, then restart the app</span>)}
+        {phase === "updating" && <span className="flex items-center gap-1.5 font-semibold"><span className="size-1.5 animate-pulse rounded-full bg-accent" />Updating… the page reloads when it's done</span>}
+        {phase === "slow" && <span className="text-bad">Still not back. In Terminal: <code>ouc status</code></span>}
+        {phase === "idle" && (
+          <button type="button" onClick={check} disabled={checking} className="rounded-full border border-line px-3 py-1 hover:border-muted disabled:opacity-60">
+            {checking ? "Checking…" : "Check for updates"}
+          </button>
+        )}
+        {info.url && <a href={info.url} target="_blank" rel="noreferrer" className="text-muted underline hover:text-ink">Release notes ↗</a>}
+      </div>
     </div>
   );
 }
