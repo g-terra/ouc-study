@@ -8,6 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { service } from "./background.ts";
 import { applyUpdate, checkForUpdate } from "./update.ts";
+import { installDeps, missingDeps, npmRunner } from "./deps.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const OS = process.platform;
@@ -36,18 +37,18 @@ const warn = (s: string) => console.log(`${paint("33", "⚠")} ${s}`);
 const err = (s: string) => console.log(`${paint("31", "✗")} ${s}`);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const node = (args: string[], opts: SpawnSyncOptions = {}) => spawnSync(process.execPath, args, { cwd: ROOT, stdio: "inherit", ...opts }).status ?? 1;
-// npm is npm.cmd on Windows, which needs a shell (the arguments here are fixed)
-const npm = (args: string[]) => spawnSync("npm", args, { cwd: ROOT, stdio: "inherit", shell: WIN }).status === 0;
 const git = (...a: string[]) => spawnSync("git", ["-C", ROOT, ...a], { encoding: "utf8" });
 
 async function up() {
   // 127.0.0.1, where the server listens: "localhost" can resolve to ::1 first (Windows)
   try { return (await fetch(`http://127.0.0.1:${PORT}`, { signal: AbortSignal.timeout(2000) })).ok; } catch { return false; }
 }
+/** Installs what package-lock.json asks for when something is missing (e.g. after a plain `git pull`). */
 function needDeps() {
-  if (existsSync(join(ROOT, "node_modules/vite/bin/vite.js"))) return;
-  warn("Installing dependencies first (npm install)…");
-  if (!npm(["install"])) { err(`npm install failed; run it in ${ROOT}`); process.exit(1); }
+  const missing = missingDeps(ROOT);
+  if (!missing.length) return;
+  warn(`Installing dependencies first (npm ci: ${missing.length} missing, e.g. ${missing[0]})…`);
+  if (!installDeps(npmRunner(ROOT), warn)) { err(`Installing dependencies failed; run "npm ci" in ${ROOT}`); process.exit(1); }
 }
 const buildData = () => {
   const tsx = join(ROOT, "node_modules/tsx/dist/cli.mjs");

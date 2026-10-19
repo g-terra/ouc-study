@@ -64,6 +64,20 @@ test("ouc update moves to the newest release tag, not past it, and reinstalls wi
   } finally { done(); }
 });
 
+test("ouc update installs dependencies that are missing even when this update didn't change the lockfile", () => {
+  // e.g. the student ran `git pull` earlier: the code is new, its packages aren't installed
+  const { dev, student, done } = setup();
+  try {
+    release(dev, "0.2.0", { "package-lock.json": JSON.stringify({ packages: { "": {}, "node_modules/pdfjs-dist": { version: "6.4.299" } } }) });
+    sh(dev, "tag", "v0.2.0"); sh(dev, "push", "-q", "--tags", "origin", "main");
+    sh(student, "pull", "-q", "origin", "main");
+    release(dev, "0.2.1", { "notes.txt": "a change with no new packages" }); sh(dev, "tag", "v0.2.1"); sh(dev, "push", "-q", "--tags", "origin", "main");
+    const { calls, run } = recorder();
+    assert.equal(applyUpdate(student, { run }).changed, true);
+    assert.deepEqual(calls, ["npm ci --no-audit --no-fund"]);
+  } finally { done(); }
+});
+
 test("ouc update never touches local code edits", () => {
   const { dev, student, done } = setup();
   try {

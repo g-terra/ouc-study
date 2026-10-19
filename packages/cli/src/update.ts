@@ -2,8 +2,9 @@
 // Used by `ouc update` / `ouc restart` and by the app's "Update available" banner (/api/update in vite.config.ts).
 // Releases are the vX.Y.Z tags release-please makes on main; `ouc update --main` follows main itself.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { installDeps, missingDeps, npmRunner } from "./deps.ts";
 
 const DEFAULT_REPO = "g-terra/ouc-study";
 const DAY = 24 * 60 * 60_000;
@@ -80,7 +81,7 @@ export async function checkForUpdate(root: string, { fresh = false, fetchImpl = 
  * then reinstall what changed: a clean `npm ci` when the dependencies changed, the AI skills when ai/ did.
  * Never touches local code edits. Returns { ok, changed, message }; log(kind, text) reports progress.
  */
-export function applyUpdate(root: string, { latest = false, log = (() => {}) as UpdateLog, run = runIn(root) } = {}): UpdateResult {
+export function applyUpdate(root: string, { latest = false, log = (() => {}) as UpdateLog, run = npmRunner(root) as Runner } = {}): UpdateResult {
   const fail = (message: string) => { log("warn", message); return { ok: false, changed: false, message }; };
   if (git(root, "rev-parse", "--is-inside-work-tree").status !== 0) return fail("Not a git checkout, so no code update (download the latest from GitHub instead).");
   if (git(root, "status", "--porcelain", "--untracked-files=no").stdout.trim()) return fail("You have local code changes, so the code wasn't updated (commit or stash them, then: ouc update).");
@@ -107,22 +108,12 @@ export function applyUpdate(root: string, { latest = false, log = (() => {}) as 
   rmSync(cacheFile(root), { force: true });
 
   const changed = git(root, "diff", "--name-only", before, after).stdout.split(/\r?\n/);
-  if (changed.some((f) => /(^|\/)package(-lock)?\.json$/.test(f)) || !existsSync(join(root, "node_modules/vite/bin/vite.js"))) {
-    // a clean install: `npm install` over old node_modules can keep stale copies (it once left Vite 6 next to Vite 8)
+  if (changed.some((f) => /(^|\/)package(-lock)?\.json$/.test(f)) || missingDeps(root).length) {
     log("warn", "Dependencies changed, reinstalling them (npm ci)…");
-    if (!run("npm", ["ci", "--no-audit", "--no-fund"])) {
-      log("warn", "npm ci failed, trying npm install…");
-      if (!run("npm", ["install", "--no-audit", "--no-fund"])) return fail(`Installing dependencies failed; run "npm ci" in ${root}`);
-    }
+    if (!installDeps(run, (t) => log("warn", t))) return fail(`Installing dependencies failed; run "npm ci" in ${root}`);
   }
   if (changed.some((f) => f.startsWith("ai/")) && !run(process.execPath, [join(root, "bin/ai.mjs"), "install"])) log("warn", "Couldn't reinstall the AI skills (ouc ai install)");
   return { ok: true, changed: true, message: onReleases ? `Updated to ${tag}` : "Updated" };
-}
-
-/** Runs a command in root, showing its output; true when it worked. (Outside applyUpdate: a default parameter can't see functions declared in the body.) */
-function runIn(root: string): Runner {
-  // npm is npm.cmd on Windows, which needs a shell (the arguments here are fixed)
-  return (cmd, args) => spawnSync(cmd, args, { cwd: root, stdio: "inherit", shell: process.platform === "win32" && cmd === "npm" }).status === 0;
 }
 
 /**
