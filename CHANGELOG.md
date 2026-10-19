@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/g-terra/ouc-study/compare/v0.7.0...v0.8.0) (2026-10-19)
+
+
+### Features
+
+* **web:** add a simpler v2 look as a preview at /v2 ([#57](https://github.com/g-terra/ouc-study/issues/57)) ([277cd5d](https://github.com/g-terra/ouc-study/commit/277cd5dbb22e8ee8c39e38cee6b251da082d2af4))
+
+
+### Bug Fixes
+
+* **cli:** check for a new release every hour instead of once a day ([#55](https://github.com/g-terra/ouc-study/issues/55)) ([c8144e9](https://github.com/g-terra/ouc-study/commit/c8144e93f591521f8ad4ff8fd2a570ed18f4a046))
+
 ## [0.7.0](https://github.com/g-terra/ouc-study/compare/v0.6.0...v0.7.0) (2026-10-19)
 
 
