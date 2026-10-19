@@ -425,7 +425,7 @@ function RunningTasks({ sem }: { sem: string }) {
 export function Markdown({ text, className, sem }: { text: string; className?: string; sem?: string }) {
   const { setOpen } = useAssistant();
   return (
-    <div className={cx("text-sm leading-relaxed [&_a]:underline [&_a_code]:text-accent [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:break-all [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_ul]:list-disc", className)}
+    <div className={cx("text-sm leading-relaxed [&_a]:underline [&_a_code]:text-accent [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:break-all [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_pre_code]:break-normal [&_pre_code]:whitespace-pre [&_ul]:list-disc", className)}
       // file paths open their page (the router follows the link); on phones the chat covers the page, so close it
       onClick={(e) => { if ((e.target as HTMLElement).closest("a[data-internal]") && !window.matchMedia("(min-width: 640px)").matches) setOpen(false); }}
       dangerouslySetInnerHTML={{ __html: mdToHtml(text, sem) }} />
