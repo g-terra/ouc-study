@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0](https://github.com/g-terra/ouc-study/compare/v0.8.0...v0.9.0) (2026-10-19)
+
+
+### Features
+
+* **ai:** make quiz questions broader and explanations complete ([#59](https://github.com/g-terra/ouc-study/issues/59)) ([fb738e9](https://github.com/g-terra/ouc-study/commit/fb738e90d28682fbf275d098a9433d89878a34d3))
+
+
+### Bug Fixes
+
+* **web:** render \( \) and \[ \] maths in Ask AI replies ([#58](https://github.com/g-terra/ouc-study/issues/58)) ([beebec3](https://github.com/g-terra/ouc-study/commit/beebec3b99a5fabfab58c234ced37e1f8caa6fd8))
+
 ## [0.8.0](https://github.com/g-terra/ouc-study/compare/v0.7.0...v0.8.0) (2026-10-19)
 
 
