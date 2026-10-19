@@ -247,3 +247,20 @@ test("make a quiz with a local model: it answers with the JSON and the app saves
   assert.ok(quiz.by && quiz.created);
   assert.match(JSON.parse(readFileSync(join(root, ".ouc/chats", `${chatId}.json`), "utf8")).quiz, /course-aaa\.json$/);
 });
+
+test("the Make a quiz pop-up: the quiz is made in the background, and the page can follow it", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  quizSemester(root);
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const post = (body: object) => fetch(`${base}/api/ai/quiz`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
+  assert.equal((await post({ sem: "S", course: "ZZZ" })).status, 400);
+  assert.equal((await fetch(`${base}/api/ai/quiz`, { method: "POST", body: "{}" })).status, 403);   // needs the app's token
+  const { job } = await json(post({ sem: "S", course: "AAA", week: 1 }));
+  assert.equal(job.running, true);
+  assert.equal(job.quiz, "semesters/S/quizzes/AAA/week-01-intro.json");
+  let jobs: Ev[] = [];
+  for (let i = 0; i < 100 && (!jobs.length || jobs[0].running); i++) { await new Promise((ok) => setTimeout(ok, 20)); jobs = (await json(fetch(`${base}/api/ai/quiz`))).jobs; }
+  assert.deepEqual([jobs[0].running, jobs[0].ok, jobs[0].week], [false, true, "1"]);
+  assert.ok(existsSync(join(root, job.quiz)));
+});

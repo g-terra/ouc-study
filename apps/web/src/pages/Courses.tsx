@@ -7,6 +7,7 @@ import { Card, Empty, FileLink, PageHeader, ProgressRing, SectionTitle, StatePil
 import { AskAiButton } from "../components/Assistant";
 import { ClassCard, ClassTimeEditor, JoinButton, upcomingClasses } from "../components/Classes";
 import { quizHref, quizScopeLabel } from "./Quizzes";
+import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
 import { pct, useAttempts } from "../lib/quiz";
 
 export function Courses({ data }: { data: SemesterData }) {
@@ -82,7 +83,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
         <section>
           <SectionTitle right={<button className="text-sm text-muted hover:text-ink" onClick={() => setOpen(open.size > 1 ? new Set() : new Set(c.weeks.map((w) => w.index)))}>{open.size > 1 ? "Collapse all" : "Expand all"}</button>}>Week by week</SectionTitle>
           <Card className="overflow-hidden">
-            {c.weeks.map((w) => <WeekRow key={w.index} w={w} isOpen={open.has(w.index)} isNow={w.index === cur?.index} color={c.color} onToggle={() => toggle(w.index)} base={base} code={code} classes={classes.filter((x) => x.weekIndex === w.index)} quizzes={quizzes.filter((q) => q.scope === "lecture" && q.section === w.index)} sem={data.id} />)}
+            {c.weeks.map((w) => <WeekRow key={w.index} w={w} isOpen={open.has(w.index)} isNow={w.index === cur?.index} color={c.color} onToggle={() => toggle(w.index)} base={base} code={code} classes={classes.filter((x) => x.weekIndex === w.index)} quizzes={quizzes.filter((q) => q.scope === "lecture" && q.section === w.index)} data={data} />)}
           </Card>
         </section>
         <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
@@ -119,8 +120,9 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
             </div>
           )}
           <div>
-            <SectionTitle right={<AskAiButton action="make-quiz" params={{ course: code }}>Course quiz</AskAiButton>}>Quizzes</SectionTitle>
-            {quizzes.length ? <QuizLinks sem={data.id} quizzes={quizzes} withScope /> : <Empty>No quizzes yet. Open a week and press “Make a quiz”, or make one for the whole course.</Empty>}
+            <SectionTitle right={<MakeQuizButton data={data} course={code}>Make a quiz</MakeQuizButton>}>Quizzes</SectionTitle>
+            <QuizJobs data={data} course={code} />
+            {quizzes.length ? <QuizLinks sem={data.id} quizzes={quizzes} withScope /> : <Empty>No quizzes yet. Press “Make a quiz” to make one for one class or the whole course.</Empty>}
           </div>
           <div>
             <SectionTitle>Notes</SectionTitle>
@@ -159,7 +161,7 @@ function QuizLinks({ sem, quizzes, withScope = false }: { sem: string; quizzes: 
   );
 }
 
-function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes, quizzes, sem }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string; classes: ClassSession[]; quizzes: Quiz[]; sem: string }) {
+function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes, quizzes, data }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string; classes: ClassSession[]; quizzes: Quiz[]; data: SemesterData }) {
   const dates = w.start ? `${fmtShort(day(w.start))} – ${fmtShort(day(w.end!))}${w.estimated ? " (est.)" : ""}` : "";
   const counts = w.items.reduce<Record<string, number>>((m, i) => ((m[i.kind] = (m[i.kind] ?? 0) + 1), m), {});
   return (
@@ -207,12 +209,12 @@ function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes, quizz
             })}
           </ul>
           {w.items.length === 0 && <p className="text-sm text-muted">Nothing posted for this week.</p>}
-          {quizzes.length > 0 && <div className="mt-2"><QuizLinks sem={sem} quizzes={quizzes} /></div>}
+          {quizzes.length > 0 && <div className="mt-2"><QuizLinks sem={data.id} quizzes={quizzes} /></div>}
           {w.index > 0 && w.items.some((i) => i.kind === "file") && (
             <div className="mt-3 flex flex-wrap gap-2">
               {!w.items.some((i) => i.kind === "note") && <AskAiButton action="make-notes" params={{ course: code, week: String(w.index) }}>Make notes</AskAiButton>}
               <AskAiButton action="quiz-me" params={{ course: code, week: String(w.index) }}>Quiz me</AskAiButton>
-              <AskAiButton action="make-quiz" params={{ course: code, week: String(w.index) }}>{quizzes.length ? "Make another quiz" : "Make a quiz"}</AskAiButton>
+              <MakeQuizButton data={data} course={code} week={String(w.index)}>{quizzes.length ? "Make another quiz" : "Make a quiz"}</MakeQuizButton>
             </div>
           )}
         </div>

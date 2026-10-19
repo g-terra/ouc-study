@@ -1,11 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Course, Quiz, QuizQuestion, SemesterData } from "@ouc/content/types";
 import { isCorrect, pointsFor, shuffledOptions, type QuizAnswer } from "@ouc/content/quiz";
-import { Link, enc } from "../lib/router";
+import { Link, enc, useRouter } from "../lib/router";
 import { courseMap } from "../lib/data";
-import { pct, saveAttempt, useAttempts } from "../lib/quiz";
+import { pct, removeQuiz, resetProgress, saveAttempt, useAttempts } from "../lib/quiz";
 import { Card, CourseBadge, CourseDot, Empty, PageHeader, ProgressRing, SectionTitle, cx } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
+import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
+
+/** Reset a quiz's progress, or remove it, each after a confirmation. Resolves true when something changed. */
+export async function confirmReset(sem: string, q?: Pick<Quiz, "id" | "title">): Promise<boolean> {
+  if (!window.confirm(q ? `Start “${q.title}” over? Its scores and best score are cleared.` : "Start every quiz over? All scores, points and the streak are cleared.")) return false;
+  try { await resetProgress(sem, q?.id); return true; } catch (e) { window.alert((e as Error).message); return false; }
+}
+export async function confirmRemove(sem: string, q: Pick<Quiz, "id" | "title">): Promise<boolean> {
+  if (!window.confirm(`Remove the quiz “${q.title}”? The quiz and its scores are deleted.`)) return false;
+  try { await removeQuiz(sem, q.id); return true; } catch (e) { window.alert((e as Error).message); return false; }
+}
+const smallBtn = "rounded-full px-2.5 py-1 text-xs text-muted hover:bg-surface-2 hover:text-ink";
 
 export const quizHref = (sem: string, q: Pick<Quiz, "code" | "name">) => `/${enc(sem)}/quizzes/${enc(q.code)}/${enc(q.name)}`;
 /** "Whole course" or the week's label. */
@@ -52,6 +64,11 @@ export function QuizzesPage({ data }: { data: SemesterData }) {
       </PageHeader>
       <QuizStatsRow data={data} />
       {state === "unavailable" && <p className="mb-6 text-sm text-warn">Scores are saved only when the app runs on your computer (ouc open).</p>}
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <MakeQuizButton data={data} course={filter === "all" ? undefined : filter}>Make a quiz</MakeQuizButton>
+        {stats.attempts > 0 && <button type="button" className={smallBtn} onClick={() => confirmReset(data.id)}>↺ Reset all progress</button>}
+      </div>
+      <QuizJobs data={data} />
       <div className="mb-6 flex flex-wrap gap-2">
         {[["all", "All courses"] as const, ...data.courses.map((c) => [c.code, c.short] as const)].map(([k, label]) => (
           <button key={k} onClick={() => setFilter(k)} className={cx("flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm", filter === k ? "border-ink bg-ink text-bg" : "border-line bg-surface text-muted")}>
@@ -64,7 +81,7 @@ export function QuizzesPage({ data }: { data: SemesterData }) {
           .sort((a, b) => (a.scope === b.scope ? (a.section ?? 0) - (b.section ?? 0) || a.name.localeCompare(b.name) : a.scope === "course" ? -1 : 1));
         return (
           <section key={c.code}>
-            <SectionTitle right={<AskAiButton action="make-quiz" params={{ course: c.code }}>Make a course quiz</AskAiButton>}>
+            <SectionTitle right={<MakeQuizButton data={data} course={c.code}>Make a quiz</MakeQuizButton>}>
               <span className="flex items-center gap-2"><CourseDot color={c.color} />{c.short}</span>
             </SectionTitle>
             {list.length ? (
@@ -72,9 +89,9 @@ export function QuizzesPage({ data }: { data: SemesterData }) {
                 {list.map((q) => {
                   const b = stats.best[q.id];
                   return (
-                    <Link key={q.id} to={quizHref(data.id, q)} className="group">
-                      <Card className="relative flex h-full items-center gap-4 overflow-hidden p-5 transition group-hover:-translate-y-0.5 group-hover:border-muted">
-                        <div className="absolute inset-x-0 top-0 h-1" style={{ background: c.color }} />
+                    <Card key={q.id} className="relative flex h-full flex-col overflow-hidden transition hover:-translate-y-0.5 hover:border-muted">
+                      <div className="absolute inset-x-0 top-0 h-1" style={{ background: c.color }} />
+                      <Link to={quizHref(data.id, q)} className="flex flex-1 items-center gap-4 p-5 pb-2">
                         <div className="min-w-0 flex-1">
                           <div className="mb-1 text-xs text-muted">{quizScopeLabel(q, c)} · {q.questions.length} questions</div>
                           <div className="font-serif text-lg font-semibold leading-snug">{q.title}</div>
@@ -83,12 +100,16 @@ export function QuizzesPage({ data }: { data: SemesterData }) {
                           </div>
                         </div>
                         <ProgressRing value={b?.pct ?? 0} color={c.color} label={b ? pct(b.pct) : "–"} />
-                      </Card>
-                    </Link>
+                      </Link>
+                      <div className="flex justify-end gap-1 px-3 pb-2">
+                        {b && <button type="button" className={smallBtn} onClick={() => confirmReset(data.id, q)}>↺ Reset progress</button>}
+                        <button type="button" className={smallBtn} onClick={() => confirmRemove(data.id, q)}>🗑 Remove</button>
+                      </div>
+                    </Card>
                   );
                 })}
               </div>
-            ) : <Empty>No quizzes for {c.short} yet. Press “Make a course quiz”, or open a week on the <Link to={`/${enc(data.id)}/courses/${enc(c.code)}`} className="underline">course page</Link> and press “Make a quiz”.</Empty>}
+            ) : <Empty>No quizzes for {c.short} yet. Press “Make a quiz” to make one for one class or the whole course.</Empty>}
           </section>
         );
       })}
@@ -145,6 +166,7 @@ export function QuizPage({ data, code, name }: { data: SemesterData; code: strin
   const quiz = (data.quizzes ?? []).find((q) => q.code === code && q.name === name);
   const course = courseMap(data)[code];
   const { stats } = useAttempts(data.id);
+  const { navigate } = useRouter();
   const [round, setRound] = useState(0);
   const orders = useMemo(() => quiz?.questions.map((q) => (q.type === "true-false" ? [] : shuffledOptions(q.options.length, q.options.map((o) => o.text)))) ?? [], [quiz, round]);
   const [i, setI] = useState(0);
@@ -175,6 +197,10 @@ export function QuizPage({ data, code, name }: { data: SemesterData; code: strin
         <Link to={back} className="hover:text-ink">← All quizzes</Link>
         <Link to={`/${enc(data.id)}/courses/${enc(code)}${quiz.section !== undefined ? `#w${quiz.section}` : ""}`}><CourseBadge course={course} size="md" /></Link>
         <span>{quizScopeLabel(quiz, course)}</span>
+        <span className="ml-auto flex gap-1">
+          {stats.best[quiz.id] && <button type="button" className={smallBtn} onClick={async () => { if (await confirmReset(data.id, quiz)) restart(); }}>↺ Reset progress</button>}
+          <button type="button" className={smallBtn} onClick={async () => { if (await confirmRemove(data.id, quiz)) navigate(back); }}>🗑 Remove quiz</button>
+        </span>
       </div>
       <h1 className="font-serif text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">{quiz.title}</h1>
       {quiz.description && <p className="mt-2 text-muted">{quiz.description}</p>}
