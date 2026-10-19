@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/g-terra/ouc-study/compare/v0.5.0...v0.6.0) (2026-10-19)
+
+
+### Features
+
+* **web:** make quizzes from a pop-up and let quizzes be removed or reset ([#50](https://github.com/g-terra/ouc-study/issues/50)) ([c53be0f](https://github.com/g-terra/ouc-study/commit/c53be0fdb9c155b05f7244d28a59d22c94e25aab))
+
 ## [0.5.0](https://github.com/g-terra/ouc-study/compare/v0.4.1...v0.5.0) (2026-10-19)
 
 
