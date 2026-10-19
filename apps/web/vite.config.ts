@@ -95,7 +95,7 @@ function aiApi(): Plugin {
 }
 
 /**
- * /api/update (GET): is a newer release out? (asks GitHub at most once a day; ?fresh=1 to force)
+ * /api/update (GET): is a newer release out? (asks GitHub at most once an hour; ?fresh=1 to force)
  * /api/update (POST): update and restart the background app (`ouc restart`); the page waits for it to come back.
  */
 function updateApi(): Plugin {

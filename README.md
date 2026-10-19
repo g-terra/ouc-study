@@ -240,7 +240,7 @@ Run `ouc check-public` before you push.
 
 ## Updates
 
-New versions are published as [GitHub releases](https://github.com/g-terra/ouc-study/releases). The app checks for one once a day; when there is one, a bar under the top menu says **Update available**, with what's new and an **Update now** button. It moves your copy to that release, reinstalls what changed, and restarts the app; the page reloads when it's back. Your semesters, notes and memory are never touched.
+New versions are published as [GitHub releases](https://github.com/g-terra/ouc-study/releases). The app checks for one every hour (⚙ Settings shows your version and has **Check for updates**); when there is one, a bar under the top menu says **Update available**, with what's new and an **Update now** button. It moves your copy to that release, reinstalls what changed, and restarts the app; the page reloads when it's back. Your semesters, notes and memory are never touched.
 
 From Terminal: `ouc update --check` (is there one?), `ouc update` (update), `ouc restart` (update and restart). Both follow releases; add `--main` to get the newest code on main instead. If you changed the code yourself, it doesn't update; commit or stash your changes first.
 

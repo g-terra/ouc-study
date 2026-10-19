@@ -103,7 +103,7 @@ test("ouc update works without an injected runner: the real one runs the AI skil
   } finally { done(); }
 });
 
-test("the update check compares the latest GitHub release with package.json and asks at most once a day", async () => {
+test("the update check compares the latest GitHub release with package.json and asks at most once an hour", async () => {
   const { student, done } = setup();
   try {
     let asked = 0;
@@ -111,10 +111,14 @@ test("the update check compares the latest GitHub release with package.json and 
     const now = Date.parse("2026-10-18T12:00:00Z");
     const u = await checkForUpdate(student, { fetchImpl, now });
     assert.deepEqual([u.current, u.latest, u.available, u.url], ["0.1.0", "0.3.0", true, "https://example/r"]);
-    await checkForUpdate(student, { fetchImpl, now: now + 60 * 60_000 });
-    assert.equal(asked, 1, "cached for a day");
-    await checkForUpdate(student, { fetchImpl, now: now + 25 * 60 * 60_000 });
+    await checkForUpdate(student, { fetchImpl, now: now + 50 * 60_000 });
+    assert.equal(asked, 1, "cached for an hour");
+    await checkForUpdate(student, { fetchImpl, now: now + 61 * 60_000 });
     assert.equal(asked, 2);
+    // updated past the cached answer (e.g. with git pull): asks again at once
+    writeFileSync(join(student, "package.json"), JSON.stringify({ name: "x", version: "0.4.0" }));
+    await checkForUpdate(student, { fetchImpl, now: now + 62 * 60_000 });
+    assert.equal(asked, 3);
     // GitHub API refused (rate limit, shared campus network) or unreachable: the newest tag on the git remote tells
     const limited = await checkForUpdate(student, { fresh: true, fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({}) }), now });
     assert.deepEqual([limited.latest, limited.available, limited.notes], ["0.1.0", false, ""]);
