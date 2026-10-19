@@ -71,3 +71,21 @@ test("the app's local APIs answer", async ({ request }) => {
   expect((await request.get("/api/quiz/attempts?sem=2026-Demo")).ok()).toBeTruthy();
   expect((await request.post("/api/quiz/attempts", { data: { sem: "2026-Demo", quiz: "../x", results: [true] } })).status()).toBe(400);
 });
+
+test("a course's slides open in the slide viewer", async ({ page }) => {
+  await page.goto(`${SEM}/courses/DEMO101`);
+  const link = page.getByRole("link", { name: /Demo lecture/ });
+  if (!(await link.isVisible())) await page.getByRole("button", { name: /Getting started/ }).click();
+  await link.click();
+  await expect(page).toHaveURL(/\/slides\//);
+  // with LibreOffice the slides show (the first with its narration); without it, how to get it
+  await expect(page.getByTestId("slide-counter").or(page.getByText("can't be shown here yet"))).toBeVisible({ timeout: 60_000 });
+  if (await page.getByTestId("slide-counter").isVisible()) {
+    await expect(page.getByTestId("slide-counter")).toHaveText("Slide 1 / 2");
+    await expect(page.locator("audio")).toHaveCount(1);
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId("slide-counter")).toHaveText("Slide 2 / 2");
+    await expect(page.locator("audio")).toHaveCount(0);
+  }
+  await expect(page.getByRole("link", { name: /Download/ }).first()).toHaveAttribute("href", /Demo%20lecture\.pptx$/);
+});

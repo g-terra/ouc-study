@@ -1,7 +1,7 @@
 import { defineConfig, type Plugin, type Connect } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,8 @@ import { createAiApi } from "../../packages/ai/src/api.ts";
 import { addAttempt, readAttempts } from "../../packages/content/src/quiz-store.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { checkForUpdate, restartDetached } from "../../packages/cli/src/update.ts";
+// @ts-ignore: plain JS module shared with the `ouc` command line
+import { createSlidesApi, sendFile } from "../../packages/ai/src/slides.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 
@@ -167,21 +169,7 @@ function semesterFiles(): Plugin {
       res.statusCode = 404;
       return res.end("File not found");
     }
-    const { size } = statSync(abs);
-    res.setHeader("Content-Type", MIME[extname(abs).toLowerCase()] ?? "application/octet-stream");
-    const range = req.headers.range?.match(/bytes=(\d*)-(\d*)/);
-    if (range) {
-      const start = range[1] ? Number(range[1]) : 0;
-      const end = range[2] ? Number(range[2]) : size - 1;
-      res.statusCode = 206;
-      res.setHeader("Content-Range", `bytes ${start}-${end}/${size}`);
-      res.setHeader("Accept-Ranges", "bytes");
-      res.setHeader("Content-Length", end - start + 1);
-      return createReadStream(abs, { start, end }).pipe(res);
-    }
-    res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("Content-Length", size);
-    createReadStream(abs).pipe(res);
+    sendFile(req, res, abs, MIME[extname(abs).toLowerCase()] ?? "application/octet-stream");
   };
   return {
     name: "semester-files",
@@ -217,8 +205,14 @@ function semesterFiles(): Plugin {
   };
 }
 
+/** /api/slides/*: PowerPoint files as a PDF plus their narration, for the slide viewer (packages/ai/src/slides.ts). */
+function slidesApi(): Plugin {
+  const handler = createSlidesApi({ semesters: SEMESTERS, cache: resolve(HERE, "../../.ouc/slides") });
+  return { name: "slides-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), semesterFiles(), eclassApi(), aiApi(), updateApi(), quizApi()],
+  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), quizApi()],
   server: { port: 5173 },
   ...(process.env.OUC_PUBLIC ? { publicDir: resolve(process.env.OUC_PUBLIC) } : {}),
 });

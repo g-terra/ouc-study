@@ -12,6 +12,7 @@ import { UpdatesPage } from "./pages/Updates";
 import { PlanPage } from "./pages/Plan";
 import { AiWorkPage } from "./pages/AiWork";
 import { QuizPage, QuizzesPage } from "./pages/Quizzes";
+import { SlidesPage } from "./pages/Slides";
 import type { SemesterData } from "@ouc/content/types";
 
 function Semester({ sem, page }: { sem: string; page: (d: SemesterData) => ReactNode }) {
@@ -51,6 +52,7 @@ export default function App() {
               ["/:sem/notes/:code/:slug", (p) => <Semester sem={p.sem} page={(d) => <NotePage key={p.slug} data={d} code={p.code} slug={p.slug} />} />],
               ["/:sem/quizzes", (p) => <Semester sem={p.sem} page={(d) => <QuizzesPage data={d} />} />],
               ["/:sem/quizzes/:code/:name", (p) => <Semester sem={p.sem} page={(d) => <QuizPage key={`${p.code}/${p.name}`} data={d} code={p.code} name={p.name} />} />],
+              ["/:sem/slides/:file", (p) => <Semester sem={p.sem} page={(d) => <SlidesPage key={p.file} data={d} file={p.file} />} />],
               ["/:sem/ai-work", (p) => <Semester sem={p.sem} page={(d) => <AiWorkPage data={d} />} />],
               ["/:sem/updates", (p) => <Semester sem={p.sem} page={(d) => <UpdatesPage data={d} />} />],
               ["/:sem/assignments", (p) => <Semester sem={p.sem} page={(d) => <AssignmentsPage data={d} />} />],

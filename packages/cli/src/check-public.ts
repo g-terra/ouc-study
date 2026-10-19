@@ -44,7 +44,8 @@ const flag = (f: string, why: string) => problems.push([f, why]);
 for (const f of files) {
   if (/^(semesters\/(?!README\.md$)|memory\/|\.claude\/|\.agents\/|\.opencode\/|\.ouc\/)/.test(f)) flag(f, "personal folder (should be git-ignored)");
   else if (/(^|\/)\.eclass-token$|(^|\/)STUDENT\.md$|CLAUDE\.local\.md$/.test(f)) flag(f, "personal file");
-  else if (/\.(pdf|pptx?|docx?|xlsx?|mp4|zip|epub|djvu)$/i.test(f)) flag(f, "document/media file: course material?");
+  // the smoke tests' made-up demo semester may hold small made-up files (e2e/demo/, under 50 KB)
+  else if (/\.(pdf|pptx?|docx?|xlsx?|mp4|zip|epub|djvu)$/i.test(f) && !(f.startsWith("e2e/demo/") && existsSync(join(ROOT, f)) && statSync(join(ROOT, f)).size < 50_000)) flag(f, "document/media file: course material?");
   const p = join(ROOT, f);
   if (!existsSync(p) || statSync(p).size > 2_000_000) continue;
   const text = readFileSync(p, "utf8");
