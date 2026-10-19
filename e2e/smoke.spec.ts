@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 const SEM = "/2026-Demo";
 const PAGES: [path: string, name: string][] = [
   ["", "Dashboard"], ["/plan", "Plan"], ["/timeline", "Timeline"], ["/courses", "Courses"],
-  ["/notes", "Notes"], ["/assignments", "Assignments"], ["/updates", "Updates"],
+  ["/notes", "Notes"], ["/quizzes", "Quizzes"], ["/assignments", "Assignments"], ["/updates", "Updates"],
 ];
 
 // what went wrong in the browser during the current test (tests in a worker run one at a time)
@@ -35,9 +35,39 @@ test("the demo course, its note and assignment show up", async ({ page }) => {
   await expect(page.getByText("Assignment 1").first()).toBeVisible();
 });
 
+test("a quiz plays to the end, and its score is saved and shown", async ({ page }) => {
+  await page.goto(`${SEM}/quizzes`);
+  await page.getByText("Week 1 · Getting started").first().click();
+  // true or false: right
+  await page.getByRole("radio", { name: "True" }).click();
+  await page.getByRole("button", { name: "Check answer" }).click();
+  await expect(page.getByText("Right!")).toBeVisible();
+  await page.getByRole("button", { name: "Next question" }).click();
+  // one answer: wrong
+  await page.getByRole("radio", { name: "Your own semester" }).click();
+  await page.getByRole("button", { name: "Check answer" }).click();
+  await expect(page.getByText("Not quite. The answer: The demo semester")).toBeVisible();
+  await page.getByRole("button", { name: "Next question" }).click();
+  // select all that apply, with "None of the above" kept last
+  await expect(page.getByRole("checkbox").last()).toHaveText(/None of the above/);
+  for (const name of ["Demo data", "App", "Smoke test"]) await page.getByRole("checkbox", { name }).click();
+  await page.getByRole("button", { name: "Check answer" }).click();
+  await page.getByRole("button", { name: "See my score" }).click();
+  await expect(page.getByText("You scored 2 out of 3")).toBeVisible();
+  await expect(page.getByText("+20 points")).toBeVisible();
+  await expect(page.getByText("Score saved on this computer.")).toBeVisible();
+  // the quiz list and the course page show the best score
+  await page.getByRole("link", { name: "All quizzes" }).last().click();
+  await expect(page.getByText(/Best 2\/3 · \d+ tr(y|ies)/)).toBeVisible();   // (a retry adds a try)
+  await page.goto(`${SEM}/courses/DEMO101`);
+  await expect(page.getByText("best 67%").first()).toBeVisible();
+});
+
 test("the app's local APIs answer", async ({ request }) => {
   const u = await request.get("/api/update");
   expect(u.ok()).toBeTruthy();
   expect(await u.json()).toHaveProperty("current");
   expect((await request.get("/api/eclass/status")).status()).toBeLessThan(500);
+  expect((await request.get("/api/quiz/attempts?sem=2026-Demo")).ok()).toBeTruthy();
+  expect((await request.post("/api/quiz/attempts", { data: { sem: "2026-Demo", quiz: "../x", results: [true] } })).status()).toBe(400);
 });

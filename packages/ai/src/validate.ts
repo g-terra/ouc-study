@@ -1,7 +1,8 @@
 /**
- * Checks a visual note or a prep pack (PREP.md) against docs/NOTE_FORMAT.md, so any AI (or person) can verify its work.
- *   node packages/ai/validate.mjs <note.md> [...]      exit 1 if there are errors
- *   node packages/ai/validate.mjs --all               every note and prep pack in every semester
+ * Checks a visual note or a prep pack (PREP.md) against docs/NOTE_FORMAT.md, and a quiz (quizzes/<CODE>/<name>.json)
+ * against docs/QUIZ_FORMAT.md, so any AI (or person) can verify its work.
+ *   node packages/ai/validate.mjs <note.md | quiz.json> [...]   exit 1 if there are errors
+ *   node packages/ai/validate.mjs --all               every note, prep pack and quiz in every semester
  *   --fix                                             also rewrite LaTeX in double quotes as single-quoted, in place
  */
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -9,6 +10,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import { hasQuotedLatex, parseBlock, singleQuoteLatex } from "../../content/src/yaml-blocks.ts";
+import { parseQuiz } from "../../content/src/quiz.ts";
 
 const CALLOUTS = new Set(["IDEA", "KEY", "TIP", "WARN", "EXAM", "ANALOGY", "LINK"]);
 const DATA = new Set(["cards", "formula", "compare", "steps", "flashcards", "terms", "links"]);
@@ -93,6 +95,14 @@ export function fixQuotedLatex(src: string): string {
   return src.replace(/^(```\s*[\w-]+[ \t]*\n)([\s\S]*?)(^```[ \t]*$)/gm, (all, open: string, body: string, close: string) => (/^```\s*mermaid/.test(open) ? all : open + singleQuoteLatex(body) + close));
 }
 
+/** A quiz file, by its path: the course code is the folder it is in. */
+export function validateQuiz(src: string, file: string): { errors: string[]; warnings: string[] } {
+  const parts = file.split(/[\\/]/);
+  if (parts.at(-3) !== "quizzes") return { errors: ["A quiz goes in semesters/<id>/quizzes/<COURSE CODE>/<name>.json."], warnings: [] };
+  const { errors, warnings } = parseQuiz(src, { code: parts.at(-2)!, name: parts.at(-1)!.replace(/\.json$/, "") });
+  return { errors, warnings };
+}
+
 // ---------- CLI ----------
 /** `node packages/ai/validate.mjs` (the launcher calls this). */
 export function main(argv: string[]): never {
@@ -111,12 +121,25 @@ export function main(argv: string[]): never {
       if (!existsSync(ad) || !statSync(ad).isDirectory()) continue;
       for (const c of readdirSync(ad)) if (statSync(join(ad, c)).isDirectory()) for (const a of readdirSync(join(ad, c))) if (existsSync(join(ad, c, a, "PREP.md"))) files.push(join(ad, c, a, "PREP.md"));
     }
+    // quizzes: semesters/<id>/quizzes/<CODE>/<name>.json
+    for (const s of existsSync(sems) ? readdirSync(sems) : []) {
+      const qd = join(sems, s, "quizzes");
+      if (!existsSync(qd) || !statSync(qd).isDirectory()) continue;
+      for (const c of readdirSync(qd)) if (statSync(join(qd, c)).isDirectory()) for (const f of readdirSync(join(qd, c))) if (f.endsWith(".json")) files.push(join(qd, c, f));
+    }
   }
-  if (!files.length) { console.error("Usage: node packages/ai/validate.mjs <note.md | PREP.md> [...] | --all  [--fix]"); process.exit(2); }
+  if (!files.length) { console.error("Usage: node packages/ai/validate.mjs <note.md | PREP.md | quiz.json> [...] | --all  [--fix]"); process.exit(2); }
   let bad = 0;
   for (const f of files) {
     const name = f.replace(`${ROOT}/`, "");
     let src = readFileSync(f, "utf8");
+    if (f.endsWith(".json")) {
+      const { errors, warnings } = validateQuiz(src, resolve(f));
+      if (errors.length) { bad++; console.log(`✗ ${name}`); errors.forEach((e) => console.log(`    error: ${e}`)); }
+      else console.log(`✓ ${name}`);
+      warnings.forEach((w) => console.log(`    note: ${w}`));
+      continue;
+    }
     if (argv.includes("--fix")) { const fixed = fixQuotedLatex(src); if (fixed !== src) { writeFileSync(f, fixed); src = fixed; console.log(`  fixed LaTeX quoting in ${name}`); } }
     const { errors, warnings } = validateNote(src, { prep: /(^|[\\/])PREP\.md$/.test(f) });
     if (errors.length) { bad++; console.log(`✗ ${name}`); errors.forEach((e) => console.log(`    error: ${e}`)); }

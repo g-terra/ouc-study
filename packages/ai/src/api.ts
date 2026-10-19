@@ -26,7 +26,8 @@ import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
 import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, loginStatusAsync, serverUp, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
-import { buildPrompt, chatSystem, listActions, prepPath, weeksWithoutNotes, type Params } from "./actions.ts";
+import { buildPrompt, chatSystem, listActions, prepPath, quizPath, quizScope, weeksWithoutNotes, type Params } from "./actions.ts";
+import { parseQuiz } from "../../content/src/quiz.ts";
 import { currentSemesterId, loadData, read } from "./context.ts";
 import { runAgentTurn, runChatTurn, type AgentEvent, type RunHandle } from "./stream.ts";
 import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview, reviewState, type Converter } from "./review.ts";
@@ -50,6 +51,7 @@ interface Message {
 export interface Chat {
   id: string; title: string; tool: string; action: string | null; params: Params; sem: string | null;
   createdAt: string; updatedAt?: string; sessionId?: string; messages: Message[]; running?: boolean;
+  quiz?: string;                                       // make-quiz: the file it makes (repo-relative)
 }
 /** POST /api/ai/run (and the background work). */
 interface RunBody { sem?: string | null; chatId?: string; action?: string | null; params?: Params; message?: string; tool?: string; auto?: boolean }
@@ -165,6 +167,35 @@ export function needsPrep(root: string, semId: string, data: Pick<SemesterData, 
     && !(tried[a.id] && now.getTime() - new Date(tried[a.id]!).getTime() < 12 * 3600_000));
 }
 
+// ---------- quizzes (semesters/<id>/quizzes/<CODE>/<name>.json) ----------
+const QUIZ_FILE = /^semesters\/[\w.-]+\/quizzes\/([\w-]+)\/([\w.-]+)\.json$/;
+/** Notes which AI made a quiz, and when, unless the file says so already. */
+export function stampQuiz(root: string, rel: string, by: string, at = new Date()): boolean {
+  if (!QUIZ_FILE.test(rel) || !existsSync(join(root, rel))) return false;
+  let d: Record<string, unknown>;
+  try { d = JSON.parse(read(join(root, rel))); } catch { return false; }
+  if (!d || typeof d !== "object" || Array.isArray(d) || (d.by && d.created)) return false;
+  const { title, course, scope, section, description, ...rest } = d;
+  writeFileSync(join(root, rel), `${JSON.stringify({ title, course, scope, section, description, by: d.by ?? by, created: d.created ?? at.toISOString(), ...rest }, null, 2)}\n`);
+  return true;
+}
+/**
+ * A plain local model answers with the quiz JSON: check it and save it at `rel`.
+ * Returns the message for the chat (the JSON itself isn't worth showing).
+ */
+export function saveQuizReply(root: string, rel: string, text: string, by: string, at = new Date()): { ok: boolean; message: string } {
+  const m = rel.match(QUIZ_FILE);
+  if (!m) return { ok: false, message: "That isn't a quiz file path." };
+  const fenced = text.match(/```(?:json)?\s*\n([\s\S]*?)\n```/)?.[1];
+  const raw = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  const { quiz, errors } = parseQuiz(raw, { code: m[1]!, name: m[2]! });
+  if (!quiz) return { ok: false, message: `The quiz couldn't be saved: ${errors.slice(0, 3).join(" ")} Ask me to fix it and answer with the whole JSON again.` };
+  mkdirSync(join(root, rel, ".."), { recursive: true });
+  const d = JSON.parse(raw);
+  writeFileSync(join(root, rel), `${JSON.stringify({ ...d, by: d.by ?? by, created: d.created ?? at.toISOString() }, null, 2)}\n`);
+  return { ok: true, message: `Saved the quiz \`${rel}\`: ${quiz.questions.length} questions. Play it on the Quizzes page.` };
+}
+
 // ---------- visuals the AI saves (shown inline in the chat) ----------
 const VIEW_TYPE: Record<string, string> = { ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
 /** The absolute path of a visual inside the folder, or null (other types, hidden folders, outside the folder). */
@@ -240,7 +271,10 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     const title = (action === "assignment-prep" && PREP_TITLE[params.mode ?? ""]) || meta?.title || "Request";
     const shown = String(body.message ?? "").trim() || `${title}${what ? `: ${what}` : ""}`;
     const now = new Date().toISOString();
-    chat ??= { id: randomUUID(), title: shown.slice(0, 80), tool, action, params, sem: semId, createdAt: now, messages: [] };
+    // a new quiz: the same path buildPrompt gave the agent (a local model's answer is saved there)
+    let quiz: string | undefined;
+    if (!chat && action === "make-quiz" && semId) { const q = quizScope(data, params); quiz = quizPath(root, semId, q.course, q.week); }
+    chat ??= { id: randomUUID(), title: shown.slice(0, 80), tool, action, params, sem: semId, createdAt: now, messages: [], quiz };
     chat.updatedAt = now;
     chat.messages.push({ role: "user", text: shown, prompt, at: now });
     const by = tool === "opencode" && !cfg.opencode ? "opencode" : describe(cfg);
@@ -282,6 +316,15 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
       .then((r) => {
         if (r?.ok && prepAbs && assignment) stampPrep(prepAbs, { assignment: assignment.id, by, mode: prepMode, log: prepLog });
         if (reviewV && semId && assignment) markReview(root, semId, assignment, reviewV, { finished: new Date().toISOString(), ok: !!r?.ok });
+        if (r?.ok && turnChat.action === "make-quiz") {
+          if (isAgentic(tool)) for (const f of new Set([...reply.files, ...(turnChat.quiz ? [turnChat.quiz] : [])])) stampQuiz(root, f, by);
+          else if (turnChat.quiz && reply.text.includes("{")) {
+            const saved = saveQuizReply(root, turnChat.quiz, reply.text, by);
+            reply.text = saved.message;
+            send({ type: "text", text: reply.text, replace: true });
+            if (saved.ok) { reply.files.push(turnChat.quiz); send({ type: "file", path: turnChat.quiz }); }
+          }
+        }
         return r;
       })
       .finally(() => {

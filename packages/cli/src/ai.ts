@@ -452,7 +452,7 @@ export async function main(): Promise<void> {
     case "run": {
       const cfg = await config(o);
       const [skill, ...rest] = o._;
-      if (!skill || !existsSync(join(ROOT, "ai/skills", skill))) { ui.fail(`Usage: ouc ai run <skill> "request". Skills: plan-week, make-notes, research-topic, find-material, quiz-me, assignment-helper, sync-eclass`); process.exit(2); }
+      if (!skill || !existsSync(join(ROOT, "ai/skills", skill))) { ui.fail(`Usage: ouc ai run <skill> "request". Skills: plan-week, make-notes, research-topic, find-material, quiz-me, make-quiz, assignment-helper, sync-eclass`); process.exit(2); }
       if (!AGENTIC.has(cfg.tool)) {
         const alt = { "make-notes": "ouc notes", "plan-week": "ouc plan", "quiz-me": "ouc quiz" }[skill];
         ui.fail(alt ? `With a local model, use: ${alt}` : `"${skill}" needs an AI that can use files and the web. Use --with opencode (local) or claude/codex.`);

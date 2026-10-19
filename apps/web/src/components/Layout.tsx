@@ -222,6 +222,7 @@ const NAV = [
   ["timeline", "Timeline"],
   ["courses", "Courses"],
   ["notes", "Notes"],
+  ["quizzes", "Quizzes"],
   ["assignments", "Assignments"],
   ["updates", "Updates"],
 ] as const;
@@ -265,11 +266,11 @@ export function Layout({ sem, children }: { sem: string; children: ReactNode }) 
       </footer>
       <SettingsFab to={`${base}/updates`} />
       <AskAiFab />
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-8 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
         {NAV.map(([seg, label], i) => (
           <Link key={seg} to={seg ? `${base}/${seg}` : base}
             className={cx("flex flex-col items-center gap-0.5 py-2 text-[10px]", section === seg ? "font-semibold text-ink" : "text-muted")}>
-            <span className="text-lg leading-none">{["🏠", "✅", "🗓️", "📚", "📒", "📝", "🔔"][i]}</span>{label}
+            <span className="text-lg leading-none">{["🏠", "✅", "🗓️", "📚", "📒", "🏆", "📝", "🔔"][i]}</span>{label}
           </Link>
         ))}
       </nav>

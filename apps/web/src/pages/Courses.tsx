@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import type { ClassSession, SemesterData, Week } from "@ouc/content/types";
+import type { ClassSession, Quiz, SemesterData, Week } from "@ouc/content/types";
 import { Link, enc, useRouter } from "../lib/router";
 import { currentWeek, stateOf } from "../lib/data";
 import { at, day, fmtDay, fmtFull, fmtShort, fmtTime, relative } from "../lib/dates";
 import { Card, Empty, PageHeader, ProgressRing, SectionTitle, StatePill, cx, kindIcon } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
 import { ClassCard, ClassTimeEditor, JoinButton, upcomingClasses } from "../components/Classes";
+import { quizHref, quizScopeLabel } from "./Quizzes";
+import { pct, useAttempts } from "../lib/quiz";
 
 export function Courses({ data }: { data: SemesterData }) {
   const base = `/${enc(data.id)}`;
@@ -54,6 +56,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
 
   const as = data.assignments.filter((a) => a.code === code);
   const notes = data.notes.filter((n) => n.code === code);
+  const quizzes = (data.quizzes ?? []).filter((q) => q.code === code);
   const exams = data.exams.filter((e) => e.code === code);
   const upcoming = as.filter((a) => !a.submitted && a.due && at(a.due) >= now);
   const classes = (data.classes ?? []).filter((x) => x.code === code);
@@ -79,7 +82,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
         <section>
           <SectionTitle right={<button className="text-sm text-muted hover:text-ink" onClick={() => setOpen(open.size > 1 ? new Set() : new Set(c.weeks.map((w) => w.index)))}>{open.size > 1 ? "Collapse all" : "Expand all"}</button>}>Week by week</SectionTitle>
           <Card className="overflow-hidden">
-            {c.weeks.map((w) => <WeekRow key={w.index} w={w} isOpen={open.has(w.index)} isNow={w.index === cur?.index} color={c.color} onToggle={() => toggle(w.index)} base={base} code={code} classes={classes.filter((x) => x.weekIndex === w.index)} />)}
+            {c.weeks.map((w) => <WeekRow key={w.index} w={w} isOpen={open.has(w.index)} isNow={w.index === cur?.index} color={c.color} onToggle={() => toggle(w.index)} base={base} code={code} classes={classes.filter((x) => x.weekIndex === w.index)} quizzes={quizzes.filter((q) => q.scope === "lecture" && q.section === w.index)} sem={data.id} />)}
           </Card>
         </section>
         <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
@@ -116,6 +119,10 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
             </div>
           )}
           <div>
+            <SectionTitle right={<AskAiButton action="make-quiz" params={{ course: code }}>Course quiz</AskAiButton>}>Quizzes</SectionTitle>
+            {quizzes.length ? <QuizLinks sem={data.id} quizzes={quizzes} withScope /> : <Empty>No quizzes yet. Open a week and press “Make a quiz”, or make one for the whole course.</Empty>}
+          </div>
+          <div>
             <SectionTitle>Notes</SectionTitle>
             {notes.length ? (
               <div className="grid gap-1.5">
@@ -133,7 +140,26 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
   );
 }
 
-function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string; classes: ClassSession[] }) {
+/** Links to quizzes with the best score so far. */
+function QuizLinks({ sem, quizzes, withScope = false }: { sem: string; quizzes: Quiz[]; withScope?: boolean }) {
+  const { stats } = useAttempts(sem);
+  return (
+    <div className="grid gap-1.5">
+      {quizzes.map((q) => {
+        const b = stats.best[q.id];
+        return (
+          <Link key={q.id} to={quizHref(sem, q)} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
+            <span aria-hidden>🏆</span>
+            <span className="min-w-0 flex-1 leading-snug">{withScope && q.scope === "course" ? `${quizScopeLabel(q)}: ` : ""}{q.title}</span>
+            <span className={cx("shrink-0 text-xs", b?.pct === 1 ? "font-semibold text-ok" : "text-muted")}>{b ? `best ${pct(b.pct)}` : `${q.questions.length} questions`}</span>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes, quizzes, sem }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string; classes: ClassSession[]; quizzes: Quiz[]; sem: string }) {
   const dates = w.start ? `${fmtShort(day(w.start))} – ${fmtShort(day(w.end!))}${w.estimated ? " (est.)" : ""}` : "";
   const counts = w.items.reduce<Record<string, number>>((m, i) => ((m[i.kind] = (m[i.kind] ?? 0) + 1), m), {});
   return (
@@ -155,6 +181,7 @@ function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes }: { w
           {counts.file && <span>📄{counts.file}</span>}
           {counts.video && <span>🎬{counts.video}</span>}
           {counts.assignment && <span>📝{counts.assignment}</span>}
+          {quizzes.length > 0 && <span>🏆{quizzes.length}</span>}
         </span>
         <span className={cx("text-muted transition", isOpen && "rotate-90")}>›</span>
       </button>
@@ -180,10 +207,12 @@ function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes }: { w
             })}
           </ul>
           {w.items.length === 0 && <p className="text-sm text-muted">Nothing posted for this week.</p>}
+          {quizzes.length > 0 && <div className="mt-2"><QuizLinks sem={sem} quizzes={quizzes} /></div>}
           {w.index > 0 && w.items.some((i) => i.kind === "file") && (
             <div className="mt-3 flex flex-wrap gap-2">
               {!w.items.some((i) => i.kind === "note") && <AskAiButton action="make-notes" params={{ course: code, week: String(w.index) }}>Make notes</AskAiButton>}
               <AskAiButton action="quiz-me" params={{ course: code, week: String(w.index) }}>Quiz me</AskAiButton>
+              <AskAiButton action="make-quiz" params={{ course: code, week: String(w.index) }}>{quizzes.length ? "Make another quiz" : "Make a quiz"}</AskAiButton>
             </div>
           )}
         </div>
