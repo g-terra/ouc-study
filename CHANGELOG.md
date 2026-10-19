@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/g-terra/ouc-study/compare/v0.4.1...v0.5.0) (2026-10-19)
+
+
+### Features
+
+* **web:** add scored quizzes made by the ai from course material ([#46](https://github.com/g-terra/ouc-study/issues/46)) ([b65501a](https://github.com/g-terra/ouc-study/commit/b65501a14bdec52b50cefd519d5057aa533579a9))
+* **web:** show course slides in the app with their narration ([#45](https://github.com/g-terra/ouc-study/issues/45)) ([8f3338c](https://github.com/g-terra/ouc-study/commit/8f3338c45705143597c6bc95404eb54a0c872180))
+
+
+### Bug Fixes
+
+* **cli:** install missing dependencies before the app starts ([#48](https://github.com/g-terra/ouc-study/issues/48)) ([1ee2eca](https://github.com/g-terra/ouc-study/commit/1ee2ecaa547a5430c0f139a66e51f2db312ca159))
+
 ## [0.4.1](https://github.com/g-terra/ouc-study/compare/v0.4.0...v0.4.1) (2026-10-18)
 
 
