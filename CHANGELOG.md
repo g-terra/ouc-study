@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/g-terra/ouc-study/compare/v0.6.0...v0.7.0) (2026-10-19)
+
+
+### Features
+
+* **web:** show the app version in settings, with update and check buttons ([#53](https://github.com/g-terra/ouc-study/issues/53)) ([5cc66b3](https://github.com/g-terra/ouc-study/commit/5cc66b3485797eb33e6342f8984c6c1cb98f005b))
+
 ## [0.6.0](https://github.com/g-terra/ouc-study/compare/v0.5.0...v0.6.0) (2026-10-19)
 
 
