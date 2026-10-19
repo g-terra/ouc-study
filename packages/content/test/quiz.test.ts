@@ -1,11 +1,11 @@
 // Quizzes: checking the file the AI writes, answers, points and streaks, and saving attempts.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isCorrect, makeAttempt, parseQuiz, pointsFor, quizStats, shuffledOptions } from "../src/quiz.ts";
-import { addAttempt, attemptsFile, readAttempts } from "../src/quiz-store.ts";
+import { addAttempt, attemptsFile, readAttempts, removeQuiz, resetAttempts } from "../src/quiz-store.ts";
 import type { QuizAttempt, QuizQuestion } from "../src/types.ts";
 
 const where = { code: "AAA", name: "lecture-01-intro" };
@@ -100,4 +100,25 @@ test("attempts: checked, points worked out on the server, appended to attempts.j
   assert.equal(all.length, 2);
   assert.deepEqual(all[1].results, [false, false]);
   assert.match(readFileSync(attemptsFile(dir), "utf8"), /"attempts"/);
+});
+
+test("reset one quiz's progress or all of it, and remove a quiz with its scores", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ouc-quiz-"));
+  for (const quiz of ["AAA/one", "AAA/one", "AAA/two", "BBB/three"]) addAttempt(dir, { quiz, results: [true] });
+  assert.equal(resetAttempts(dir, "AAA/one"), 2);
+  assert.deepEqual(readAttempts(dir).map((a) => a.quiz), ["AAA/two", "BBB/three"]);
+  assert.equal(resetAttempts(dir, "AAA/none"), 0);
+  assert.throws(() => resetAttempts(dir, "../x"), /Bad quiz id/);
+
+  mkdirSync(join(dir, "quizzes/AAA"), { recursive: true });
+  writeFileSync(join(dir, "quizzes/AAA/two.json"), "{}");
+  removeQuiz(dir, "AAA/two");
+  assert.equal(existsSync(join(dir, "quizzes/AAA/two.json")), false);
+  assert.deepEqual(readAttempts(dir).map((a) => a.quiz), ["BBB/three"]);
+  assert.throws(() => removeQuiz(dir, "AAA/two"), /doesn't exist/);
+  assert.throws(() => removeQuiz(dir, "AAA/../../x"), /Bad quiz id/);
+  assert.throws(() => removeQuiz(dir, "AAA/.hidden"), /Bad quiz id/);
+
+  assert.equal(resetAttempts(dir), 1);
+  assert.deepEqual(readAttempts(dir), []);
 });

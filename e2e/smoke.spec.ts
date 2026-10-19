@@ -63,6 +63,32 @@ test("a quiz plays to the end, and its score is saved and shown", async ({ page 
   await expect(page.getByText("best 67%").first()).toBeVisible();
 });
 
+test("a quiz's progress can be reset; Make a quiz opens a pop-up; Remove asks first", async ({ page }) => {
+  await page.goto(`${SEM}/quizzes/DEMO101/week-01-getting-started`);
+  for (const pick of [page.getByRole("radio", { name: "True" }), page.getByRole("radio").first(), page.getByRole("checkbox").first()]) {
+    await pick.click();
+    await page.getByRole("button", { name: "Check answer" }).click();
+    await page.getByRole("button", { name: /Next question|See my score/ }).click();
+  }
+  await expect(page.getByText("Score saved on this computer.")).toBeVisible();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "↺ Reset progress" }).click();
+  await expect(page.getByText("Question 1 of 3")).toBeVisible();
+  await page.goto(`${SEM}/quizzes`);
+  await expect(page.getByText("Not played yet")).toBeVisible();
+  // Remove: cancelling keeps the quiz
+  page.once("dialog", (d) => d.dismiss());
+  await page.getByRole("button", { name: "🗑 Remove" }).click();
+  await expect(page.getByText("Week 1 · Getting started")).toBeVisible();
+  // the pop-up picks one class or the whole course, without opening the chat
+  await page.getByRole("button", { name: "Make a quiz" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Make a quiz" });
+  await dialog.getByText("One class").click();
+  await expect(dialog.getByRole("combobox", { name: "Class", exact: true })).toHaveValue("1");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+});
+
 test("the app's local APIs answer", async ({ request }) => {
   const u = await request.get("/api/update");
   expect(u.ok()).toBeTruthy();
@@ -70,6 +96,8 @@ test("the app's local APIs answer", async ({ request }) => {
   expect((await request.get("/api/eclass/status")).status()).toBeLessThan(500);
   expect((await request.get("/api/quiz/attempts?sem=2026-Demo")).ok()).toBeTruthy();
   expect((await request.post("/api/quiz/attempts", { data: { sem: "2026-Demo", quiz: "../x", results: [true] } })).status()).toBe(400);
+  expect((await request.delete("/api/quiz?sem=2026-Demo&quiz=DEMO101/nope")).status()).toBe(404);
+  expect((await request.get("/api/ai/quiz")).ok()).toBeTruthy();
 });
 
 test("a course's slides open in the slide viewer", async ({ page }) => {

@@ -8,6 +8,8 @@
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
 //   GET  /api/ai/view?path=…  a visual the AI saved (HTML, SVG or image), sandboxed, for the chat to show inline
 //   POST /api/ai/plan/task     { sem, week, line, done } ticks a task in semesters/<sem>/plans/<week>.md
+//   POST /api/ai/quiz          { sem, course, week? } makes a quiz in the background (no chat on screen) → { job }
+//   GET  /api/ai/quiz          the quizzes being made, and the ones just finished: { jobs: [{ chatId, quiz, course, week, running, ok?, error? }] }
 //   GET  /api/ai/prep          background notes/prep work: { enabled, busy, running/finished: [{ id, chatId, ok? }], queue, total, done, error }
 //   GET  /api/ai/review?sem=…&assignment=…          pre-submission review rounds of an assignment (see review.mjs)
 //   POST /api/ai/review/upload?sem=…&assignment=…&name=…   the student's .docx as the body → the next version
@@ -168,6 +170,7 @@ export function needsPrep(root: string, semId: string, data: Pick<SemesterData, 
 }
 
 // ---------- quizzes (semesters/<id>/quizzes/<CODE>/<name>.json) ----------
+const stripTicks = (s?: string) => String(s ?? "").replace(/`/g, "").trim().slice(0, 300);
 const QUIZ_FILE = /^semesters\/[\w.-]+\/quizzes\/([\w-]+)\/([\w.-]+)\.json$/;
 /** Notes which AI made a quiz, and when, unless the file says so already. */
 export function stampQuiz(root: string, rel: string, by: string, at = new Date()): boolean {
@@ -421,6 +424,25 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     }
   }
 
+  // ----- quizzes made in the background (the Make a quiz pop-up) -----
+  type QuizJob = { chatId: string; sem: string; course: string; week?: string; quiz?: string; started: string; running: boolean; ok?: boolean; error?: string };
+  let quizJobs: QuizJob[] = [];
+  function makeQuiz(b: Json): QuizJob {
+    const params: Params = { course: String(b.course ?? "") };
+    if (b.week !== undefined && b.week !== null && b.week !== "") params.week = String(b.week);
+    const t = startTurn({ sem: b.sem, action: "make-quiz", params });
+    if (t.error !== undefined) throw Object.assign(new Error(t.error), { code: t.code });
+    const job: QuizJob = { chatId: t.chat.id, sem: t.chat.sem ?? "", course: params.course!, week: params.week as string | undefined, quiz: t.chat.quiz, started: t.chat.createdAt, running: true };
+    // keep the last few finished ones, so the page can say how it went
+    quizJobs = [...quizJobs.filter((j) => j.running || Date.now() - new Date(j.started).getTime() < 3600_000).slice(-9), job];
+    t.done.then((r) => {
+      job.running = false;
+      job.ok = !!r?.ok && !!job.quiz && existsSync(join(root, job.quiz));
+      if (!job.ok) job.error = t.chat.messages.at(-1)?.error ?? (r?.ok ? stripTicks(t.chat.messages.at(-1)?.text) || "The AI finished without saving a quiz." : "The AI stopped with an error.");
+    });
+    return job;
+  }
+
   // ----- pre-submission review -----
   let conv: { at: number; found: Converter | null } = { at: 0, found: null };
   // looked up again after a minute, so installing LibreOffice works without restarting the app
@@ -469,6 +491,10 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
           return json(res, reviewBody(semId, a));
         }
       }
+      if (p === "/api/ai/quiz") {
+        if (req.method === "POST") return json(res, { job: makeQuiz(await readBody(req)) });
+        return json(res, { jobs: quizJobs });
+      }
       if (p === "/api/ai/actions") return json(res, { actions: listActions(root) });
       if (p === "/api/ai/chats") return json(res, { chats: listChats(root) });
       if (p.startsWith("/api/ai/chats/")) {
@@ -506,7 +532,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
       return json(res, { error: "Not found" }, 404);
     } catch (e) {
       const err = e as Error & { code?: number };
-      if (!res.headersSent) json(res, { error: err.message }, err.code === 404 ? 404 : url.pathname.startsWith("/api/ai/review/") ? 400 : 500);
+      if (!res.headersSent) json(res, { error: err.message }, err.code === 404 ? 404 : err.code && err.code >= 400 && err.code < 500 ? err.code : url.pathname.startsWith("/api/ai/review/") ? 400 : 500);
       else res.end();
     }
   }) as AiApi;

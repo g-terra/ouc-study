@@ -104,7 +104,7 @@ export function usePrepStatus(): PrepStatus | null {
   return s;
 }
 
-async function token() {
+export async function token() {
   if (!current.token) await refreshAi();
   return current.token ?? "";
 }

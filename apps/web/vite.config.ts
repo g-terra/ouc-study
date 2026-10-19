@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { createAiApi } from "../../packages/ai/src/api.ts";
-import { addAttempt, readAttempts } from "../../packages/content/src/quiz-store.ts";
+import { addAttempt, readAttempts, removeQuiz, resetAttempts } from "../../packages/content/src/quiz-store.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { checkForUpdate, restartDetached } from "../../packages/cli/src/update.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
@@ -124,6 +124,8 @@ function updateApi(): Plugin {
 /**
  * /api/quiz/attempts?sem=… (GET): the quiz scores saved on this computer.
  * /api/quiz/attempts (POST { sem, quiz, title, results }): saves a finished quiz (points worked out on the server).
+ * /api/quiz/attempts?sem=…&quiz=CODE/name (DELETE): starts a quiz over (its scores cleared); without quiz, every quiz.
+ * /api/quiz?sem=…&quiz=CODE/name (DELETE): removes the quiz file and its scores (the app data rebuilds on its own).
  * Stored in semesters/<sem>/quizzes/attempts.json, see packages/content/src/quiz-store.ts.
  */
 function quizApi(): Plugin {
@@ -134,11 +136,22 @@ function quizApi(): Plugin {
     return /^\w[\w.-]*$/.test(id) && existsSync(resolve(SEMESTERS, id, "semester.json")) ? resolve(SEMESTERS, id) : null;
   };
   const handler: Connect.NextHandleFunction = (req, res, next) => {
-    if (!req.url?.startsWith("/api/quiz/")) return next();
+    if (!/^\/api\/quiz(\/|\?|$)/.test(req.url ?? "")) return next();
     // only pages from this app on this computer may save scores
     const origin = req.headers.origin;
     if (!LOCAL.test(req.headers.host ?? "") || (origin && !LOCAL.test(origin.replace(/^https?:\/\//, "")))) return send(res, { error: "Forbidden" }, 403);
-    const url = new URL(req.url, "http://x");
+    const url = new URL(req.url!, "http://x");
+    if (req.method === "DELETE") {
+      const dir = semDir(url.searchParams.get("sem"));
+      if (!dir) return send(res, { error: "No such semester." }, 404);
+      const quiz = url.searchParams.get("quiz") ?? undefined;
+      try {
+        if (url.pathname === "/api/quiz" && quiz) removeQuiz(dir, quiz);
+        else if (url.pathname === "/api/quiz/attempts") resetAttempts(dir, quiz);
+        else return send(res, { error: "Not found" }, 404);
+      } catch (e) { return send(res, { error: (e as Error).message }, (e as { code?: number }).code === 404 ? 404 : 400); }
+      return send(res, { attempts: readAttempts(dir) });
+    }
     if (url.pathname !== "/api/quiz/attempts") return send(res, { error: "Not found" }, 404);
     if (req.method === "GET") {
       const dir = semDir(url.searchParams.get("sem"));
