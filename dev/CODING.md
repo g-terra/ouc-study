@@ -3,15 +3,19 @@
 How to change OUC Study's code well. Read it before you write code; `AGENTS.md` sends you here.
 This is about the **code**. The student-facing study assistant (`ai/`, `STUDENT.md`, `memory/`, `semesters/`) is a different job with its own rules; don't load or follow them while coding.
 
-## Workflow
+## Workflow: discovery → plan → build → test → review
 
-We use [Superpowers](https://github.com/obra/superpowers) (setup: [dev/README.md](README.md)). Pick the path that fits the task:
+Every change goes through these five stages, using [Superpowers](https://github.com/obra/superpowers) skills (setup: [dev/README.md](README.md)). **TDD is not optional**: no production code without a failing test that asked for it.
 
-| Task | Path |
-|---|---|
-| New feature, or unclear ask | brainstorming → writing-plans → test-driven-development per task → requesting-code-review → `ouc-dev-ship` |
-| Bug | systematic-debugging (reproduce it in a failing test first) → test-driven-development → `ouc-dev-ship` |
-| Small, clearly specified change | test-driven-development → `ouc-dev-ship` |
+| Stage | Superpowers skill | What it means here |
+|---|---|---|
+| 1. Discovery | brainstorming (bugs: systematic-debugging) | Understand the ask and the code it touches; agree the design and its acceptance criteria. A bug starts by reproducing it. |
+| 2. Plan | writing-plans | Small tasks, each naming its test first: which layer (see [Testing](#testing-what-and-where)), which file, what it asserts. |
+| 3. Build | test-driven-development, inside executing-plans or subagent-driven-development | For each task: **red** (write the test, run it, watch it fail for the right reason) → **green** (the least code that passes) → **refactor** (clean up with the tests green). Commit per task. |
+| 4. Test | verification-before-completion | The whole suite, not just your tests: `npm run check`, `npm run build`, `npm run e2e`; look at UI changes at desktop and phone widths. Read the output; no "should pass". |
+| 5. Review | requesting-code-review → finishing-a-development-branch, then `ouc-dev-ship` | Review the diff against the plan and this guide, fix what it finds (back to build, test first), then open the PR. |
+
+Scale the stages, never skip them: a one-line, clearly specified fix can have a two-line plan, but it still gets a failing test first, the full check and a review of the diff. Bugs always get a regression test that fails before the fix.
 
 House rules on top of Superpowers:
 - **Running unattended?** In a cloud or background session nobody answers questions quickly: take the reasonable default, write it down in the PR's "How", and keep going.
@@ -19,8 +23,8 @@ House rules on top of Superpowers:
 - **Specs and plans stay local.** `docs/superpowers/` is git-ignored; put the design summary in the PR description instead.
 - **Before you say "done"**: verification-before-completion, i.e. run the commands below and read their output.
 
-The project's own skills, `dev/skills/ouc-dev-*` (installed as skills by `npm run dev:agents`):
-`ouc-dev-testing` (what and how to test), `ouc-dev-web` (pages and components in the app), `ouc-dev-study-ai` (changing the students' skills, agents or Ask AI), `ouc-dev-ship` (checks, PR, release).
+The project's own skills, `dev/skills/ouc-dev-*` (installed as skills by `npm run dev:agents`), add the repo's specifics to those stages:
+`ouc-dev-testing` (plan and build: what to test, where and how), `ouc-dev-web` (pages and components in the app), `ouc-dev-study-ai` (changing the students' skills, agents or Ask AI), `ouc-dev-ship` (review: checks, PR, release).
 
 ## Verify
 
@@ -52,7 +56,7 @@ CI runs all three on Node 20 and 22, and lint/test/typecheck/build on Windows. R
 
 ## Testing: what and where
 
-Every behaviour change ships with a test that fails without it. Details and examples: `dev/skills/ouc-dev-testing/SKILL.md`.
+Test-driven: write the test first and see it fail, then write the code. Every behaviour change ships with a test that failed without it. Details and examples: `dev/skills/ouc-dev-testing/SKILL.md`.
 
 | You changed | Test it in | With |
 |---|---|---|
@@ -68,6 +72,6 @@ Never use real course material, names or eClass data in tests or fixtures; make 
 ## Never
 
 - Read, print or commit `.eclass-token`; commit anything from `semesters/`, `memory/`, `STUDENT.md`, `CLAUDE.local.md`, `.ouc/` (`npm run check:public` catches most).
-- Skip, disable or loosen a test to get green.
+- Write production code before a failing test asks for it, or skip, disable or loosen a test to get green.
 - Put contributor tooling in `ai/` (every skill there becomes a button in the students' app) or study tooling in `dev/`.
 - Edit the generated copies in `.claude/skills`, `.claude/agents`, `.agents/skills`, `.opencode/agents`; edit `ai/` or `dev/skills/`.

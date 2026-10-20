@@ -84,10 +84,10 @@ When a request matches a skill, follow its `SKILL.md`. If the installed copies a
 ## Changing the tool itself
 
 When the task is to change this repo's code, docs, skills or agents (not to help with studying), you are a contributor. Don't read `STUDENT.md`, `memory/` or `semesters/`, and don't follow the study sections above.
-**Read `dev/CODING.md` first**: workflow (Superpowers), stack conventions, what to test where. Then use the matching contributor skill from `dev/skills/` (installed as `ouc-dev-*` skills by `npm run dev:agents`; read the file if your tool doesn't list it): `ouc-dev-testing`, `ouc-dev-web`, `ouc-dev-study-ai`, `ouc-dev-ship`. People's guide: `CONTRIBUTING.md`. In short:
+**Read `dev/CODING.md` first**: the flow every change follows (discovery → plan → build test-first → test → review, with Superpowers), stack conventions, what to test where. Then use the matching contributor skill from `dev/skills/` (installed as `ouc-dev-*` skills by `npm run dev:agents`; read the file if your tool doesn't list it): `ouc-dev-testing`, `ouc-dev-web`, `ouc-dev-study-ai`, `ouc-dev-ship`. People's guide: `CONTRIBUTING.md`. In short:
 
 - **Verify:** `npm run check` (lint, `node:test` unit tests, typecheck, public check), `npm run build` and, when the app or server changed, `npm run e2e` (Playwright on the demo semester in `e2e/demo/`). CI runs them all; run them and read the output before saying you're done.
-- **Test first:** every behaviour change comes with a test that fails without it (`packages/<pkg>/test/`, `apps/web/test/`, `e2e/`). Never skip or loosen a test to get green.
+- **TDD, always:** write the test, watch it fail, then write the code; every behaviour change comes with a test that failed without it (`packages/<pkg>/test/`, `apps/web/test/`, `e2e/`). Never skip or loosen a test to get green.
 - **Never touch personal data:** don't read, print or commit `.eclass-token`, and don't commit anything from `semesters/`, `memory/`, `STUDENT.md`, `CLAUDE.local.md` or `.ouc/`. Tests use small made-up fixtures, never course material.
 - **Two AI toolsets, kept apart:** the students' skills and agents live in `ai/` (every skill there becomes an Ask AI action; keep the `name`/`description` front matter, agents also `tools`); contributor tooling lives in `dev/`. Never mix them, and never edit the generated copies in `.claude/skills`, `.claude/agents`, `.agents/skills` or `.opencode/agents`.
 - **Docs:** README for students, this file for AI tools, `CONTRIBUTING.md` for contributors, `dev/` for coding agents.
