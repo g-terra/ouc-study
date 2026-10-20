@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/g-terra/ouc-study/compare/v0.9.1...v0.9.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* **web:** label the v2 course ring "assignments" and give calendar courses their own line ([#63](https://github.com/g-terra/ouc-study/issues/63)) ([c2130e3](https://github.com/g-terra/ouc-study/commit/c2130e343d6388113ee33d1b47ae34a038546ad4))
+
 ## [0.9.1](https://github.com/g-terra/ouc-study/compare/v0.9.0...v0.9.1) (2026-10-20)
 
 
