@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { pull } from "../src/pull.ts";
+import { pull, textCopies } from "../src/pull.ts";
 import type { MoodleClient, MoodleSection } from "../src/moodle.ts";
 import type { SemesterConfig } from "../../content/src/eclass.ts";
 
@@ -79,4 +79,33 @@ test("a dry run lists the video and asks Panopto nothing", async () => {
   assert.deepEqual(r.files.toDownload, ["courses/ABC101-Testing/01-Week-1/Video-1-What-is-testing/What is testing.mp4"]);
   assert.equal(asked, 0);
   assert.match(readFileSync(join(root, ".ouc/dry-run/T/report.md"), "utf8"), /Class videos to download: 1; Panopto recordings \(links only\): 1/);
+});
+
+test("an exam timetable linked from an activity's description downloads into its section", async () => {
+  const root = setup({ videos: false });
+  const desc = `<p>Join the class here.</p><p><a href="https://e/pluginfile.php/9/mod_webconference/intro/Exam-Timetable-2026-2027.pdf">View the examination timetable</a>`
+    + ` · <a href="https://e/pluginfile.php/9/mod_webconference/intro/Guide.pdf">How to join</a> · <a href="https://elsewhere.example/timetable.pdf">Other timetable</a></p>`;
+  const general: MoodleSection[] = [{ section: 0, name: "General", summary: "", modules: [
+    { id: 21, name: "Webconference", modname: "webconference", url: "https://e/mod/webconference/view.php?id=21", description: desc, contents: [] },
+  ] }];
+  const downloads: string[] = [];
+  const client = {
+    site: "https://e",
+    call: (async (fn: string) => (fn === "core_course_get_contents" ? general : fn === "mod_assign_get_assignments" ? { courses: [] } : {})) as MoodleClient["call"],
+    getText: async () => "",
+    download: async (url: string, dest: string) => { downloads.push(url); mkdirSync(dirname(dest), { recursive: true }); writeFileSync(dest, "pdf"); return 3; },
+  } as MoodleClient;
+  await pull({ root, semId: "T", cfg, client, fetchImpl: answers("") });
+  // only the eClass PDF named as the exam timetable, not the other links
+  assert.deepEqual(downloads, ["https://e/pluginfile.php/9/mod_webconference/intro/Exam-Timetable-2026-2027.pdf"]);
+  assert.ok(existsSync(join(root, "semesters/T/courses/ABC101-Testing/00-General/Exam-Timetable-2026-2027.pdf")));
+});
+
+test("after new files, the text copies are made (the app reads exam dates from the timetable's)", () => {
+  const calls: string[][] = [];
+  const run = (cmd: string, args: string[]) => { calls.push([cmd, ...args]); return { status: 0 }; };
+  assert.equal(textCopies("/r", "2026-Fall", { run, python: "python3" }), true);
+  assert.deepEqual(calls, [["python3", "tools/extract_text.py", "2026-Fall"]]);
+  assert.equal(textCopies("/r", "2026-Fall", { run, python: null }), false);   // no Python: skipped
+  assert.equal(textCopies("/r", "2026-Fall", { run: () => ({ status: 1 }), python: "python" }), false);
 });

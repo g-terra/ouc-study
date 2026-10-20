@@ -14,8 +14,9 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import type { CourseConfig, MetaActivity, MetaCourse, MetaSection, SemesterConfig, SubmissionRecord } from "../../content/src/eclass.ts";
-import { createClient, eclassDate, htmlToText, isoDay, links, pad, readToken, safeName, slug, strip, type MoodleAssignment, type MoodleClient, type MoodleError } from "./moodle.ts";
+import { createClient, eclassDate, htmlToText, isoDay, links, pad, readToken, safeName, slug, strip, timetableLinks, type MoodleAssignment, type MoodleClient, type MoodleError } from "./moodle.ts";
 import { MEDIA_FILE, loadMediaConfig, panoptoCaptions, panoptoSession, srtToSegments, transcriptMarkdown } from "./media.ts";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -100,6 +101,8 @@ export async function pull({ root = ROOT, semId, cfg, client, dryRun = false, on
         if (m.uservisible === false || m.modname === "label") continue;
         const act: MetaActivity = { type: m.modname, name: strip(m.name), url: m.url ?? "", desc: htmlToText(m.description ?? "") };
         const files = (m.contents ?? []).filter((f) => f.type === "file" && f.fileurl);
+        // the exam timetable is often only a link in an activity's description: the app reads the exam dates from it
+        for (const t of timetableLinks(m.description, client.site)) { queue(t.url, `${secRel}/${safeName(t.filename)}`); nFiles++; }
         if (m.modname === "resource" && files.length && files.every((f) => INSTALLER.test(f.filename))) {
           act.desc = act.desc || "Installer: download it from eClass if you need it.";
         } else if (m.modname === "resource" && files.length) {
@@ -310,6 +313,18 @@ function currentSemesterId(root: string): string | null {
   return (sems.find((s) => s.start <= today && today <= s.end) ?? sems.at(-1))?.id ?? null;
 }
 
+const findPython = () => ["python3", "python"].find((p) => spawnSync(p, ["--version"], { stdio: "ignore" }).status === 0) ?? null;
+/**
+ * Makes the text copies of new course files (tools/extract_text.py, only new or changed files): the AI reads
+ * them, and the app reads the exam dates from the exam timetable's. False when there is no Python or it failed.
+ */
+export function textCopies(root: string, semId: string, o: { run?: (cmd: string, args: string[]) => { status: number | null }; python?: string | null } = {}): boolean {
+  const python = o.python === undefined ? findPython() : o.python;
+  if (!python) return false;
+  const run = o.run ?? ((cmd, args) => spawnSync(cmd, args, { cwd: root, stdio: "ignore" }));
+  return run(python, ["tools/extract_text.py", semId]).status === 0;
+}
+
 /** `ouc pull` (pull.mjs): exit code 2 when there is no key or no semester yet. */
 export async function main(args: string[]): Promise<void> {
   const dryRun = args.includes("--dry-run");
@@ -331,6 +346,7 @@ export async function main(args: string[]): Promise<void> {
     const f = r.files;
     if (dryRun) console.log(`✓ Dry run: ${f.total} files on eClass, ${f.existing} already here, ${f.toDownload.length} new, ${f.changed.length} newer. Report: .ouc/dry-run/${semId}/report.md`);
     else console.log(`✓ eClass files: ${f.downloaded} new${f.updated ? `, ${f.updated} updated` : ""}, ${f.existing} already here${f.failed ? `, ${f.failed} failed (see _meta/pull-report.json)` : ""}.`);
+    if (!dryRun && (f.downloaded || f.updated) && !textCopies(ROOT, semId) && !quiet) console.log("  Text copies of the new files skipped (needs Python: run ouc setup).");
     const v = r.videos;
     if (!dryRun && v.panopto && v.signin && !quiet) console.log(`  ${v.signin} Panopto recording(s) need a Panopto sign-in, so they stay links (transcripts only for videos on eClass).`);
     if (r.warnings.length && !quiet) console.log(`  ${r.warnings.length} part(s) skipped: ${r.warnings.slice(0, 3).join(" | ")}`);
