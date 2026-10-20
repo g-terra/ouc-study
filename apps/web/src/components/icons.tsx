@@ -1,12 +1,12 @@
 import type { ItemKind } from "@ouc/content/types";
 import {
-  Bell, BookOpen, Bot, Braces, CalendarDays, Clapperboard, ClipboardList, Compass, File, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, Library, MessagesSquare, Monitor, NotebookPen, NotebookText, PartyPopper, Presentation, RefreshCw, Settings, Sparkles, Sun, Trash2, TriangleAlert, Trophy, User, Video, X,
+  AlarmClock, Award, Bell, BookOpen, Bot, Braces, CalendarDays, Check, CircleAlert, Clapperboard, ClipboardList, Compass, File, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, KeyRound, Library, Megaphone, MessageSquareText, MessagesSquare, Monitor, NotebookPen, NotebookText, PartyPopper, Presentation, RefreshCw, Settings, Sparkles, Star, Sun, Trash2, TriangleAlert, Trophy, Upload, User, Video, Wifi, WifiOff, X,
   Link as LinkIcon, type LucideIcon,
 } from "lucide-react";
 
 // One icon set for the app (Lucide, ISC licence): thin line icons in the text colour, so they suit every colour theme.
 export {
-  Bell, Bot, BookOpen, CalendarDays, ClipboardList, Compass, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, Library, MessagesSquare, NotebookPen, PartyPopper, RefreshCw, Settings, Sparkles, Sun, Trash2, TriangleAlert, Trophy, User, Video, X,
+  AlarmClock, Award, Bell, BookOpen, Bot, CalendarDays, Check, CircleAlert, Clapperboard, ClipboardList, Compass, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, KeyRound, Library, Megaphone, MessageSquareText, MessagesSquare, NotebookPen, PartyPopper, RefreshCw, Settings, Sparkles, Star, Sun, Trash2, TriangleAlert, Trophy, Upload, User, Video, Wifi, WifiOff, X,
   type LucideIcon,
 };
 
@@ -26,13 +26,14 @@ export function KindIcon({ kind, ext, className = INLINE }: { kind: ItemKind; ex
   return <Icon aria-hidden className={`${className} ${tint ?? "text-muted"}`} />;
 }
 
-/** The OUC Study logo: an O with a bookmark ribbon, drawn in the theme's colours (docs/images/logo.svg and the favicon in index.html are fixed-colour copies). */
+/** The OUC Study logo: an O wearing a graduation cap, drawn in the theme's colours (docs/images/logo.svg and the favicon in index.html are fixed-colour copies). */
 export function Logo({ className = "size-8" }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={className} aria-hidden>
       <rect width="32" height="32" rx="8" fill="var(--ink)" />
-      <circle cx="15" cy="15.5" r="7.5" fill="none" stroke="var(--bg)" strokeWidth="3.6" />
-      <path d="M19.5 16h5.5v11l-2.75-2.2L19.5 27z" fill="var(--accent)" />
+      <circle cx="16" cy="19.5" r="6.3" fill="none" stroke="var(--bg)" strokeWidth="3.2" />
+      <path d="M16 4.5 28 9.5 16 14.5 4 9.5z" fill="var(--accent)" />
+      <path d="M25 10.8v5.4" stroke="var(--accent)" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }

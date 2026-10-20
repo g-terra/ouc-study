@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="128" height="128">
   <title>OUC Study</title>
-  <style>.t{fill:#1c1b19}.o{stroke:#f6f4ef}.r{fill:#c2410c}@media (prefers-color-scheme:dark){.t{fill:#ecebe6}.o{stroke:#131312}.r{fill:#fb923c}}</style>
+  <style>.t{fill:#1c1b19}.o{stroke:#f6f4ef}.r{fill:#c2410c}.l{stroke:#c2410c}@media (prefers-color-scheme:dark){.t{fill:#ecebe6}.o{stroke:#131312}.r{fill:#fb923c}.l{stroke:#fb923c}}</style>
   <rect class="t" width="32" height="32" rx="8"/>
-  <circle class="o" cx="15" cy="15.5" r="7.5" fill="none" stroke-width="3.6"/>
-  <path class="r" d="M19.5 16h5.5v11l-2.75-2.2L19.5 27z"/>
+  <circle class="o" cx="16" cy="19.5" r="6.3" fill="none" stroke-width="3.2"/>
+  <path class="r" d="M16 4.5 28 9.5 16 14.5 4 9.5z"/>
+  <path class="l" d="M25 10.8v5.4" stroke-width="1.4" stroke-linecap="round"/>
 </svg>
