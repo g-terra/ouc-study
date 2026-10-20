@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.15.0](https://github.com/g-terra/ouc-study/compare/v0.14.0...v0.15.0) (2026-10-20)
+
+
+### Features
+
+* **web:** make the new look the default, keep the classic look as a choice ([#78](https://github.com/g-terra/ouc-study/issues/78)) ([e97226f](https://github.com/g-terra/ouc-study/commit/e97226fe145ba77bbbbff7ff4c47993032389d28))
+* **web:** profile menu with a settings page, notifications bell, full forum messages ([#82](https://github.com/g-terra/ouc-study/issues/82)) ([1b9ff87](https://github.com/g-terra/ouc-study/commit/1b9ff873b2ac056c676bb9244e69525856f277cd))
+
+
+### Bug Fixes
+
+* **web:** keep quiz answer options in the same order while answering ([#80](https://github.com/g-terra/ouc-study/issues/80)) ([ef6e22e](https://github.com/g-terra/ouc-study/commit/ef6e22ee69dc48caa5f65fcab2db2392fe99c8d1))
+* **web:** keep the AI background work links in the new look ([#79](https://github.com/g-terra/ouc-study/issues/79)) ([68e413f](https://github.com/g-terra/ouc-study/commit/68e413f36889478c5cdf0d9caf69bac2a41ead63))
+
 ## [0.14.0](https://github.com/g-terra/ouc-study/compare/v0.13.0...v0.14.0) (2026-10-20)
 
 
