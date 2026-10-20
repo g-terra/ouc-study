@@ -5,6 +5,8 @@ description: Contributor only. Use when finishing a change to OUC Study's code: 
 
 # Shipping a change
 
+Stages 4 (test) and 5 (review) of the flow in `dev/CODING.md`. You get here only after building test-first: every behaviour change has a test that you saw fail before the code was written.
+
 ## 1. Verify (read the output, don't assume)
 
 ```bash
@@ -16,7 +18,7 @@ All green, or you are not done. A failure you didn't cause still gets reported, 
 
 ## 2. Review your own diff
 
-`git diff main...` as a reviewer would: one purpose per PR, no stray files, no debug output, docs updated where people look (README for students, AGENTS.md for AI tools, CONTRIBUTING.md for contributors, `dev/` for coding agents), nothing personal (`npm run check:public`). With Superpowers, run requesting-code-review.
+`git diff main...` as a reviewer would: one purpose per PR, no stray files, no debug output, docs updated where people look (README for students, AGENTS.md for AI tools, CONTRIBUTING.md for contributors, `dev/` for coding agents), nothing personal (`npm run check:public`). Run Superpowers' requesting-code-review, and check that each change has its test (TDD) and the plan's acceptance criteria are met. Fix findings test-first, then verify again.
 
 ## 3. Commit and PR
 

@@ -27,6 +27,6 @@ React 19, Vite, Tailwind 4, TypeScript. The app reads JSON that `packages/conten
 
 ## Check it
 
-1. Test first: unit test for the logic, e2e for what the student sees (`ouc-dev-testing`).
+1. Test first (red, green, refactor; `ouc-dev-testing`): a unit test for the logic, an e2e test for what the student sees, each run and failing before you write the code.
 2. `npm run typecheck`, `npm run build`, `npm run e2e`.
 3. Look at it: `npm run dev`, or the demo semester on port 5180 with `cd e2e && node --import tsx serve.ts`, and screenshot it with Playwright at desktop and phone widths, light and dark.

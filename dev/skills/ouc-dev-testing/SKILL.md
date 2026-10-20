@@ -5,9 +5,15 @@ description: Contributor only. Use when changing OUC Study's code and deciding w
 
 # Testing OUC Study changes
 
-Red, green, refactor: write the test first, watch it fail for the right reason, then make it pass. Every behaviour change ships with a test that would fail without it. Bug fixes start with a test that reproduces the bug.
+TDD is mandatory here (stage 3 of the flow in `dev/CODING.md`). For every task in the plan:
 
-## Pick the layer
+1. **Red**: write the test for the next small behaviour. Run it and watch it fail for the right reason (an assertion about the missing behaviour, not a typo or import error).
+2. **Green**: write the least code that makes it pass. Run it again.
+3. **Refactor**: clean up the code and the test with everything green, then commit.
+
+No production code without a failing test that asked for it. Wrote code first? Delete it and start from the test. Bug fixes start with a test that reproduces the bug.
+
+## Pick the layer (decide it in the plan)
 
 Test at the lowest layer that proves the behaviour, and add an e2e test only when the behaviour lives in the page.
 
