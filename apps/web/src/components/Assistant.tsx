@@ -10,7 +10,7 @@ import { Link, linkHref, useRouter, enc } from "../lib/router";
 import { chatPathFor, isChatPath } from "../lib/chat-path";
 import { mdToHtml } from "../lib/markdown";
 import { linkLabel } from "../lib/links";
-import { TOOL_STATE, deleteChats, pickedModels, rememberModel, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
+import { TOOL_STATE, deleteChats, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type AiTool, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
 import { refreshData } from "../lib/data";
 import { cx } from "./ui";
 import { renderMermaid } from "../notes/Mermaid";
@@ -49,6 +49,9 @@ export const MAX_TABS = 6;
 
 let seq = 0;
 const blank = (): Session => ({ key: `s${++seq}`, chat: null, busy: false, draft: null });
+
+/** "Default (gpt-5.5)", or "Default (Claude Code's own)" when the tool's own default model isn't known. */
+export const defaultLabel = (t: AiTool) => `Default (${t.model ?? `${t.label}'s own`})`;
 
 export function AssistantProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -320,10 +323,10 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
     : ai.state !== "ok" ? undefined
     : !picked ? (ai.reason || "No AI chosen yet. In Terminal, run: ouc ai setup")
     : !ready ? `${picked.label}: ${picked.detail ?? "not ready"}${picked.fix ? `. Fix: ${picked.fix}` : ""}` : undefined;
-  // the model for the picked AI: the one picked for it last (if it still has it), else its default
-  const [models, setModels] = useState(pickedModels);
+  // the model for the picked AI in this panel ("": its default, set in Settings)
+  const [models, setModels] = useState<Record<string, string>>({});
   const model = picked && picked.models?.includes(models[picked.id]) ? models[picked.id] : "";
-  const pickModel = (m: string) => { if (!picked) return; rememberModel(picked.id, m); setModels(pickedModels()); };
+  const pickModel = (m: string) => { if (picked) setModels((x) => ({ ...x, [picked.id]: m })); };
   const needsAgent = meta?.agentOnly && ai.state === "ok" && !agentic ? `"${meta.title}" needs Claude Code, Codex or opencode.` : undefined;
   const canSend = !a.busy && !blocked && !needsAgent && (a.chat ? !!input.trim() : !!a.draft || !!input.trim());
   const submit = async () => {
@@ -421,9 +424,9 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
                   ))}
                 </select>
                 {!!picked?.models?.length && (
-                  <select aria-label="Model" title="The model for this AI (remembered as its default)" value={model} disabled={a.busy}
+                  <select aria-label="Model" title="The model for these messages. Change the default in Settings, AI tools." value={model} disabled={a.busy}
                     onChange={(e) => pickModel(e.target.value)} className={cx(PICK, "max-w-[9rem]")}>
-                    <option value="">{picked.model ? `Default (${picked.model})` : "Default model"}</option>
+                    <option value="">{defaultLabel(picked)}</option>
                     {picked.models.filter((m) => m !== picked.model).map((m) => <option key={m} value={m}>{m}</option>)}
                   </select>
                 )}

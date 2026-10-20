@@ -3,6 +3,7 @@
 //
 //   GET  /api/ai/status        which coding tools are installed and signed in (cached 5 min, ?fresh=1)
 //   GET  /api/ai/actions       the study actions (one per skill in ai/skills/)
+//   POST /api/ai/defaults      { tool, model } the model an AI uses unless a chat picks another ("" = the tool's own), saved in .ouc/ai.json
 //   POST /api/ai/run           { sem, chatId?, action?, params?, message, tool?, model? } → Server-Sent Events (model: one of the tool's `models` in status)
 //   POST /api/ai/stop          { chatId }
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
@@ -34,7 +35,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
-import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, codexModelsAsync, loginStatusAsync, serverUp, toolModels, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
+import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, saveConfig, codexModelsAsync, loginStatusAsync, serverUp, setServerModels, toolModels, writeOpencodeConfig, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
 import { buildPrompt, chatSystem, listActions, prepPath, quizPath, quizScope, weeksWithoutNotes, weeksWithoutQuiz, type Params } from "./actions.ts";
 import { parseQuiz } from "../../content/src/quiz.ts";
 import { currentSemesterId, loadData, read } from "./context.ts";
@@ -46,7 +47,8 @@ import { setClassTime } from "../../content/src/classes.ts";
 import { createTranscriber, type Engine } from "./transcribe.ts";
 
 type ToolState = { state: "connected" | "signedout" | "apikey" | "missing" | "noserver" | "unknown"; detail?: string; fix?: string };
-export interface ToolStatus extends ToolState { id: string; label: string; chosen?: boolean; /** models the panel offers, and the default (none: the tool's own) */ models?: string[]; model?: string }
+/** models: what the panel offers; model: what a new chat uses (the Settings default, else own: the tool's own); setting: the Settings default */
+export interface ToolStatus extends ToolState { id: string; label: string; chosen?: boolean; models?: string[]; model?: string; own?: string; setting?: string }
 /** GET /api/ai/status */
 export interface AiStatus {
   chosen: string | null; label: string; agentic: boolean; ready: boolean; reason: string;
@@ -126,7 +128,13 @@ export async function aiStatus(root: string): Promise<AiStatus> {
     { id: "opencode", label: "opencode", ...(d.opencode ? await server(ocServer) : { state: "missing", fix: INSTALL_HINT.opencode }) },
   ];
   if (cfg?.local) tools.push({ id: "local", label: TOOL_LABEL.local, ...(await server(cfg.local)) });
-  for (const t of tools) Object.assign(t, { chosen: t.id === chosen, ...toolModels(cfg, t.id) });
+  // the models Ollama or LM Studio has right now, to pick from (opencode and plain local models)
+  const live = (s?: LocalModel) => (s?.kind === "ollama" ? d.ollama?.models : s?.kind === "lmstudio" ? d.lmstudio?.models : undefined);
+  setServerModels("opencode", live(ocServer ?? undefined));
+  setServerModels("local", live(cfg?.local));
+  // opencode with no model saved anywhere still offers what the server has
+  const offer = { ...cfg, opencode: ocServer ?? undefined };
+  for (const t of tools) Object.assign(t, { chosen: t.id === chosen, ...toolModels(offer, t.id) });
   const pick = tools.find((t) => t.chosen);
   return {
     chosen, label: describe(cfg), agentic: isAgentic(chosen),
@@ -274,8 +282,16 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     if (tool === "opencode" && !cfg.opencode && !existsSync(join(root, ".opencode/opencode.json"))) return fail("opencode has no local model set up yet. In Terminal, run: ouc ai setup");
     cfg.tool = tool as AiConfig["tool"];
     // only a model the panel offers: it never reaches the command line as anything else
-    const model = body.model || undefined;
-    if (model && !toolModels(cfg, tool).models.includes(model)) return fail(`${TOOL_LABEL[tool as keyof typeof TOOL_LABEL]} can't use the model "${model}" here.`);
+    // (none picked: the default set in Settings, if any; else the tool's own)
+    const offered = toolModels(cfg, tool);
+    const model = body.model || offered.setting;
+    if (model && !offered.models.includes(model)) return fail(`${TOOL_LABEL[tool as keyof typeof TOOL_LABEL]} can't use the model "${model}" here.`);
+    // opencode only runs models its config lists: add one the server has that `ouc ai setup` didn't save
+    if (model && tool === "opencode" && cfg.opencode && !(cfg.opencode.models ?? [cfg.opencode.model]).includes(model)) {
+      cfg.opencode = { ...cfg.opencode, models: [...new Set([cfg.opencode.model, ...(cfg.opencode.models ?? []), model])] };
+      writeOpencodeConfig(root, cfg.opencode);
+      saveConfig(root, { ...(loadConfig(root) ?? { tool: null }), opencode: cfg.opencode });
+    }
     const semId = body.sem && existsSync(join(root, "semesters", body.sem)) ? body.sem : currentSemesterId(root);
     let data: SemesterData;
     try { data = semId ? loadData(root, semId) : ({ courses: [], notes: [], assignments: [] } as unknown as SemesterData); } catch (e) { return fail((e as Error).message, 500); }
@@ -592,6 +608,17 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         return chat ? json(res, { ...chat, running: runs.has(id) }) : json(res, { error: "Not found" }, 404);
       }
       if (p === "/api/ai/run" && req.method === "POST") return await run(req, res);
+      if (p === "/api/ai/defaults" && req.method === "POST") {
+        // Settings: the model each AI uses unless a chat picks another ("" = the tool's own)
+        const { tool, model } = await readBody(req);
+        const cfg = loadConfig(root) ?? { tool: null };
+        if (!["claude", "codex", "opencode", "local"].includes(tool) || typeof (model ?? "") !== "string") return json(res, { error: "Bad request" }, 400);
+        if (model && !toolModels(cfg, tool).models.includes(model)) return json(res, { error: `${TOOL_LABEL[tool as keyof typeof TOOL_LABEL]} doesn't offer "${model}".` }, 400);
+        const defaultModels = { ...cfg.defaultModels, [tool]: model || undefined };
+        saveConfig(root, { ...cfg, defaultModels: JSON.parse(JSON.stringify(defaultModels)) });
+        cache = undefined;
+        return json(res, { ok: true, ...toolModels(loadConfig(root), tool) });
+      }
       if (p === "/api/ai/plan/task" && req.method === "POST") {
         const { sem, week, line, done } = await readBody(req);
         if (!/^\w[\w.-]*$/.test(sem ?? "") || !/^\d{4}-W\d{1,2}$/.test(week ?? "") || !Number.isInteger(line)) return json(res, { error: "Bad request" }, 400);
