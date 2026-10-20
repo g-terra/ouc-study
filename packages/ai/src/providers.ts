@@ -31,6 +31,7 @@ export interface AiConfig {
   parallel?: number;    // background AI runs at once (default 3)
   models?: Partial<Record<"claude" | "codex", string[]>>;   // the models the app offers for these tools (default AGENT_MODELS)
   defaultModels?: Partial<Record<Tool, string>>;            // the model each AI uses unless the chat picks another (Settings)
+  warmUp?: boolean;    // false: don't load the default AI's model when the app starts
 }
 export interface ChatMessage { role: "system" | "user" | "assistant"; content: string }
 export interface LoginState { loggedIn: boolean; subscription: boolean; how: string; unknown?: boolean }
@@ -145,6 +146,33 @@ export async function longContextModel(root: string, local: LocalModel, model: s
     if (!r.ok) throw new Error(`Couldn't load ${model} in LM Studio with a 32k context window (${r.out}). Pick another model, or load it in LM Studio with Context Length 32768.`);
     loaded.add(model);
   }
+  return model;
+}
+
+type WarmDeps = { fetch?: (url: string, init?: { method?: string; body?: string; signal?: AbortSignal }) => Promise<unknown>; run?: typeof runCmd; bin?: (name: string) => string | null | undefined };
+const findBin = (name: string) => which(name) ?? (name === "lms" ? LMS_PATHS.flatMap((p) => (process.platform === "win32" ? [`${p}.exe`] : [p])).map((p) => join(homedir(), p)).find(existsSync) : name === "ollama" && process.platform === "win32" && existsSync(OLLAMA_WIN()) ? OLLAMA_WIN() : null);
+/**
+ * Gets the default AI ready when the app starts, so the first message doesn't wait: a local model is loaded
+ * into memory (with the context window it needs), and the agent CLI is started once so its files are cached.
+ * Never a model call for Claude Code or Codex (that would spend the student's usage). Returns the model warmed.
+ */
+export async function warmUp(root: string, cfg: AiConfig | null, { fetch: get = fetch, run = runCmd, bin = findBin }: WarmDeps = {}): Promise<string | null> {
+  const tool = cfg?.tool ? (ALIASES[cfg.tool] ?? cfg.tool) : null;
+  if (!tool || cfg?.warmUp === false) return null;
+  const cli = (name: string, args: string[]) => { const b = bin(name); return b ? run(b, args) : Promise.resolve({ ok: false, out: "" }); };
+  if (tool === "claude" || tool === "codex") { await cli(tool, ["--version"]); return null; }
+  const local = tool === "opencode" ? cfg?.opencode : cfg?.local;
+  if (!local) return null;
+  let model = toolModels(cfg, tool).model ?? local.model;
+  try {
+    if (tool === "opencode" && model !== local.model) model = await longContextModel(root, local, model, { run, bin: bin(local.kind === "lmstudio" ? "lms" : "ollama") ?? undefined });
+    else if (local.kind === "lmstudio" && tool === "opencode" && !(await cli("lms", ["ps"])).out.includes(model)) await cli("lms", ["load", model, "--context-length", "32768", "--yes"]);
+    if (local.kind === "ollama") {
+      const body = { model, keep_alive: "30m", ...(tool === "local" ? { options: { num_ctx: local.ctx ?? 32768 } } : {}) };
+      await get(`${local.baseUrl.replace(/\/v1\/?$/, "")}/api/generate`, { method: "POST", body: JSON.stringify(body), signal: AbortSignal.timeout(180_000) });
+    }
+  } catch { /* the first message will load it instead */ }
+  if (tool === "opencode") await cli("opencode", ["models"]);
   return model;
 }
 

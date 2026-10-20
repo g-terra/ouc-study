@@ -36,7 +36,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
-import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, longContextModel, preferLongContext, saveConfig, codexModelsAsync, loginStatusAsync, serverUp, setServerModels, toolModels, writeOpencodeConfig, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
+import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, longContextModel, warmUp, preferLongContext, saveConfig, codexModelsAsync, loginStatusAsync, serverUp, setServerModels, toolModels, writeOpencodeConfig, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
 import { buildPrompt, chatSystem, listActions, prepPath, quizPath, quizScope, weeksWithoutNotes, weeksWithoutQuiz, type Params } from "./actions.ts";
 import { parseQuiz } from "../../content/src/quiz.ts";
 import { currentSemesterId, loadData, read } from "./context.ts";
@@ -82,7 +82,7 @@ export interface AiApiOptions {
   installWhisper?: () => Promise<{ ok: boolean; message: string }>;   // tests: a fake install
 }
 export type AiApi = ((req: IncomingMessage, res: ServerResponse, next: () => void) => Promise<void>) & {
-  autoPrep(): void; catchUp(): { notes: number; prep: number; quizzes: number }; prepIdle(): boolean;
+  autoPrep(): void; catchUp(): { notes: number; prep: number; quizzes: number }; prepIdle(): boolean; warmUp(): Promise<string | null>;
 };
 
 // The background app starts with a minimal PATH; add the usual install places of the agent CLIs
@@ -651,6 +651,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         if ((tool === "opencode" && !cfg.opencode) || (tool === "local" && !cfg.local)) return json(res, { error: `${TOOL_LABEL[tool as keyof typeof TOOL_LABEL]} has no local model set up yet. In Terminal, run: ouc ai setup` }, 400);
         saveConfig(root, { ...cfg, tool });
         cache = undefined;
+        void handler.warmUp();
         return json(res, { ok: true, tool });
       }
       if (p === "/api/ai/defaults" && req.method === "POST") {
@@ -662,6 +663,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         const defaultModels = { ...cfg.defaultModels, [tool]: model || undefined };
         saveConfig(root, { ...cfg, defaultModels: JSON.parse(JSON.stringify(defaultModels)) });
         cache = undefined;
+        void handler.warmUp();
         return json(res, { ok: true, ...toolModels(loadConfig(root), tool) });
       }
       if (p === "/api/ai/plan/task" && req.method === "POST") {
@@ -717,5 +719,8 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     return todo;
   };
   handler.prepIdle = () => !prep.busy;
+  // load the default AI's model once at a time (on start, and when Settings change the default)
+  let warming: Promise<string | null> | undefined;
+  handler.warmUp = () => (warming ??= warmUp(root, loadConfig(root)).finally(() => { warming = undefined; }));
   return handler;
 }
