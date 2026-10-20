@@ -398,23 +398,24 @@ function twoClasses(root: string) {
   }));
 }
 
-test("Every class: one quiz per class with material, a few at a time, then nothing left to make", async (t) => {
+test("quizzes from the pop-up wait their turn: a few at a time; a custom quiz is saved under its name", async (t) => {
   const { root, server, base } = await setup();
   t.after(() => server.close());
   twoClasses(root);
   writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude", parallel: 1 }));
   const { token } = await json(fetch(`${base}/api/ai/status`));
   const post = (body: object) => fetch(`${base}/api/ai/quiz`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
-  const { jobs: made } = await json(post({ sem: "S", course: "AAA", every: true }));
-  assert.deepEqual(made.map((j: Ev) => j.week), ["1", "2"]);   // week 3 has no material
-  assert.deepEqual(made.map((j: Ev) => [j.running, !!j.queued]), [[true, false], [false, true]]);   // parallel: 1
-  let jobs: Ev[] = made;
-  for (let i = 0; i < 200 && jobs.some((j) => j.running || j.queued); i++) { await new Promise((ok) => setTimeout(ok, 20)); jobs = (await json(fetch(`${base}/api/ai/quiz`))).jobs; }
+  const { jobs: [one] } = await json(post({ sem: "S", course: "AAA", week: 1 }));
+  const { jobs: [custom] } = await json(post({ sem: "S", course: "AAA", topics: "Colours of things", web: true, title: "Colour drill" }));
+  assert.deepEqual([one.running, !!custom.queued], [true, true]);   // parallel: 1
+  assert.equal((await post({ sem: "S", course: "AAA", topics: "Colours again", title: "colour DRILL" })).status, 409);   // same name
+  assert.equal((await post({ sem: "S", course: "AAA", topics: "  " })).status, 400);   // no topics
+  assert.equal((await post({ sem: "S", course: "AAA", every: true })).status, 400);   // gone: Sync now makes them
+  let jobs: Ev[] = [];
+  for (let i = 0; i < 200 && (!jobs.length || jobs.some((j) => j.running || j.queued)); i++) { await new Promise((ok) => setTimeout(ok, 20)); jobs = (await json(fetch(`${base}/api/ai/quiz`))).jobs; }
   assert.deepEqual(jobs.map((j) => j.ok), [true, true]);
-  assert.ok(existsSync(join(root, "semesters/S/quizzes/AAA/week-01-intro.json")) && existsSync(join(root, "semesters/S/quizzes/AAA/week-02-more.json")));
-  const again = await post({ sem: "S", course: "AAA", every: true });
-  assert.equal(again.status, 400);
-  assert.match(((await again.json()) as Ev).error, /already has a quiz/);
+  const saved = JSON.parse(readFileSync(join(root, "semesters/S/quizzes/AAA/colour-drill.json"), "utf8"));
+  assert.equal(saved.title, "Colour drill");
 });
 
 test("Sync now also makes a quiz for every class without one, unless autoQuiz is off", async () => {

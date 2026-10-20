@@ -95,8 +95,18 @@ test("a quiz's progress can be reset; Make a quiz opens a pop-up; Remove asks fi
   await name.fill("My revision quiz");
   await dialog.getByText("One class").click();
   await expect(name).toHaveValue("My revision quiz");
-  // "Every class" makes one quiz per class without one; the demo's only class already has a quiz
-  await expect(dialog.getByRole("radio", { name: /Every class with material already has a quiz/ })).toBeDisabled();
+  await name.fill("");   // emptied: the proposal comes back
+  await expect(name).toHaveValue("Lecture 1 · Getting started");
+  // Sync now makes a quiz for every class, so the pop-up doesn't offer it
+  await expect(dialog.getByText("Every class", { exact: true })).toHaveCount(0);
+  // a custom quiz: your topics, the course material only or the web too
+  await dialog.getByText("Custom", { exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Make quiz" })).toBeDisabled();   // no topics yet
+  await dialog.getByRole("textbox", { name: "Topics" }).fill("Smoke tests and demo data");
+  await expect(name).toHaveValue("Demo Studies · Smoke tests and demo data");
+  await expect(dialog.getByRole("radio", { name: /Course material only/ })).toBeChecked();
+  await dialog.getByText("Course material and the web").click();
+  await expect(dialog.getByRole("button", { name: "Make quiz" })).toBeEnabled();
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
 });

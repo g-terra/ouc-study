@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildPrompt, chatSystem, listActions, quizPath, weeksWithoutNotes } from "../src/actions.ts";
+import { buildPrompt, chatSystem, listActions, quizPath, weeksWithoutNotes, weeksWithoutQuiz } from "../src/actions.ts";
 import type { Course, SemesterData } from "../../content/src/types.ts";
 
 // made-up data with only the fields these prompts read
@@ -67,6 +67,37 @@ test("make a quiz: a lecture quiz from a week's files, or a course quiz; never o
   // nothing to make it from
   assert.throws(() => buildPrompt({ root, semId: "S", data: quizData, action: "make-quiz", params: { course: "AAA", week: "2" } }), /No material for AAA, Week 2 yet/);
   assert.throws(() => buildPrompt({ root, semId: "S", data: quizData, action: "make-quiz", params: {} }), /Choose course first/);
+});
+
+test("a custom quiz: the student's topics, from the course material only or with the web too", () => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-quiz-"));
+  const slides = { kind: "file", title: "slides", href: "/files/S/courses/AAA-dir/01-Week-1/slides.pdf" };
+  const quizData = fixture({ courses: [course("AAA", [[1, "2026-09-01", [slides]]])], notes: [], assignments: [] });
+  const ask = (params: object) => buildPrompt({ root, semId: "S", data: quizData, action: "make-quiz", params: { course: "AAA", ...params }, first: false });
+  const own = ask({ topics: "Signal detection and\nd-prime", title: "SDT drill" });
+  assert.match(own, /custom quiz for AAA course \(AAA\) on these topics:\n> Signal detection and\n> d-prime/);
+  assert.match(own, /Keep to the subjects the course material covers/);
+  assert.doesNotMatch(own, /search the web/i);
+  assert.match(own, /`semesters\/S\/courses\/AAA-dir\/01-Week-1\/slides\.pdf`/);   // the whole course's material
+  assert.match(own, /Save it as semesters\/S\/quizzes\/AAA\/sdt-drill\.json \("title": "SDT drill", "course": "AAA", "scope": "course", "description": "Signal detection and d-prime"\)/);
+  const web = ask({ topics: "Signal detection", web: true });
+  assert.match(web, /Search the web too/);
+  assert.match(web, /Save it as semesters\/S\/quizzes\/AAA\/custom-signal-detection\.json/);   // no name: after the topics
+  // without material it still works from the web, but not from the material alone
+  const empty = fixture({ courses: [course("AAA", [[1, "2026-09-01", []]])], notes: [], assignments: [] });
+  assert.match(buildPrompt({ root, semId: "S", data: empty, action: "make-quiz", params: { course: "AAA", topics: "x", web: true }, first: false }), /custom quiz/);
+  assert.throws(() => buildPrompt({ root, semId: "S", data: empty, action: "make-quiz", params: { course: "AAA", topics: "x" } }), /No material for AAA/);
+});
+
+test("a class whose quiz is on disk but not yet in the app data still counts as having a quiz", () => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-quiz-"));
+  const slides = { kind: "file", title: "slides", href: "/files/S/courses/AAA-dir/01-Week-1/slides.pdf" };
+  const data = fixture({ courses: [course("AAA", [[1, "2026-09-01", [slides]], [2, "2026-09-08", [slides]]])], notes: [], assignments: [] });
+  mkdirSync(join(root, "semesters/S/quizzes/AAA"), { recursive: true });
+  // named in the pop-up, so not week-01-….json
+  writeFileSync(join(root, "semesters/S/quizzes/AAA/lecture-1-my-name.json"), JSON.stringify({ title: "Mine", scope: "lecture", section: 1, questions: [] }));
+  writeFileSync(join(root, "semesters/S/quizzes/AAA/broken.json"), "{");
+  assert.deepEqual(weeksWithoutQuiz(root, "S", data, data.courses[0]).map((w) => w.index), [2]);
 });
 
 test("make a quiz is an action every AI can do, local models included", () => {

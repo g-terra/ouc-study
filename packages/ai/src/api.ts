@@ -14,7 +14,7 @@
 //   POST /api/ai/plan/task     { sem, week, line, done } ticks a task in semesters/<sem>/plans/<week>.md
 //   POST /api/ai/quiz          { sem, course, week?, title? } makes a quiz in the background (no chat on screen) → { jobs: [job] };
 //                              409 while the same quiz is being made (a different title is a second quiz on purpose)
-//                              { sem, course, every: true } one quiz per class without one, "parallel" at a time → { jobs }
+//                              { sem, course, topics, web?, title? } a custom quiz on the student's topics (the web too when web)
 //   GET  /api/ai/quiz          the quizzes being made or waiting, and the ones just finished: { jobs: [{ id, chatId?, quiz, course, week, queued?, running, ok?, error? }] }
 //   GET  /api/ai/prep          background notes/prep work: { enabled, busy, running/finished: [{ id, chatId, ok? }], queue, total, done, error }
 //   GET  /api/ai/review?sem=…&assignment=…          pre-submission review rounds of an assignment (see review.mjs)
@@ -39,7 +39,7 @@ import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
 import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, longContextModel, warmUp, preferLongContext, saveConfig, codexModelsAsync, loginStatusAsync, serverUp, setServerModels, toolModels, writeOpencodeConfig, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
-import { buildPrompt, chatSystem, listActions, prepPath, quizPath, quizScope, quizTitle, weeksWithoutNotes, weeksWithoutQuiz, type Params } from "./actions.ts";
+import { buildPrompt, chatSystem, listActions, prepPath, quizFile, quizScope, quizTitle, quizTopics, weeksWithoutNotes, weeksWithoutQuiz, type Params } from "./actions.ts";
 import { parseQuiz } from "../../content/src/quiz.ts";
 import { currentSemesterId, loadData, read } from "./context.ts";
 import { runAgentTurn, runChatTurn, type AgentEvent, type RunHandle } from "./stream.ts";
@@ -357,7 +357,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     const now = new Date().toISOString();
     // a new quiz: the same path buildPrompt gave the agent (a local model's answer is saved there)
     let quiz: string | undefined;
-    if (!chat && action === "make-quiz" && semId) { const q = quizScope(data, params); quiz = quizPath(root, semId, q.course, q.week, quizTitle(params)); }
+    if (!chat && action === "make-quiz" && semId) { const q = quizScope(data, params); quiz = quizFile(root, semId, q.course, q.week, params); }
     chat ??= { id: randomUUID(), title: shown.slice(0, 80), tool, action, params, sem: semId, createdAt: now, messages: [], quiz, ...(body.background && { background: true }) };
     chat.updatedAt = now;
     chat.messages.push({ role: "user", text: shown, prompt, at: now });
@@ -527,11 +527,11 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
   // ----- quizzes made in the background (the Make a quiz pop-up) -----
   // A job waits in the queue (queued) until a slot is free: "parallel" in .ouc/ai.json (default 3) run at once.
   // phase: "planning" while the AI reads the material, "writing" once it starts writing the quiz
-  type QuizJob = { id: string; chatId?: string; sem: string; course: string; week?: string; title?: string; quiz?: string; started: string; queued?: boolean; running: boolean; phase?: "planning" | "writing"; ok?: boolean; error?: string };
+  type QuizJob = { id: string; chatId?: string; sem: string; course: string; week?: string; title?: string; topics?: string; web?: boolean; quiz?: string; started: string; queued?: boolean; running: boolean; phase?: "planning" | "writing"; ok?: boolean; error?: string };
   let quizJobs: QuizJob[] = [];
   const quizSlots = () => Math.max(1, Math.min(8, Number(loadConfig(root)?.parallel) || 3));
   function startQuizJob(job: QuizJob) {
-    const params: Params = { course: job.course, ...(job.week !== undefined ? { week: job.week } : {}), ...(job.title ? { title: job.title } : {}) };
+    const params: Params = { course: job.course, ...(job.week !== undefined ? { week: job.week } : {}), ...(job.title ? { title: job.title } : {}), ...(job.topics ? { topics: job.topics, web: job.web } : {}) };
     const t = startTurn({ sem: job.sem, action: "make-quiz", params, background: true });
     if (t.error !== undefined) return Object.assign(job, { queued: false, running: false, ok: false, error: t.error, code: t.code });
     Object.assign(job, { chatId: t.chat.id, quiz: t.chat.quiz, started: t.chat.createdAt, queued: false, running: true, phase: "planning" });
@@ -555,7 +555,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
   }
   /** The quizzes being made (or waiting to be), from the pop-up or from Sync now: "<CODE>/<week>" and the name given, if any. */
   const quizzesBusy = (): { cls: string; title?: string }[] => [
-    ...quizJobs.filter((j) => j.queued || j.running).map((j) => ({ cls: `${j.course}/${j.week}`, title: j.title?.toLowerCase() })),
+    ...quizJobs.filter((j) => j.queued || j.running).map((j) => ({ cls: `${j.course}/${j.topics ? "custom" : j.week}`, title: j.title?.toLowerCase() })),
     ...[...prep.running.map((x) => x.id), ...prep.queue].filter((id) => id.startsWith("quiz:")).map((id) => ({ cls: id.slice(5) })),
   ];
   /** The classes still without a quiz, leaving out the ones being made. */
@@ -567,21 +567,16 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
   function makeQuiz(b: Json): QuizJob[] {
     const semId = /^[\w-]+$/.test(String(b.sem ?? "")) ? String(b.sem) : currentSemesterId(root);
     const course = String(b.course ?? "");
-    const job = (week?: string): QuizJob => ({ id: randomUUID(), sem: semId ?? "", course, week, started: new Date().toISOString(), queued: true, running: false });
-    let added: QuizJob[];
-    if (b.every) {
-      const data = semId ? loadData(root, semId) : null;
-      const c = data?.courses.find((x) => x.code === course);
-      if (!c || !data) throw Object.assign(new Error("Choose a course first."), { code: 400 });
-      added = quizzesToMake(semId!, { ...data, courses: [c] }).map((x) => job(x.week));
-      if (!added.length) throw Object.assign(new Error(`Every class of ${c.short} with material already has a quiz.`), { code: 400 });
-    } else {
-      const week = b.week !== undefined && b.week !== null && b.week !== "" ? String(b.week) : undefined;
-      const title = quizTitle({ title: b.title });
-      // two runs at once would write the same quiz twice; a quiz with a name of its own is a second one on purpose
-      if (quizzesBusy().some((x) => x.cls === `${course}/${week}` && (!x.title || !title || x.title === title.toLowerCase()))) throw Object.assign(new Error(`${title ? `“${title}”` : `A quiz for ${week === undefined ? "the whole course" : "this class"}`} is already being made.`), { code: 409 });
-      added = [{ ...job(week), ...(title ? { title } : {}) }];
-    }
+    const topics = quizTopics({ topics: b.topics });
+    if (b.topics !== undefined && !topics) throw Object.assign(new Error("Write the topics you want the quiz on."), { code: 400 });
+    if (b.every) throw Object.assign(new Error("Choose one class, the whole course or a custom quiz (Sync now makes a quiz for every class)."), { code: 400 });
+    // a custom quiz has no class; its name tells it apart
+    const week = topics || b.week === undefined || b.week === null || b.week === "" ? undefined : String(b.week);
+    const cls = topics ? `${course}/custom` : `${course}/${week}`;
+    const title = quizTitle({ title: b.title });
+    // two runs at once would write the same quiz twice; a quiz with a name of its own is a second one on purpose
+    if (quizzesBusy().some((x) => (x.title && x.title === title?.toLowerCase()) || (x.cls === cls && (!x.title || !title)))) throw Object.assign(new Error(`${title ? `“${title}”` : `A quiz for ${week === undefined ? "the whole course" : "this class"}`} is already being made.`), { code: 409 });
+    const added: QuizJob[] = [{ id: randomUUID(), sem: semId ?? "", course, week, started: new Date().toISOString(), queued: true, running: false, ...(title ? { title } : {}), ...(topics ? { topics, web: !!b.web } : {}) }];
     // keep the last few finished ones, so the page can say how it went
     const recent = quizJobs.filter((j) => !j.queued && !j.running && Date.now() - new Date(j.started).getTime() < 3600_000).slice(-20);
     quizJobs = [...quizJobs.filter((j) => j.queued || j.running || recent.includes(j)), ...added];
