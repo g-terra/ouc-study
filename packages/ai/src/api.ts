@@ -130,9 +130,11 @@ export async function aiStatus(root: string): Promise<AiStatus> {
   if (cfg?.local) tools.push({ id: "local", label: TOOL_LABEL.local, ...(await server(cfg.local)) });
   // the models Ollama or LM Studio has right now, to pick from (opencode and plain local models)
   const live = (s?: LocalModel) => (s?.kind === "ollama" ? d.ollama?.models : s?.kind === "lmstudio" ? d.lmstudio?.models : undefined);
-  setServerModels("opencode", live(cfg?.opencode));
+  setServerModels("opencode", live(ocServer ?? undefined));
   setServerModels("local", live(cfg?.local));
-  for (const t of tools) Object.assign(t, { chosen: t.id === chosen, ...toolModels(cfg, t.id) });
+  // opencode with no model saved anywhere still offers what the server has
+  const offer = { ...cfg, opencode: ocServer ?? undefined };
+  for (const t of tools) Object.assign(t, { chosen: t.id === chosen, ...toolModels(offer, t.id) });
   const pick = tools.find((t) => t.chosen);
   return {
     chosen, label: describe(cfg), agentic: isAgentic(chosen),

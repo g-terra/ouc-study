@@ -189,7 +189,21 @@ export function loadConfig(root: string): AiConfig | null {
     const lms = cfg.oss?.provider === "lmstudio";
     cfg = { tool: "opencode", opencode: { kind: lms ? "lmstudio" : "ollama", baseUrl: lms ? "http://localhost:1234/v1" : "http://localhost:11434", model: cfg.oss?.model ?? "gpt-oss:20b" } };
   }
+  // opencode set up without `ouc ai setup` saving it here: read its model from .opencode/opencode.json
+  if (cfg && !cfg.opencode) { const oc = readOpencodeConfig(root); if (oc) cfg.opencode = oc; }
   return cfg;
+}
+/** The local model in .opencode/opencode.json (its default `model`, the server and the models it lists), if any. */
+export function readOpencodeConfig(root: string): LocalModel | undefined {
+  try {
+    const j = JSON.parse(readFileSync(join(root, ".opencode", "opencode.json"), "utf8"));
+    const [id, ...rest] = String(j.model ?? "").split("/");
+    const p = j.provider?.[id];
+    if (!rest.length || !p?.options?.baseURL) return undefined;
+    const kind = id === "ollama" || id === "lmstudio" ? id : "openai";
+    const baseUrl = kind === "ollama" ? String(p.options.baseURL).replace(/\/v1\/?$/, "") : String(p.options.baseURL);
+    return { kind, baseUrl, model: rest.join("/"), models: Object.keys(p.models ?? {}) };
+  } catch { return undefined; }
 }
 export function saveConfig(root: string, cfg: AiConfig): void {
   mkdirSync(join(root, ".ouc"), { recursive: true });

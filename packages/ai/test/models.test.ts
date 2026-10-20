@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AGENT_MODELS, agentCommand, codexModelsAsync, ownDefault, parseCodexModels, setServerModels, toolModels, type AiConfig, type LocalModel } from "../src/providers.ts";
+import { AGENT_MODELS, agentCommand, codexModelsAsync, loadConfig, ownDefault, parseCodexModels, setServerModels, toolModels, type AiConfig, type LocalModel } from "../src/providers.ts";
 
 const noHome = mkdtempSync(join(tmpdir(), "ouc-home-"));   // no Claude Code or Codex settings
 const ollama: LocalModel = { kind: "ollama", baseUrl: "http://127.0.0.1:11434", model: "qwen3:8b", models: ["qwen3:8b", "llama3.2"] };
@@ -77,4 +77,18 @@ test("the models read from the installed Codex are what the panel offers (else t
   assert.deepEqual(toolModels({ models: { codex: ["mine"] } }, "codex").models, ["mine"]);   // .ouc/ai.json still wins
   // Codex can't answer: the last good list stays
   assert.deepEqual(await codexModelsAsync(5000, join(dir, "missing")), ["gpt-6.1-sol", "gpt-6-astra", "gpt-5.5"]);
+});
+
+test("opencode set up outside `ouc ai setup`: its model and server are read from .opencode/opencode.json", () => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-oc-"));
+  mkdirSync(join(root, ".ouc")); mkdirSync(join(root, ".opencode"));
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "opencode" }));
+  writeFileSync(join(root, ".opencode/opencode.json"), JSON.stringify({
+    model: "ollama/gemma4:26b",
+    provider: { ollama: { npm: "@ai-sdk/openai-compatible", options: { baseURL: "http://localhost:11434/v1" }, models: { "gemma4:26b": {}, "qwen3:8b": {} } } },
+  }));
+  assert.deepEqual(loadConfig(root)?.opencode, { kind: "ollama", baseUrl: "http://localhost:11434", model: "gemma4:26b", models: ["gemma4:26b", "qwen3:8b"] });
+  // what `ouc ai setup` saved still wins
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "opencode", opencode: ollama }));
+  assert.equal(loadConfig(root)?.opencode?.model, "qwen3:8b");
 });
