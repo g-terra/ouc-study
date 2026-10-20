@@ -23,6 +23,9 @@ test("v2 calendar lists the overdue assignment; a course keeps its notes and qui
   await expect(page.getByRole("heading", { name: "Overdue" })).toBeVisible();
   await expect(page.getByText("Assignment 1").first()).toBeVisible();
   await page.getByRole("navigation", { name: "Main" }).first().getByRole("link", { name: "Courses", exact: true }).click();
+  // the ring says what it counts
+  await expect(page.getByTitle("0 of 1 assignments handed in")).toContainText("handed in");
+  await expect(page.getByText("Exam: no date yet")).toBeVisible();
   await page.getByText("Demo Studies").click();
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses\/DEMO101$/);
   await page.getByRole("tab", { name: /Notes/ }).click();
