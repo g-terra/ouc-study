@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.20.0](https://github.com/g-terra/ouc-study/compare/v0.19.0...v0.20.0) (2026-10-20)
+
+
+### Features
+
+* **web:** tick off what you've watched and read each week ([#111](https://github.com/g-terra/ouc-study/issues/111)) ([1cbdd99](https://github.com/g-terra/ouc-study/commit/1cbdd99e2fd563f10b4900c756d64ce7845376c0))
+
+
+### Bug Fixes
+
+* **web:** show overdue assignments first on Today ([#113](https://github.com/g-terra/ouc-study/issues/113)) ([f9adf83](https://github.com/g-terra/ouc-study/commit/f9adf83ab456642e662bbc115aa6cac0a9dd6c0c))
+
 ## [0.19.0](https://github.com/g-terra/ouc-study/compare/v0.18.3...v0.19.0) (2026-10-20)
 
 
