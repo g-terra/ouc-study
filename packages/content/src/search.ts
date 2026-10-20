@@ -9,7 +9,9 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import YAML from "yaml";
 import type { SemesterData, WeekItem } from "./types.ts";
+import { parseBlock } from "./yaml-blocks.ts";
 import { fold, queryWords, snippet, type SearchHit, type SearchKind } from "./search-text.ts";
 
 export { fold, queryWords, snippet, type SearchHit, type SearchKind };
@@ -75,7 +77,71 @@ export const paragraphs = (s: string): Part[] => s.replace(/\r/g, "").split(/\n\
 export const plainMarkdown = (s: string) => s
   .replace(/^\s*(```|~~~).*$/gm, "").replace(/^\s*>\s?/gm, "").replace(/\[!\w+\]\s*/g, "").replace(/^\s*#{1,6}\s+/gm, "")
   .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/(\*\*|__|\*|`)(\S(?:.*?\S)?)\1/g, "$2");
-const mdParts = (s: string) => paragraphs(plainMarkdown(s));
+
+// LaTeX commands read as the symbol they show; the rest of a command's name is dropped
+const TEX: Record<string, string> = {
+  alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", varepsilon: "ε", eta: "η", theta: "θ", kappa: "κ", lambda: "λ", mu: "μ", nu: "ν",
+  xi: "ξ", pi: "π", rho: "ρ", sigma: "σ", tau: "τ", phi: "φ", varphi: "φ", chi: "χ", psi: "ψ", omega: "ω",
+  Gamma: "Γ", Delta: "Δ", Theta: "Θ", Lambda: "Λ", Sigma: "Σ", Phi: "Φ", Psi: "Ψ", Omega: "Ω", Pi: "Π",
+  infty: "∞", cdot: "·", times: "×", leq: "≤", geq: "≥", le: "≤", ge: "≥", neq: "≠", approx: "≈", propto: "∝", pm: "±",
+  to: "→", rightarrow: "→", leftarrow: "←", Rightarrow: "⇒", sum: "Σ", prod: "Π", int: "∫", partial: "∂", nabla: "∇", sqrt: "√", in: "∈",
+};
+/** LaTeX as plain characters: \frac{a}{b} → a/b, \tau → τ, \mathrm{x} → x, braces and $ signs gone. */
+export function plainTex(s: string): string {
+  let t = s.replace(/\\\\/g, " ");   // a line break
+  for (let i = 0; i < 3; i++) t = t.replace(/\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}/g, "$1/$2").replace(/\\(?:mathrm|mathbf|mathit|mathcal|mathbb|text|textbf|textit|operatorname|boldsymbol|bar|hat|vec|overline)\{([^{}]*)\}/g, "$1");
+  return t.replace(/\\(left|right|big|Big)\b/g, "").replace(/\\([A-Za-z]+)/g, (_, n: string) => TEX[n] ?? "")
+    .replace(/\\[,;:! ]/g, " ").replace(/[{}$]/g, "");
+}
+const clean = (s: string) => plainTex(plainMarkdown(s)).replace(/\s+/g, " ").trim();
+
+// keys of a note block that hold what draws it, not what it says (the formula itself is LaTeX, a link its address)
+const ASSET_KEYS = new Set(["tex", "url", "icon", "color", "colour", "image", "src"]);
+/** A visual block (docs/NOTE_FORMAT.md) as the words it shows: one part per card, step, term or flashcard; a formula as its title, variables and note. */
+export function blockParts(data: unknown): Part[] {
+  const leaves = (x: unknown): string[] => {
+    if (typeof x === "string" || typeof x === "number") return [String(x)];
+    // a formula's "where" pair: symbol and meaning
+    if (Array.isArray(x)) return x.length === 2 && x.every((v) => typeof v === "string") ? [`${x[0]}: ${x[1]}`] : x.flatMap(leaves);
+    if (x && typeof x === "object") return Object.entries(x).filter(([k]) => !ASSET_KEYS.has(k)).flatMap(([, v]) => leaves(v));
+    return [];
+  };
+  if (!data || typeof data !== "object" || "error" in data) return [];
+  return (Array.isArray(data) ? data : [data]).map((it) => leaves(it).map(clean).filter(Boolean).join(" · ")).filter(Boolean).map((text) => ({ text }));
+}
+
+/**
+ * A note (or prep pack) as the words a reader sees: Markdown without its marks, LaTeX as symbols, visual blocks
+ * as their text, and no diagram code, so neither matching nor the snippet shows YAML, LaTeX or Mermaid.
+ */
+// notes read before, by their text (a search reads every note; the YAML is parsed once)
+const noteCache = new Map<string, Part[]>();
+export function noteParts(md: string): Part[] {
+  const hit = noteCache.get(md);
+  if (hit) return hit;
+  if (noteCache.size > 5000) noteCache.clear();
+  const out: Part[] = [];
+  let text: string[] = [];
+  const flush = () => { out.push(...paragraphs(text.join("\n")).map((p) => ({ text: clean(p.text) })).filter((p) => p.text)); text = []; };
+  const lines = md.replace(/\r/g, "").split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const fence = lines[i]!.match(/^\s*(```|~~~)\s*([\w-]*)\s*$/);
+    if (!fence) { text.push(lines[i]!); continue; }
+    flush();
+    const body: string[] = [];
+    for (i++; i < lines.length && !lines[i]!.trim().startsWith(fence[1]!); i++) body.push(lines[i]!);
+    const kind = fence[2]!;
+    if (kind === "mermaid") continue;   // diagram code
+    if (["cards", "formula", "compare", "steps", "flashcards", "terms", "links"].includes(kind)) {
+      try { out.push(...blockParts(parseBlock(YAML, body.join("\n")))); } catch { /* a block that doesn't parse shows nothing */ }
+    }
+    // other code blocks are code, not prose: left out
+  }
+  flush();
+  noteCache.set(md, out);
+  return out;
+}
+const mdParts = noteParts;
 
 const stripFrontMatter = (s: string) => s.replace(/^﻿?---\n[\s\S]*?\n---\n/, "");
 
@@ -165,7 +231,7 @@ export function semesterDocs(data: SemesterData, semDir: string): SearchDoc[] {
   }
 
   for (const n of data.notes) {
-    docs.push({ kind: "note", code: n.code, weekIndex: n.weekIndex, title: n.title, to: `${base}/notes/${enc(n.code)}/${enc(n.slug)}`, parts: [...paragraphs(n.summary), ...mdParts(n.body)] });
+    docs.push({ kind: "note", code: n.code, weekIndex: n.weekIndex, title: n.title, to: `${base}/notes/${enc(n.code)}/${enc(n.slug)}`, parts: [...noteParts(n.summary), ...noteParts(n.body)] });
   }
 
   // text copies of the course files (text/<course dir>/<week dir>/<file>.txt mirrors courses/)

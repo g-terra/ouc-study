@@ -20,3 +20,11 @@ flowchart LR
 ## Math
 
 The demo formula: $E = mc^2$.
+
+```formula
+title: Mass-energy equivalence
+tex: 'E = m c^{2}'
+where:
+  - ['c', 'speed of light']
+note: A made-up formula block for the search test.
+```
