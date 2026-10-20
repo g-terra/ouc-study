@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.0](https://github.com/g-terra/ouc-study/compare/v0.27.2...v0.28.0) (2026-10-20)
+
+
+### Features
+
+* **web:** add important dates to a course, and stop reading exams from the timetable PDF ([#153](https://github.com/g-terra/ouc-study/issues/153)) ([955306a](https://github.com/g-terra/ouc-study/commit/955306af3ac6010fe2aafd5945643e08852c5e10))
+
 ## [0.27.2](https://github.com/g-terra/ouc-study/compare/v0.27.1...v0.27.2) (2026-10-20)
 
 
