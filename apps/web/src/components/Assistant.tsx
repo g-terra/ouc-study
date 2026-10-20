@@ -420,7 +420,7 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
                   className={cx(PICK, "max-w-[11rem]")}>
                   {!picked && <option value="">Choose an AI</option>}
                   {ai.tools.filter((t) => t.state !== "missing").map((t) => (
-                    <option key={t.id} value={t.id}>{t.id === "opencode" || t.id === "local" ? `${t.label}${t.detail && t.state === "connected" ? ` · ${t.detail}` : ""}` : t.label}{t.state === "connected" ? "" : ` (${TOOL_STATE[t.state].text.toLowerCase()})`}</option>
+                    <option key={t.id} value={t.id}>{t.label}{t.state === "connected" ? "" : ` (${TOOL_STATE[t.state].text.toLowerCase()})`}</option>
                   ))}
                 </select>
                 {!!picked?.models?.length && (
