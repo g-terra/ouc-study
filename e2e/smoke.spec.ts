@@ -278,7 +278,8 @@ test("the AI and its model are picked next to Send; the default is named and the
   const tool = (id: string, label: string, models: string[], chosen = false, model?: string) => ({ id, label, state: "connected", chosen, models, model });
   await page.route("**/api/ai/status**", (route) => route.fulfill({ json: {
     chosen: "claude", label: "Claude Code", agentic: true, ready: true, reason: "", token: "t",
-    tools: [tool("claude", "Claude Code", ["sonnet", "opus", "haiku"], true), tool("codex", "Codex", ["gpt-5", "gpt-5-codex"], false, "gpt-5")],
+    tools: [tool("claude", "Claude Code", ["sonnet", "opus", "haiku"], true), tool("codex", "Codex", ["gpt-5", "gpt-5-codex"], false, "gpt-5"),
+      { ...tool("opencode", "opencode", ["gemma4:26b"], false, "gemma4:26b"), detail: "gemma4:26b on Ollama" }],
   } }));
   let sent: Record<string, unknown> | undefined;
   await page.route("**/api/ai/run", (route) => {
@@ -287,6 +288,8 @@ test("the AI and its model are picked next to Send; the default is named and the
   });
   await page.goto(`${SEM}/chat`);
   const model = page.getByRole("combobox", { name: "Model" });
+  // the AI list names each AI only; its model is in the Model picker
+  await expect(page.getByRole("combobox", { name: "Which AI answers" }).locator("option")).toHaveText(["Claude Code", "Codex", "opencode"]);
   await expect(model.locator("option")).toHaveText(["Default (Claude Code's own)", "sonnet", "opus", "haiku"]);
   await model.selectOption("opus");
   // another AI has its own models, its default named
