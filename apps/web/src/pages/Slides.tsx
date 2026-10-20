@@ -1,13 +1,15 @@
 /**
  * The slide viewer: a course PowerPoint, shown slide by slide in the app (no download), with the
  * narration recorded into each slide. The server turns the .pptx into a PDF with LibreOffice on first
- * view (packages/ai/src/slides.ts); pdf.js draws its pages here.
+ * view (packages/ai/src/slides.ts); pdf.js draws its pages here. When the deck has a transcript, what's
+ * said on each slide shows under it.
  */
 import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import type { SemesterData } from "@ouc/content/types";
 import { Link, enc } from "../lib/router";
 import { Card, CourseBadge, cx } from "../components/ui";
+import { parseTranscript, type Transcript } from "../lib/transcript";
 
 type Info =
   | { ok: true; pdf: string; download: string; slides: { n: number; audio: string[] }[] }
@@ -69,6 +71,18 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // the deck's transcript (made from its narration), if it has one
+  const href = `/files/${encodeURIComponent(data.id)}/${file.split("/").map(encodeURIComponent).join("/")}`;
+  const transcriptHref = data.courses.flatMap((c) => c.weeks.flatMap((w) => w.items)).find((it) => it.href === href)?.transcript;
+  const [transcript, setTranscript] = useState<Transcript | null>(null);
+  useEffect(() => {
+    let live = true;
+    setTranscript(null);
+    if (transcriptHref) fetch(transcriptHref).then((r) => (r.ok ? r.text() : null)).then((md) => live && md && setTranscript(parseTranscript(md))).catch(() => {});
+    return () => { live = false; };
+  }, [transcriptHref]);
+  const said = transcript?.sections.find((s) => s.slide === page)?.lines ?? [];
+
   const stage = useRef<HTMLDivElement>(null);
   const audio = info?.ok ? info.slides[page - 1]?.audio ?? [] : [];
   const withAudio = info?.ok ? info.slides.filter((s) => s.audio.length).length : 0;
@@ -113,6 +127,14 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
           </div>
 
           <Narration key={page} clips={audio} lecture={lecture} onEnded={() => page < pages && go(page + 1)} />
+          {said.length > 0 && (
+            <div className="mt-3 rounded-xl border border-line bg-surface p-3" data-testid="slide-transcript">
+              <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                📝 What's said on this slide
+              </div>
+              {said.map((l, i) => <p key={i} className="text-sm leading-relaxed">{l.text}</p>)}
+            </div>
+          )}
 
           {pages > 1 && (
             <nav className="mt-4 flex flex-wrap gap-1" aria-label="Slides">

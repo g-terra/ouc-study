@@ -1,6 +1,6 @@
 import type { ReactNode, CSSProperties } from "react";
 import { Link } from "../lib/router";
-import { slidesPage } from "../lib/links";
+import { slidesPage, videoPage } from "../lib/links";
 import type { Course, FileRef, ItemKind, WeekItem } from "@ouc/content/types";
 import { STATE_LABEL, type State } from "../lib/data";
 import { KindIcon } from "./icons";
@@ -74,8 +74,8 @@ export const kindIcon = (k: ItemKind, ext?: string) => <KindIcon kind={k} ext={e
 
 /** A link to a course file: slides open in the app's slide viewer, anything else in a new tab. */
 export function FileLink({ href, className, title, children }: { href?: string; className?: string; title?: string; children: ReactNode }) {
-  const slides = slidesPage(href);
-  return slides ? <Link to={slides} className={className} title={title}>{children}</Link>
+  const page = slidesPage(href) ?? videoPage(href);
+  return page ? <Link to={page} className={className} title={title}>{children}</Link>
     : <a href={href} target="_blank" rel="noreferrer" className={className} title={title}>{children}</a>;
 }
 

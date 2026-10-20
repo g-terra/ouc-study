@@ -147,22 +147,34 @@ test("a course's slides open in the slide viewer", async ({ page }) => {
   if (await page.getByTestId("slide-counter").isVisible()) {
     await expect(page.getByTestId("slide-counter")).toHaveText("Slide 1 / 2");
     await expect(page.locator("audio")).toHaveCount(1);
+    await expect(page.getByTestId("slide-transcript")).toContainText("This first slide says hello.");
     await page.keyboard.press("ArrowRight");
     await expect(page.getByTestId("slide-counter")).toHaveText("Slide 2 / 2");
     await expect(page.locator("audio")).toHaveCount(0);
+    await expect(page.getByTestId("slide-transcript")).toHaveCount(0);
   }
   await expect(page.getByRole("link", { name: /Download/ }).first()).toHaveAttribute("href", /Demo%20lecture\.pptx$/);
 });
 
-test("a class video on a course week plays from this computer, with its transcript", async ({ page }) => {
+test("a class video opens on its own page, the transcript beside it: a line jumps there, full screen works", async ({ page }) => {
   await page.goto(`${SEM}/courses/DEMO101`);
   const video = page.getByRole("link", { name: /Welcome to the demo/ });
   if (!(await video.isVisible())) await page.getByRole("button", { name: /Getting started/ }).click();
-  await expect(video).toHaveAttribute("href", /Video-Welcome-to-the-demo\/Welcome\.mp4$/);
-  const transcript = page.getByRole("link", { name: "Transcript" });
-  await expect(transcript).toHaveAttribute("href", /Welcome\.transcript\.md$/);
-  const res = await page.request.get((await transcript.getAttribute("href"))!);
-  expect(await res.text()).toContain("Welcome to the demo course.");
+  // a video and narrated slides open with their transcript (marked on the week), not as .md files
+  await expect(page.getByText("📝 transcript")).toHaveCount(2);
+  await expect(video).toHaveAttribute("href", /\/video\/.*Welcome\.mp4$/);
+  await video.click();
+  await expect(page).toHaveURL(/\/video\/courses%2FDEMO101/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Video: Welcome to the demo");
+  await expect(page.getByTestId("class-video")).toHaveAttribute("src", /Video-Welcome-to-the-demo\/Welcome\.mp4$/);
+  const transcript = page.getByTestId("transcript");
+  await expect(transcript).toContainText("Welcome to the demo course.");
+  const later = transcript.getByRole("button", { name: /0:30 Next, open the lecture slides/ });
+  await later.click();
+  await expect(later).toHaveAttribute("aria-current", "true");
+  expect(await page.getByTestId("class-video").evaluate((v) => Math.round((v as unknown as { currentTime: number }).currentTime))).toBe(30);
+  await page.getByRole("button", { name: /Full screen/ }).click();
+  await expect.poll(() => page.evaluate("document.fullscreenElement?.tagName")).toBe("VIDEO");
 });
 
 test("the activity bar shows background work, and Details opens each part", async ({ page }) => {

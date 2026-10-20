@@ -161,6 +161,6 @@ test("v2: an open week groups its items under Watch, Read, My notes and Practice
   await page.getByRole("button", { name: /Getting started/ }).first().click();
   const week = page.locator("#w1");
   for (const name of ["Watch", "Read", "My notes", "Practice"]) await expect(week.getByRole("heading", { name, exact: true })).toBeVisible();
-  await expect(week.getByRole("heading", { name: "Watch" }).locator("..")).toContainText("Transcript");
+  await expect(week.getByRole("heading", { name: "Watch" }).locator("..")).toContainText("📝 transcript");
   await expect(week.getByRole("heading", { name: "Practice" }).locator("..").getByRole("button", { name: /Quiz me/ })).toBeVisible();
 });
