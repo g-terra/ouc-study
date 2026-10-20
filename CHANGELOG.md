@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.0](https://github.com/g-terra/ouc-study/compare/v0.17.0...v0.18.0) (2026-10-20)
+
+
+### Features
+
+* **web:** draw the app's icons with one line-icon set and add a logo ([#91](https://github.com/g-terra/ouc-study/issues/91)) ([ea97184](https://github.com/g-terra/ouc-study/commit/ea971843f1e59db6944f707b153da0b9ba21ff72))
+
 ## [0.17.0](https://github.com/g-terra/ouc-study/compare/v0.16.0...v0.17.0) (2026-10-20)
 
 
