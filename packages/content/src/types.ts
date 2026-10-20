@@ -21,6 +21,7 @@ export interface WeekItem {
   href?: string;          // /files/... for local files, absolute URL for external
   external?: boolean;
   ext?: string;           // file extension for local files
+  transcript?: string;    // /files/... of the transcript of a video or narrated slides, when there is one
   assignmentId?: string;
   noteSlug?: string;
 }

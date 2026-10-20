@@ -17,6 +17,8 @@ import { pull, reportMarkdown, type PullReport } from "../../eclass-sync/src/pul
 import { chooseAssistant, installSkills } from "./ai.ts";
 import { describe as describeAI, loadConfig as loadAI } from "../../ai/src/providers.ts";
 import { findConverter } from "../../ai/src/review.ts";
+import { findEngine, installWhisper } from "../../ai/src/transcribe.ts";
+import { loadMediaConfig } from "../../eclass-sync/src/media.ts";
 
 const { c } = ui;
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -268,6 +270,14 @@ async function main() {
       const r = await sh(...how);
       r.code === 0 ? sp.succeed("LibreOffice installed: slides open right in the app") : sp.warn(`LibreOffice: ${r.log.trim().split("\n").pop()} (slides still download; install it from https://www.libreoffice.org/download/ )`);
     } else if (!how) ui.info(`To see slides right in the app, install LibreOffice (free): ${c.cyan("https://www.libreoffice.org/download/")}`);
+  }
+  // class videos and narrated slides → transcripts the notes are made from, with Whisper on this computer
+  if (loadMediaConfig(ROOT).transcribe && !findEngine(ROOT)) {
+    if (await confirm("Install Whisper (free, runs on this computer) to turn class videos and narrated slides into transcripts for your notes?", true)) {
+      const sp = ui.spinner("Installing Whisper (a few minutes: it downloads a speech model once)…");
+      const r = await installWhisper(ROOT);
+      r.ok ? sp.succeed(`Whisper ready (${r.message}): the app transcribes videos in the background`) : sp.warn(`Whisper: ${r.message}`);
+    } else ui.info(`Transcripts later: ${c.cyan("ouc transcribe --setup")}`);
   }
   {
     const first = !existsSync(join(semDir, "_meta/sync-state.json"));

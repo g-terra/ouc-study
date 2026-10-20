@@ -3,11 +3,11 @@ import type { Course, SemesterData, Week } from "@ouc/content/types";
 import { useAiStatus } from "../lib/ai";
 import { dismissJob, makeQuiz, useQuizJobs } from "../lib/quiz";
 import { useAssistant } from "./Assistant";
-import { cx } from "./ui";
+import { cx, isMaterial } from "./ui";
 
 /** The classes a quiz can be made for: weeks with files or a note. */
 export const quizWeeks = (data: SemesterData, c: Course): Week[] =>
-  c.weeks.filter((w) => w.items.some((i) => i.kind === "file") || data.notes.some((n) => n.code === c.code && n.weekIndex === w.index));
+  c.weeks.filter((w) => w.items.some(isMaterial) || data.notes.some((n) => n.code === c.code && n.weekIndex === w.index));
 
 /** Pop-up: pick one class or the whole course; the AI makes the quiz in the background (no chat opens). */
 function MakeQuizDialog({ data, course, week, onClose }: { data: SemesterData; course?: string; week?: string; onClose: () => void }) {

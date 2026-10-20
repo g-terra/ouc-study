@@ -3,7 +3,7 @@ import type { ClassSession, Quiz, SemesterData, Week } from "@ouc/content/types"
 import { Link, enc, useRouter } from "../lib/router";
 import { currentWeek, stateOf } from "../lib/data";
 import { at, day, fmtDay, fmtFull, fmtShort, fmtTime, relative } from "../lib/dates";
-import { Card, Empty, FileLink, PageHeader, ProgressRing, SectionTitle, StatePill, cx, kindIcon } from "../components/ui";
+import { Card, Empty, FileLink, PageHeader, ProgressRing, SectionTitle, StatePill, cx, isMaterial, kindIcon } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
 import { ClassCard, ClassTimeEditor, JoinButton, upcomingClasses } from "../components/Classes";
 import { quizHref, quizScopeLabel } from "./Quizzes";
@@ -205,12 +205,13 @@ export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes
               const internal = it.kind === "note" || it.kind === "assignment";
               const cls = cx("flex items-start gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2", it.kind === "note" && "font-semibold");
               const inner = <><span>{kindIcon(it.kind, it.ext)}</span><span className="leading-snug">{it.kind === "note" ? `My notes: ${it.title}` : it.title}{it.external && <span className="text-muted"> ↗</span>}</span></>;
-              return <li key={i}>{!href ? <span className={cls}>{inner}</span> : internal ? <Link to={href} className={cls}>{inner}</Link> : <FileLink href={href} className={cls}>{inner}</FileLink>}</li>;
+              const link = !href ? <span className={cls}>{inner}</span> : internal ? <Link to={href} className={cls}>{inner}</Link> : <FileLink href={href} className={cls}>{inner}</FileLink>;
+              return <li key={i} className={cx(it.transcript && "flex items-start gap-2")}>{link}{it.transcript && <a href={it.transcript} target="_blank" rel="noreferrer" className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-muted underline hover:text-ink">Transcript</a>}</li>;
             })}
           </ul>
           {w.items.length === 0 && <p className="text-sm text-muted">Nothing posted for this week.</p>}
           {quizzes.length > 0 && <div className="mt-2"><QuizLinks sem={data.id} quizzes={quizzes} /></div>}
-          {w.index > 0 && w.items.some((i) => i.kind === "file") && (
+          {w.index > 0 && w.items.some(isMaterial) && (
             <div className="mt-3 flex flex-wrap gap-2">
               {!w.items.some((i) => i.kind === "note") && <AskAiButton action="make-notes" params={{ course: code, week: String(w.index) }}>Make notes</AskAiButton>}
               <AskAiButton action="quiz-me" params={{ course: code, week: String(w.index) }}>Quiz me</AskAiButton>

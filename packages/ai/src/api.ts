@@ -22,6 +22,8 @@
 // assignment not submitted yet without a PREP.md gets one, one at a time, from the AI chosen with
 // `ouc ai setup` ("autoPrep": false in .ouc/ai.json turns that off). Sync now also makes the
 // missing notes, for every week with files. Up to "parallel" (default 3) runs at once.
+// Class videos and narrated slides get transcripts in the background too (transcribe.ts); Sync now
+// makes those of the weeks about to get notes first, so the notes are made from them.
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -36,6 +38,7 @@ import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview,
 import type { Assignment, SemesterData } from "../../content/src/types.ts";
 import { setTask } from "../../content/src/plan.ts";
 import { setClassTime } from "../../content/src/classes.ts";
+import { createTranscriber, type Engine } from "./transcribe.ts";
 
 type ToolState = { state: "connected" | "signedout" | "apikey" | "missing" | "noserver" | "unknown"; detail?: string; fix?: string };
 export interface ToolStatus extends ToolState { id: string; label: string; chosen?: boolean }
@@ -66,6 +69,7 @@ export interface AiApiOptions {
   status?: () => Promise<{ ready: boolean; reason?: string }>;
   converter?: Converter | null;
   noAutoPrep?: boolean;
+  whisper?: () => Engine | null;                        // tests: a fake speech-to-text engine
 }
 export type AiApi = ((req: IncomingMessage, res: ServerResponse, next: () => void) => Promise<void>) & {
   autoPrep(): void; catchUp(): { notes: number; prep: number }; prepIdle(): boolean;
@@ -357,6 +361,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
   // ----- automatic prep: one assignment at a time, in the background -----
   const prepState = join(root, ".ouc", "prep-state.json");
   type Slot = { id: string; chatId: string; ok?: boolean };
+  const transcriber = createTranscriber(root, opts.whisper ? { engine: opts.whisper } : {});
   const prep = { busy: false, again: false, notes: false, force: false, running: [] as Slot[], queue: [] as string[], finished: [] as Slot[], total: 0, done: 0, error: null as string | null };
   async function status(fresh = false) {
     if (!cache || Date.now() - cache.at > 5 * 60_000 || fresh) cache = { at: Date.now(), body: await aiStatus(root) };
@@ -384,7 +389,14 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         if (!semId) break;
         let tried: Record<string, string> = {};
         try { tried = JSON.parse(read(prepState, "{}")); } catch { /* start fresh */ }
-        const data = loadData(root, semId);
+        let data = loadData(root, semId);
+        if (wantNotes) {
+          // transcripts first for the weeks about to get notes (the notes are made from them)
+          prep.total = 0; prep.done = 0; prep.finished = [];   // the bar shows the transcribing meanwhile
+          const todo = new Set(weeksWithoutNotes(data, data.courses).map(({ course, week }) => `${course.code}|${week.index}`));
+          await transcriber.run({ only: (j) => todo.has(`${j.code}|${j.section}`) });
+          if (transcriber.status().made) data = loadData(root, semId);
+        }
         const jobs: { id: string; body: RunBody }[] = [
           ...(wantNotes ? data.courses.filter((c) => weeksWithoutNotes(data, [c]).length)
             .map((c) => ({ id: `notes:${c.code}`, body: { action: "make-notes", params: { course: c.code } } })) : []),
@@ -465,7 +477,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     try {
       const p = url.pathname;
       if (p === "/api/ai/status") return json(res, { ...(await status(url.searchParams.has("fresh"))), token });
-      if (p === "/api/ai/prep") return json(res, { enabled: prepEnabled(), busy: prep.busy, running: prep.running, queue: prep.queue, finished: prep.finished, total: prep.total, done: prep.done, error: prep.error });
+      if (p === "/api/ai/prep") return json(res, { enabled: prepEnabled(), busy: prep.busy, running: prep.running, queue: prep.queue, finished: prep.finished, total: prep.total, done: prep.done, error: prep.error, transcribe: transcriber.status() });
       if (p === "/api/ai/view") {
         const abs = viewablePath(root, url.searchParams.get("path"));
         if (!abs) return json(res, { error: "Not found" }, 404);
@@ -537,7 +549,11 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     }
   }) as AiApi;
   /** Call when the app data was rebuilt (a sync, new files): prepares assignments that need it. */
-  handler.autoPrep = () => { if (!opts.noAutoPrep) catchUp(); };
+  handler.autoPrep = () => {
+    if (opts.noAutoPrep) return;
+    catchUp();
+    transcriber.run();   // videos and narrated slides without a transcript, one at a time
+  };
   /** Sync now: make the missing notes and prep packs (returns how many it will make). */
   handler.catchUp = () => {
     const semId = currentSemesterId(root);

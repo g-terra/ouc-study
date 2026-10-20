@@ -15,6 +15,7 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CourseConfig, MetaActivity, MetaCourse, MetaSection, SemesterConfig, SubmissionRecord } from "../../content/src/eclass.ts";
 import { createClient, eclassDate, htmlToText, isoDay, links, pad, readToken, safeName, slug, strip, type MoodleAssignment, type MoodleClient, type MoodleError } from "./moodle.ts";
+import { MEDIA_FILE, loadMediaConfig, panoptoCaptions, panoptoSession, srtToSegments, transcriptMarkdown } from "./media.ts";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -38,6 +39,8 @@ export interface PullReport {
   courses: { code: string; sections: number; files: number }[];
   files: { total: number; existing: number; downloaded: number; failed: number; updated: number; bytes: number; toDownload: string[]; changed: Task[]; errors: string[] };
   assignments: { total: number; newFolders: string[]; briefs: number; submissions: number };
+  /** class videos: files queued with the others; Panopto links (captions saved when Panopto shares them) */
+  videos: { files: number; panopto: number; captions: number; signin: number };
 }
 export interface PullOptions {
   root?: string;
@@ -46,19 +49,23 @@ export interface PullOptions {
   client: MoodleClient;
   dryRun?: boolean;
   on?: (ev: PullEvent) => void;
+  fetchImpl?: typeof fetch;  // tests: Panopto answers
 }
 /** An error from eClass: fatal ones (offline, bad key) stop the pull, others skip that part. */
 const isFatal = (e: unknown) => !!(e as MoodleError).fatal;
 const msg = (e: unknown) => (e as Error).message;
 
-export async function pull({ root = ROOT, semId, cfg, client, dryRun = false, on = () => {} }: PullOptions): Promise<PullReport> {
+export async function pull({ root = ROOT, semId, cfg, client, dryRun = false, on = () => {}, fetchImpl = fetch }: PullOptions): Promise<PullReport> {
   const semDir = join(root, "semesters", semId);
   const outDir = dryRun ? join(root, ".ouc", "dry-run", semId) : semDir;
   const report: PullReport = {
     semester: semId, dryRun, courses: [], warnings: [],
     files: { total: 0, existing: 0, downloaded: 0, failed: 0, updated: 0, bytes: 0, toDownload: [], changed: [], errors: [] },
     assignments: { total: 0, newFolders: [], briefs: 0, submissions: 0 },
+    videos: { files: 0, panopto: 0, captions: 0, signin: 0 },
   };
+  const media = loadMediaConfig(root);
+  const panopto: { url: string; title: string; rel: string }[] = [];   // Panopto links → captions to try
   const courses = cfg.courses.filter((c): c is CourseConfig & { eclassId: number } => !!c.eclassId);
   const courseids = courses.map((c) => c.eclassId);
   const tasks: Task[] = [];
@@ -113,9 +120,23 @@ export async function pull({ root = ROOT, semId, cfg, client, dryRun = false, on
           continue;
         } else if (m.modname === "url") {
           act.target = (m.contents ?? []).find((f) => f.fileurl)?.fileurl ?? m.url;
+          if (panoptoSession(act.target)) {
+            // a Panopto recording: the eClass key can't download it, but its captions may be shared
+            report.videos.panopto++;
+            const inSec = `${slug(act.name, 50)}.transcript.md`;
+            act.transcript = `${cc.code}/${pad(i)}/${inSec}`;
+            if (media.transcribe) panopto.push({ url: act.target!, title: act.name, rel: `${secRel}/${inSec}` });
+          }
         } else if (m.modname === "page") {
           const page = files.find((f) => /\.html?$/i.test(f.filename));
           if (page) { try { act.links = links(await client.getText(page.fileurl)); act.body = ""; } catch (e) { report.warnings.push(`page ${act.name}: ${msg(e)}`); } }
+          // a video (or audio) embedded in the page: eClass lists it with the page's files
+          const videos = files.filter((f) => f !== page && MEDIA_FILE.test(f.filename.split("?")[0]!));
+          if (media.videos) for (const f of videos) {
+            const inSec = [slug(act.name, 50), safeName(f.filename)].join("/");
+            queue(f.fileurl, `${secRel}/${inSec}`, f.filesize, f.timemodified); nFiles++; report.videos.files++;
+            if (f === videos[0]) Object.assign(act, { file: f.filename, ctype: f.mimetype, size: f.filesize, local: `${cc.code}/${pad(i)}/${inSec}` });
+          }
         } else if (m.modname === "assign") {
           const as = assigns.get(m.id);
           if (as) {
@@ -222,6 +243,18 @@ export async function pull({ root = ROOT, semId, cfg, client, dryRun = false, on
   };
   await Promise.all([worker(), worker(), worker(), worker()]);
 
+  // ---- Panopto captions as transcripts (once; a session that needs signing in is tried again next time)
+  for (const p of panopto) {
+    const dest = join(semDir, p.rel);
+    if (existsSync(dest)) { report.videos.captions++; continue; }
+    const r = await panoptoCaptions(p.url, fetchImpl);
+    if (r.ok) {
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, transcriptMarkdown({ title: p.title, source: p.url, by: "Panopto captions" }, [{ segments: srtToSegments(r.srt) }]));
+      report.videos.captions++;
+    } else if (r.reason === "signin") report.videos.signin++;
+  }
+
   // ---- READMEs for new assignment folders and courses (handy for Claude; never overwritten)
   for (const m of meta) {
     const cc = courses.find((c) => c.code === m.code)!;
@@ -258,6 +291,7 @@ export function reportMarkdown(r: PullReport): string {
     `| Course | Sections | Files |`, `|---|---|---|`, ...r.courses.map((c) => `| ${c.code} | ${c.sections} | ${c.files} |`), "",
     `- Files on eClass: **${r.files.total}**; already here: **${r.files.existing}**; new: **${r.files.toDownload.length}**; newer on eClass: **${r.files.changed.length}**`,
     `- Assignments: ${r.assignments.total}; brief files: ${r.assignments.briefs}; your submitted files: ${r.assignments.submissions}`,
+    `- Class videos to download: ${r.videos.files}; Panopto recordings (links only): ${r.videos.panopto}`,
     r.assignments.newFolders.length ? `- New assignment folders: ${r.assignments.newFolders.map((f) => `\`${f}\``).join(", ")}` : "- No new assignment folders",
     "", "## Would download", "", ...r.files.toDownload.map((f) => `- ${f}`), "",
     "## Newer on eClass", "", ...r.files.changed.map((t) => `- ${t.rel}`), "",
@@ -294,6 +328,8 @@ export async function main(args: string[]): Promise<void> {
     const f = r.files;
     if (dryRun) console.log(`✓ Dry run: ${f.total} files on eClass, ${f.existing} already here, ${f.toDownload.length} new, ${f.changed.length} newer. Report: .ouc/dry-run/${semId}/report.md`);
     else console.log(`✓ eClass files: ${f.downloaded} new${f.updated ? `, ${f.updated} updated` : ""}, ${f.existing} already here${f.failed ? `, ${f.failed} failed (see _meta/pull-report.json)` : ""}.`);
+    const v = r.videos;
+    if (!dryRun && v.panopto && v.signin && !quiet) console.log(`  ${v.signin} Panopto recording(s) need a Panopto sign-in, so they stay links (transcripts only for videos on eClass).`);
     if (r.warnings.length && !quiet) console.log(`  ${r.warnings.length} part(s) skipped: ${r.warnings.slice(0, 3).join(" | ")}`);
   }).catch((e: unknown) => { console.error(`✗ ${msg(e)}`); process.exit(1); });
 }

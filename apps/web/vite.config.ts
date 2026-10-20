@@ -23,6 +23,9 @@ const MIME: Record<string, string> = {
   ".json": "application/json", ".ipynb": "application/json", ".html": "text/html; charset=utf-8",
   ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  // class videos play in the browser (sendFile answers byte ranges, so they can seek)
+  ".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
+  ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav",
 };
 
 /** Runs a Node script from the repo root and resolves with its last JSON line on stdout. */

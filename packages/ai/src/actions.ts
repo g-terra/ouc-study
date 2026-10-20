@@ -60,7 +60,8 @@ export function listActions(root: string): Action[] {
   });
 }
 
-const hasFiles = (w: Week) => w.items.some((i) => i.kind === "file");
+// downloaded files, videos included (their transcripts are what notes are made from)
+const hasFiles = (w: Week) => w.items.some((i) => i.kind === "file" || (i.kind === "video" && !i.external));
 // the sections notes are made for: the weekly ones with files, else (all files in General) the General one
 const noteSections = (course: Course) => {
   const weekly = course.weeks.filter((w) => w.index > 0 && hasFiles(w));
@@ -89,7 +90,7 @@ export function notesPrompt(semId: string, course: Course, week: Week): { rel: s
   return {
     rel,
     prompt: `Use the make-notes skill. Make visual study notes for ${course.title} (${course.code}), eClass section ${week.index} "${week.name}". ` +
-      `The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/. Save the note as ${rel} (front matter: course ${course.code}, section ${week.index}, week ${weekNumber(week)}). ` +
+      `The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/; transcripts of its videos and narrated slides (*.transcript.md next to them), when there are any, are the base for the note. Save the note as ${rel} (front matter: course ${course.code}, section ${week.index}, week ${weekNumber(week)}). ` +
       `When done, run: node packages/ai/validate.mjs ${rel} and fix every error it reports.`,
   };
 }
@@ -214,7 +215,7 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       if (!todo.length) throw new Error(`Nothing to make notes for. ${(course ? [course] : data.courses).map((c) => notesCoverage(data, c)).join("; ")}.`);
       if (todo.length === 1) { body = notesPrompt(semId, todo[0].course, todo[0].week).prompt + extra; break; }
       body = `Use the make-notes skill. Make visual study notes for each of these ${todo.length} weeks, which have material but no notes yet (some may not have started: use the files that are there). ` +
-        `Delegate to the note-taker agent, one per course, in parallel if you can. The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/.\n\n` +
+        `Delegate to the note-taker agent, one per course, in parallel if you can. The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/; transcripts of the videos and narrated slides (*.transcript.md next to them), when there are any, are the base for each note.\n\n` +
         todo.map(({ course: c, week: w }) => `- ${c.code} section ${w.index} "${w.name}" → ${notesPrompt(semId, c, w).rel} (front matter: course ${c.code}, section ${w.index}, week ${weekNumber(w)})`).join("\n") +
         `\n\nAfter writing each note, run: node packages/ai/validate.mjs <its path> and fix every error it reports.${extra}`;
       break;

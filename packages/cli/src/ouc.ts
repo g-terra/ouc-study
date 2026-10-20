@@ -1,5 +1,5 @@
 // ouc: control the OUC Study app and the eClass sync from a terminal (macOS, Windows, Linux).
-//   ouc setup | start | stop | restart | update | status | open | sync | pull | logs [app|sync] | install | uninstall | help
+//   ouc setup | start | stop | restart | update | status | open | sync | pull | transcribe | logs [app|sync] | install | uninstall | help
 // Started through bin/ouc (macOS/Linux) or bin/ouc.cmd (Windows). Background details: background.ts.
 import { spawn, spawnSync, type SpawnSyncOptions } from "node:child_process";
 import { accessSync, appendFileSync, chmodSync, closeSync, constants, existsSync, lstatSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, unwatchFile, watchFile } from "node:fs";
@@ -167,6 +167,8 @@ const HELP = () => `${paint("1", "ouc: OUC Study app & eClass sync")}
   ouc open         open the app in your browser (starts it if needed)
   ouc sync         check eClass now (grades, feedback, materials…) and refresh the app
   ouc pull         download any new course files now (--dry-run: just list them)
+  ouc transcribe   transcripts of class videos and narrated slides, made on this computer
+                   (the app does this in the background; --setup: install Whisper, free)
   ouc status       is it running? when was the last sync?
   ouc logs [sync]  follow the app (or sync) log
   ouc notes [course] [week]   AI notes for a week (default: latest without notes)
@@ -227,6 +229,7 @@ switch (cmd) {
     process.exitCode = node([join(ROOT, "packages/eclass-sync/pull.mjs"), ...args]);
     if (!args.includes("--dry-run")) buildData();
     break;
+  case "transcribe": process.exitCode = node([join(ROOT, "bin/transcribe.mjs"), ...args]); break;
   case "link": linkCmd(); break;
   case "ai": process.exitCode = node([join(ROOT, "bin/ai.mjs"), ...args]); break;
   case "notes": case "plan": case "quiz": process.exitCode = node([join(ROOT, "bin/ai.mjs"), cmd, ...args]); break;

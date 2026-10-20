@@ -125,6 +125,17 @@ test("a course's slides open in the slide viewer", async ({ page }) => {
   await expect(page.getByRole("link", { name: /Download/ }).first()).toHaveAttribute("href", /Demo%20lecture\.pptx$/);
 });
 
+test("a class video on a course week plays from this computer, with its transcript", async ({ page }) => {
+  await page.goto(`${SEM}/courses/DEMO101`);
+  const video = page.getByRole("link", { name: /Welcome to the demo/ });
+  if (!(await video.isVisible())) await page.getByRole("button", { name: /Getting started/ }).click();
+  await expect(video).toHaveAttribute("href", /Video-Welcome-to-the-demo\/Welcome\.mp4$/);
+  const transcript = page.getByRole("link", { name: "Transcript" });
+  await expect(transcript).toHaveAttribute("href", /Welcome\.transcript\.md$/);
+  const res = await page.request.get((await transcript.getAttribute("href"))!);
+  expect(await res.text()).toContain("Welcome to the demo course.");
+});
+
 test("Ask AI expands to a full page and back to the pop-up, keeping what's typed", async ({ page }) => {
   await page.goto(`${SEM}/courses`);
   await page.getByRole("button", { name: "Ask AI" }).click();

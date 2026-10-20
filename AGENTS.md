@@ -20,14 +20,14 @@ The current one is named in `STUDENT.md`; otherwise use the semester whose dates
 ```
 apps/web/             React + Vite + Tailwind study app (dashboard, timeline, courses, notes, assignments, updates)
 packages/content/     builds apps/web/public/data/*.json from semesters/ (npm run content)
-packages/eclass-sync/ eClass web-service client: src/daily.ts (what changed), src/pull.ts (download files), src/moodle.ts
-packages/ai/src/      AI backends (providers.ts), study actions (actions.ts), /api/ai for the app's Ask AI panel (api.ts, stream.ts), slide viewer server (slides.ts: .pptx → PDF + narration)
+packages/eclass-sync/ eClass web-service client: src/daily.ts (what changed), src/pull.ts (download files, class videos), src/media.ts (video sources, transcript format), src/moodle.ts
+packages/ai/src/      AI backends (providers.ts), study actions (actions.ts), /api/ai for the app's Ask AI panel (api.ts, stream.ts), slide viewer server (slides.ts: .pptx → PDF + narration), transcripts (transcribe.ts: local Whisper, `ouc transcribe`)
 packages/cli/src/     the `ouc` command (ouc.ts, ai.ts), setup.ts (installer), server.ts (background app), background.ts, update.ts
 bin/                  small .mjs launchers (ouc.mjs, setup.mjs, server.mjs, ai.mjs) that start the TypeScript in packages/cli with tsx
 semesters/<id>/       ← personal, git-ignored
   semester.json       course registry
   _meta/              eclass-meta.json (course structure), submissions.json, live.json, exams.json, resources.json (study links)
-  courses/<course>/NN-<week>/   original eClass files
+  courses/<course>/NN-<week>/   original eClass files, class videos included; *.transcript.md next to a video or narrated .pptx = its transcript (base for notes)
   text/               plain-text copies of every PDF/PPTX/DOCX/notebook. **grep these**
   assignments/<CODE>/<MM-DD>_<name>/   brief files, my-submission/, README.md (working notes), PREP.md (AI prep pack), review/ (drafts uploaded for review: vN.docx, vN.md text, REVIEW-vN.md, approved PDF)
   notes/<CODE>/*.md   visual notes (format: docs/NOTE_FORMAT.md)
@@ -36,7 +36,7 @@ semesters/<id>/       ← personal, git-ignored
   updates/            daily eClass change feed
 memory/               long-term memory, shared across semesters (personal, git-ignored)
 ai/                   agents and skills, the single source (installed into .claude/, .agents/skills/ and .opencode/agents/ by setup or `ouc ai install`)
-tools/                Python helpers (extract_text.py, build_from_export.py)
+tools/                Python helpers (extract_text.py, build_from_export.py, transcribe.py)
 docs/NOTE_FORMAT.md   how to write visual notes; docs/QUIZ_FORMAT.md how to write quizzes
 .github/              CI (tests on every PR), PR-title check, release-please, issue and PR templates
 ```

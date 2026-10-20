@@ -188,13 +188,20 @@ export function AiWorkBar({ sem }: { sem: string }) {
   const st = usePrepStatus();
   const data = useSemester(sem);
   const { load, setOpen } = useAssistant();
-  if (!st?.busy || !st.total) return st?.error && !st.busy && st.total ? (
-    <div className="border-t border-line bg-bad-bg px-4 py-1.5 text-center text-xs text-bad">The AI stopped making notes and prep packs: {st.error}</div>
+  const tr = st?.transcribe;
+  const transcribing = tr?.busy && tr.total ? (
+    <div className="border-t border-line px-4 py-1.5 text-center text-xs text-muted">
+      🎧 Transcribing class videos and narrated slides on this computer: {tr.done} of {tr.total}{tr.current ? ` · ${tr.current.split("/").pop()}` : ""}
+    </div>
   ) : null;
+  if (!st?.busy || !st.total) return transcribing ?? (st?.error && !st.busy && st.total ? (
+    <div className="border-t border-line bg-bad-bg px-4 py-1.5 text-center text-xs text-bad">The AI stopped making notes and prep packs: {st.error}</div>
+  ) : null);
   const label = (id: string) => workLabel(id, data);
   const pct = Math.round((st.done / st.total) * 100);
   return (
     <div className="border-t border-line">
+      {transcribing}
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs">
         <span className="font-semibold">✨ AI is making notes and prep packs</span>
         <span className="text-muted">{st.done} of {st.total} done{st.queue.length ? ` · ${st.queue.length} waiting` : ""}</span>

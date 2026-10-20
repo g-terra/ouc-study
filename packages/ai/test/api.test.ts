@@ -264,3 +264,33 @@ test("the Make a quiz pop-up: the quiz is made in the background, and the page c
   assert.deepEqual([jobs[0].running, jobs[0].ok, jobs[0].week], [false, true, "1"]);
   assert.ok(existsSync(join(root, job.quiz)));
 });
+
+test("Sync now: the videos of the weeks about to get notes are transcribed first", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-ai-"));
+  cpSync(join(REPO, "ai/skills"), join(root, "ai/skills"), { recursive: true });
+  mkdirSync(join(root, ".ouc"));
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude" }));
+  const sem = join(root, "semesters/S");
+  const video = join(sem, "courses/AAA-Course/01-Week-1/Lesson.mp4");
+  mkdirSync(dirname(video), { recursive: true });
+  writeFileSync(video, "v");
+  writeFileSync(join(sem, "semester.json"), JSON.stringify({ start: "2000-01-01", end: "2999-01-01", courses: [{ code: "AAA", dir: "AAA-Course" }] }));
+  mkdirSync(join(root, "apps/web/public/data"), { recursive: true });
+  writeFileSync(join(root, "apps/web/public/data/S.json"), JSON.stringify({
+    courses: [{ code: "AAA", short: "AAA", title: "AAA course", weeks: [{ index: 1, name: "Week 1", label: "Week 1", estimated: true, summary: "", items: [{ kind: "video", title: "Lesson", href: "/files/S/x.mp4" }] }] },
+    ],
+    notes: [], assignments: [],
+  }));
+  const order: string[] = [];
+  const mw = createAiApi(root, {
+    bin: join(HERE, "fixtures/fake-agent.mjs"), status: async () => ({ ready: true }),
+    whisper: () => ({ label: "fake", transcribe: async (files) => { order.push("transcribe"); return files.map(() => [{ start: 0, end: 1, text: "hello" }]); } }),
+  });
+  assert.deepEqual(mw.catchUp(), { notes: 1, prep: 0 });
+  while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
+  assert.ok(existsSync(join(sem, "courses/AAA-Course/01-Week-1/Lesson.transcript.md")));
+  assert.deepEqual(order, ["transcribe"]);
+  const chat = JSON.parse(readFileSync(join(root, ".ouc/chats", readdirSync(join(root, ".ouc/chats"))[0]!), "utf8"));
+  assert.equal(chat.action, "make-notes");
+  assert.match(chat.messages[0].prompt, /transcripts of its videos and narrated slides/);
+});
