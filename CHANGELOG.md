@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/g-terra/ouc-study/compare/v0.25.0...v0.26.0) (2026-10-20)
+
+
+### Features
+
+* **ai:** switch each ai on or off in settings to hide it from the chat ([#145](https://github.com/g-terra/ouc-study/issues/145)) ([b36403e](https://github.com/g-terra/ouc-study/commit/b36403e970e81604c980966d12936a22546ea1cb))
+
 ## [0.25.0](https://github.com/g-terra/ouc-study/compare/v0.24.1...v0.25.0) (2026-10-20)
 
 
