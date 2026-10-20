@@ -329,3 +329,29 @@ test("v2 settings: the default AI is picked from the installed ones and saved", 
   await expect(pick).toHaveValue("codex");
   expect(posted).toEqual([{ tool: "codex" }]);
 });
+
+test("v2 settings: an AI switched off disappears from the chat; the default AI stays on", async ({ page }) => {
+  const off = new Set<string>();
+  const posted: unknown[] = [];
+  const tool = (id: string, label: string) => ({ id, label, state: "connected", chosen: id === "claude", enabled: !off.has(id) });
+  await page.route("**/api/ai/status**", (route) => route.fulfill({ json: {
+    chosen: "claude", label: "Claude Code", agentic: true, ready: true, reason: "", token: "t",
+    tools: [tool("claude", "Claude Code"), tool("codex", "Codex"), tool("opencode", "opencode")],
+  } }));
+  await page.route("**/api/ai/enabled", (route) => {
+    const body = route.request().postDataJSON();
+    posted.push(body);
+    if (body.enabled) off.delete(body.tool); else off.add(body.tool);
+    return route.fulfill({ json: { ok: true, ...body } });
+  });
+  await page.goto(`/v2${SEM}/settings`);
+  await expect(page.getByRole("switch", { name: "Use Claude Code" })).toBeDisabled();   // the default AI
+  const codex = page.getByRole("switch", { name: "Use Codex" });
+  await expect(codex).toBeChecked();
+  await codex.click();
+  await expect(codex).not.toBeChecked();
+  expect(posted).toEqual([{ tool: "codex", enabled: false }]);
+  await expect(page.getByRole("combobox", { name: "Default AI" }).locator("option")).toHaveText(["Claude Code", "opencode"]);
+  await page.goto(`/v2${SEM}/chat`);
+  await expect(page.getByRole("combobox", { name: "Which AI answers" }).locator("option")).toHaveText(["Claude Code", "opencode"]);
+});

@@ -6,7 +6,16 @@ export { fileLink, linkPaths } from "./links";
 
 export type ToolState = "connected" | "signedout" | "apikey" | "missing" | "noserver" | "unknown";
 /** models: what the panel offers; model: what a new chat uses (setting: the default chosen in Settings, else own: the tool's own, when known) */
-export interface AiTool { id: string; label: string; state: ToolState; detail?: string; fix?: string; chosen: boolean; models?: string[]; model?: string; own?: string; setting?: string }
+export interface AiTool { id: string; label: string; state: ToolState; detail?: string; fix?: string; chosen: boolean; /** false: switched off in Settings (hidden from the chat) */ enabled?: boolean; models?: string[]; model?: string; own?: string; setting?: string }
+
+/** Settings: switch an AI off (hidden from the chat, never used) or back on. */
+export async function setToolEnabled(tool: string, enabled: boolean): Promise<string | null> {
+  const res = await fetch("/api/ai/enabled", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ tool, enabled }) }).catch(() => null);
+  if (res?.status === 403) refreshAi(true);
+  if (!res?.ok) return (await res?.json().catch(() => null))?.error ?? "Couldn't save that. Is the app running on your computer?";
+  await refreshAi(true);
+  return null;
+}
 
 /** Settings: the AI that answers new chats and does the background work. */
 export async function setDefaultTool(tool: string): Promise<string | null> {

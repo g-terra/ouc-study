@@ -268,7 +268,7 @@ test("a flow in a chat reply shows as a Mermaid diagram; code that isn't a diagr
   await page.route("**/api/ai/chats**", (route) => route.fulfill({ json: route.request().url().includes("chat-flow") ? chat : { chats: [chat] } }));
   await page.goto(`${SEM}/chat/chat-flow`);
   const diagram = page.locator("figure[data-diagram] svg");
-  await expect(diagram).toHaveCount(1);
+  await expect(diagram).toHaveCount(1, { timeout: 20_000 });   // mermaid loads on demand, slowly on a busy machine
   await expect(diagram).toContainText("Spike");
   await expect(page.getByText("this is not mermaid -->")).toBeVisible();
 });

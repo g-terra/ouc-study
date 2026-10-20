@@ -3,6 +3,7 @@
 //
 //   GET  /api/ai/status        which coding tools are installed and signed in (cached 5 min, ?fresh=1)
 //   GET  /api/ai/actions       the study actions (one per skill in ai/skills/)
+//   POST /api/ai/enabled       { tool, enabled } switch an AI off (hidden from the chat, never used) or on (Settings); not the default AI
 //   POST /api/ai/tool          { tool } the AI that answers new chats and does the background work (Settings), saved in .ouc/ai.json
 //   POST /api/ai/defaults      { tool, model } the model an AI uses unless a chat picks another ("" = the tool's own), saved in .ouc/ai.json
 //   POST /api/ai/run           { sem, chatId?, action?, params?, message, tool?, model? } → Server-Sent Events (model: one of the tool's `models` in status)
@@ -49,7 +50,7 @@ import { createTranscriber, type Engine } from "./transcribe.ts";
 
 type ToolState = { state: "connected" | "signedout" | "apikey" | "missing" | "noserver" | "unknown"; detail?: string; fix?: string };
 /** models: what the panel offers; model: what a new chat uses (the Settings default, else own: the tool's own); setting: the Settings default */
-export interface ToolStatus extends ToolState { id: string; label: string; chosen?: boolean; models?: string[]; model?: string; own?: string; setting?: string }
+export interface ToolStatus extends ToolState { id: string; label: string; chosen?: boolean; enabled?: boolean; models?: string[]; model?: string; own?: string; setting?: string }
 /** GET /api/ai/status */
 export interface AiStatus {
   chosen: string | null; label: string; agentic: boolean; ready: boolean; reason: string;
@@ -137,7 +138,7 @@ export async function aiStatus(root: string): Promise<AiStatus> {
   setServerModels("local", live(cfg?.local));
   // opencode with no model saved anywhere still offers what the server has
   const offer = { ...cfg, opencode: ocServer ?? undefined };
-  for (const t of tools) Object.assign(t, { chosen: t.id === chosen, ...toolModels(offer, t.id) });
+  for (const t of tools) Object.assign(t, { chosen: t.id === chosen, enabled: !cfg?.off?.includes(t.id as AiConfig["tool"] & string), ...toolModels(offer, t.id) });
   const pick = tools.find((t) => t.chosen);
   return {
     chosen, label: describe(cfg), agentic: isAgentic(chosen),
@@ -300,6 +301,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     const fail = (error: string, code = 400) => ({ error, code });
     if (!tool) return fail("No AI chosen yet. In Terminal, run: ouc ai setup");
     if (!isAgentic(tool) && !(tool === "local" && cfg.local)) return fail(`Unknown AI "${tool}".`);
+    if (cfg.off?.includes(tool as never)) return fail(`${TOOL_LABEL[tool as keyof typeof TOOL_LABEL]} is switched off in Settings, AI tools.`);
     if (tool === "opencode" && !cfg.opencode && !existsSync(join(root, ".opencode/opencode.json"))) return fail("opencode has no local model set up yet. In Terminal, run: ouc ai setup");
     cfg.tool = tool as AiConfig["tool"];
     // only a model the panel offers: it never reaches the command line as anything else
@@ -643,11 +645,23 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         return chat ? json(res, { ...chat, running: runs.has(id) }) : json(res, { error: "Not found" }, 404);
       }
       if (p === "/api/ai/run" && req.method === "POST") return await run(req, res);
+      if (p === "/api/ai/enabled" && req.method === "POST") {
+        // Settings: switch an AI off (hidden from the chat, never used) or back on; the default AI stays on
+        const { tool, enabled } = await readBody(req);
+        const cfg = loadConfig(root) ?? { tool: null };
+        if (!["claude", "codex", "opencode", "local"].includes(tool) || typeof enabled !== "boolean") return json(res, { error: "Bad request" }, 400);
+        if (!enabled && (ALIASES[cfg.tool ?? ""] ?? cfg.tool) === tool) return json(res, { error: `${TOOL_LABEL[tool as keyof typeof TOOL_LABEL]} is the Default AI. Pick another Default AI first.` }, 400);
+        const off = [...new Set([...(cfg.off ?? []).filter((x) => x !== tool), ...(enabled ? [] : [tool])])];
+        saveConfig(root, { ...cfg, off: off.length ? off : undefined });
+        cache = undefined;
+        return json(res, { ok: true, tool, enabled });
+      }
       if (p === "/api/ai/tool" && req.method === "POST") {
         // Settings: the AI that answers new chats and does the background work (what `ouc ai setup` chose)
         const { tool } = await readBody(req);
         const cfg = loadConfig(root) ?? { tool: null };
         if (!["claude", "codex", "opencode", "local"].includes(tool)) return json(res, { error: "Bad request" }, 400);
+        if (cfg.off?.includes(tool)) return json(res, { error: `${TOOL_LABEL[tool as keyof typeof TOOL_LABEL]} is switched off. Switch it on first.` }, 400);
         if ((tool === "opencode" && !cfg.opencode) || (tool === "local" && !cfg.local)) return json(res, { error: `${TOOL_LABEL[tool as keyof typeof TOOL_LABEL]} has no local model set up yet. In Terminal, run: ouc ai setup` }, 400);
         saveConfig(root, { ...cfg, tool });
         cache = undefined;
