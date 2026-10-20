@@ -30,3 +30,4 @@ React 19, Vite, Tailwind 4, TypeScript. The app reads JSON that `packages/conten
 1. Test first (red, green, refactor; `ouc-dev-testing`): a unit test for the logic, an e2e test for what the student sees, each run and failing before you write the code.
 2. `npm run typecheck`, `npm run build`, `npm run e2e`.
 3. Look at it: `npm run dev`, or the demo semester on port 5180 with `cd e2e && node --import tsx serve.ts`, and screenshot it with Playwright at desktop and phone widths, light and dark.
+4. Changed something a README screenshot shows? Retake those screenshots in this PR (`ouc-dev-ship`, step 3).

@@ -13,7 +13,7 @@ Every change goes through these five stages, using [Superpowers](https://github.
 | 2. Plan | writing-plans | Small tasks, each naming its test first: which layer (see [Testing](#testing-what-and-where)), which file, what it asserts. |
 | 3. Build | test-driven-development, inside executing-plans or subagent-driven-development | For each task: **red** (write the test, run it, watch it fail for the right reason) → **green** (the least code that passes) → **refactor** (clean up with the tests green). Commit per task. |
 | 4. Test | verification-before-completion | The whole suite, not just your tests: `npm run check`, `npm run build`, `npm run e2e`; look at UI changes at desktop and phone widths. Read the output; no "should pass". |
-| 5. Review | requesting-code-review → finishing-a-development-branch, then `ouc-dev-ship` | Review the diff against the plan and this guide, fix what it finds (back to build, test first), then open the PR. |
+| 5. Review | requesting-code-review → finishing-a-development-branch, then `ouc-dev-ship` | Review the diff against the plan and this guide, fix what it finds (back to build, test first), retake README screenshots the change made out of date, then open the PR. |
 
 Scale the stages, never skip them: a one-line, clearly specified fix can have a two-line plan, but it still gets a failing test first, the full check and a review of the diff. Bugs always get a regression test that fails before the fix.
 
@@ -22,6 +22,7 @@ House rules on top of Superpowers:
 - **Stay on your branch.** Don't create git worktrees unless asked; cloud sessions are given a branch to push.
 - **Specs and plans stay local.** `docs/superpowers/` is git-ignored; put the design summary in the PR description instead.
 - **Before you say "done"**: verification-before-completion, i.e. run the commands below and read their output.
+- **README screenshots follow the UI.** When a change alters anything a README screenshot shows (a page, the header, a pop-up, the theme), retake the affected screenshots in the same PR. How: `ouc-dev-ship`, step 3.
 
 The project's own skills, `dev/skills/ouc-dev-*` (installed as skills by `npm run dev:agents`), add the repo's specifics to those stages:
 `ouc-dev-testing` (plan and build: what to test, where and how), `ouc-dev-web` (pages and components in the app), `ouc-dev-study-ai` (changing the students' skills, agents or Ask AI), `ouc-dev-ship` (review: checks, PR, release).
