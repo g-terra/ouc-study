@@ -126,6 +126,6 @@ Prompt that works well with any agent:
 Releases are automated with [release-please](https://github.com/googleapis/release-please):
 
 1. Every merge to `main` first runs the **smoke test** on that code; only if it passes does release-please update the open **release PR** with the next version (from the commit types above) and the `CHANGELOG.md` entries. Its checks run like any PR's because release-please pushes with the maintainer's `RELEASE_PLEASE_TOKEN` secret (a fine-grained token for this repo with Contents and Pull requests read/write); without it GitHub runs no checks on the release PR.
-2. Merging the release PR tags the version (`v0.2.0`), publishes a GitHub release and bumps `version` in `package.json`.
+2. The release PR merges itself (squash) as soon as its required checks pass, which tags the version (`v0.2.0`), publishes a GitHub release and bumps `version` in `package.json`.
 
 While we are below 1.0, `feat` bumps the minor version and breaking changes bump the minor too. Installed copies see the new release within the hour (the app's **Update available** bar, or `ouc update --check`) and move to its tag with `ouc update`, so only released code reaches students; a release whose lockfile changed is reinstalled with `npm ci`.
