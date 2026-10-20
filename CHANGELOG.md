@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.2](https://github.com/g-terra/ouc-study/compare/v0.18.1...v0.18.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* **web:** exam dates without a time, singular counts, bell drop-down on phones ([#108](https://github.com/g-terra/ouc-study/issues/108)) ([9475393](https://github.com/g-terra/ouc-study/commit/94753935c27398b5ff578f78adedbbcb7e9337d7))
+
 ## [0.18.1](https://github.com/g-terra/ouc-study/compare/v0.18.0...v0.18.1) (2026-10-20)
 
 
