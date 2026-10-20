@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { SemesterData } from "@ouc/content/types";
 import { Link, enc, useRouter } from "../lib/router";
 import { currentWeek, stateOf } from "../lib/data";
-import { at, fmtFull, relative } from "../lib/dates";
+import { at, fmtFull, fmtShort, relative } from "../lib/dates";
 import { useAttempts } from "../lib/quiz";
 import { Card, Empty, PageHeader, ProgressRing, StatePill, cx } from "../components/ui";
 import { ClassCard, ClassTimeEditor, upcomingClasses } from "../components/Classes";
@@ -28,6 +28,7 @@ export function CourseList({ data }: { data: SemesterData }) {
           const nd = as.find((a) => !a.submitted && a.due && at(a.due) >= now);
           const notes = data.notes.filter((n) => n.code === c.code).length;
           const quizzes = (data.quizzes ?? []).filter((q) => q.code === c.code).length;
+          const exam = data.exams.find((e) => e.code === c.code && at(e.at) >= now);
           return (
             <Link key={c.code} to={`/v2/${enc(data.id)}/courses/${enc(c.code)}`} className="group">
               <Card className="relative flex items-center gap-4 overflow-hidden p-4 pl-5 transition group-hover:border-muted">
@@ -36,9 +37,13 @@ export function CourseList({ data }: { data: SemesterData }) {
                   <div className="flex items-baseline gap-2"><span className="font-serif text-xl font-semibold">{c.short}</span><span className="text-xs text-muted">{c.code}</span></div>
                   <div className="mt-1 text-sm"><span className="text-muted">This week:</span> {wk?.label ?? "between weeks"}</div>
                   <div className="text-sm"><span className="text-muted">Next due:</span> {nd ? `${nd.title}, ${relative(at(nd.due!), now)}` : "nothing open"}</div>
+                  <div className="text-sm"><span className="text-muted">Exam:</span> {exam ? `${exam.kind}, ${exam.noTime ? fmtShort(at(exam.at)) : fmtFull(at(exam.at))} (${relative(at(exam.at), now)})` : "no date yet"}</div>
                   <div className="mt-1.5 text-xs text-muted">📒 {notes} notes · 🏆 {quizzes} quizzes</div>
                 </div>
-                <ProgressRing value={as.length ? done / as.length : 0} color={c.color} label={`${done}/${as.length}`} />
+                <div className="flex shrink-0 flex-col items-center" title={`${done} of ${as.length} assignments handed in`}>
+                  <ProgressRing value={as.length ? done / as.length : 0} color={c.color} label={`${done}/${as.length}`} />
+                  <span className="mt-0.5 text-[11px] text-muted">handed in</span>
+                </div>
               </Card>
             </Link>
           );

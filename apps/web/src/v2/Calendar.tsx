@@ -51,7 +51,7 @@ export function Calendar({ data }: { data: SemesterData }) {
         <Chip on={view === "upcoming"} onClick={() => setView("upcoming")}>Upcoming</Chip>
         <Chip on={view === "done"} onClick={() => setView("done")}>Submitted <span className="opacity-60">{data.assignments.length - open}</span></Chip>
       </div>
-      <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1">
+      <div className="mb-6 flex flex-wrap gap-2">
         {view === "upcoming" && (["all", "due", "class", "exam"] as const).map((k) => (
           <Chip key={k} on={show === k} onClick={() => setShow(k)}>{{ all: "Everything", due: "📝 Deadlines", class: "🎥 Classes", exam: "🎓 Exams" }[k]}</Chip>
         ))}
