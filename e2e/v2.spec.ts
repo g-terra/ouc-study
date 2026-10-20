@@ -37,18 +37,26 @@ test("v2 calendar lists the overdue assignment; a course keeps its notes and qui
   await expect(page.getByRole("navigation", { name: "Main" }).first().getByRole("link", { name: "Courses", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
-test("the look switches both ways and is remembered", async ({ page }) => {
+test("the new look is the default; the classic look can be chosen and is remembered", async ({ page }) => {
+  // a first visit, and classic addresses, open the new look
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/v2\/2026-Demo$/);
+  await page.goto(`${SEM}/updates`);
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/inbox$/);
+  // choosing the classic look sticks
+  await page.getByRole("button", { name: /^Settings/ }).click();
+  await page.getByRole("button", { name: "Back to the classic look" }).click();
+  await expect(page).toHaveURL(/\/2026-Demo\/updates$/);
+  await expect(page.getByRole("link", { name: "Dashboard", exact: true }).first()).toBeVisible();
+  await page.goto("/");
+  await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/2026-Demo$/);
   await page.goto(`${SEM}/timeline`);
+  await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/2026-Demo\/timeline$/);
+  // and back to the new look
   await page.getByRole("button", { name: /new look/ }).click();
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/calendar$/);
   await page.goto("/");
   await expect(page).toHaveURL(/\/v2\/2026-Demo$/);
-  await page.getByRole("button", { name: /^Settings/ }).click();
-  await page.getByRole("button", { name: "Back to the classic look" }).click();
-  await expect(page).toHaveURL(/\/2026-Demo$/);
-  await expect(page.getByRole("link", { name: "Dashboard", exact: true }).first()).toBeVisible();
-  await page.goto("/");
-  await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/2026-Demo$/);
 });
 
 test("v2: Ask AI expands to a full page inside v2, and the page opens on its own", async ({ page }) => {

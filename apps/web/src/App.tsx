@@ -27,7 +27,12 @@ setLinkRewrite((to) => (isV2(window.location.pathname) ? toV2(to) : to));
 
 function Semester({ sem, page }: { sem: string; page: (d: SemesterData) => ReactNode }) {
   const data = useSemester(sem);
+  const { path, navigate } = useRouter();
+  // the new look is the default: a classic address opens the same page there, unless the classic look was chosen
+  const v2 = preferredLook() === "v2";
+  useEffect(() => { if (v2) navigate(toV2(path), { raw: true, replace: true }); }, [v2, path]);
   useEffect(() => { document.title = data ? `${data.label} · OUC Study` : "OUC Study"; }, [data]);
+  if (v2) return <Loading />;
   return (
     <Layout sem={sem}>
       {data === undefined ? <Loading /> : data === null ? <Problem msg={`No data for semester “${sem}”.`} /> : page(data)}
