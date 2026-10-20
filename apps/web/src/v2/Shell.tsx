@@ -8,6 +8,7 @@ import { AiWorkBar, AskAiFab, UpdateBar, useConnectionSummary } from "../compone
 import { v2Section } from "./paths";
 import { rememberLook } from "./look";
 import { NotificationsBell } from "./Notifications";
+import { SearchButton } from "./Search";
 import { PANEL, usePopover } from "./popover";
 import { Tour, startTour } from "./Tour";
 import { CalendarDays, Compass, Library, Logo, MessagesSquare, Settings, Sparkles, Sun, User } from "../components/icons";
@@ -54,7 +55,7 @@ function ProfileMenu({ sem }: { sem: string }) {
   );
 }
 
-/** The v2 frame: three places (Today, Courses, Calendar), the notifications bell and the profile menu top right, Ask AI bottom right. */
+/** The v2 frame: three places (Today, Courses, Calendar), search, the notifications bell and the profile menu top right, Ask AI bottom right. */
 export function Shell({ sem, data, children }: { sem: string; data?: SemesterData | null; children: ReactNode }) {
   const { path, navigate } = useRouter();
   const index = useIndex();
@@ -85,6 +86,7 @@ export function Shell({ sem, data, children }: { sem: string; data?: SemesterDat
               {index.semesters.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           )}
+          <SearchButton data={data} />
           <NotificationsBell data={data} />
           <ProfileMenu sem={sem} />
         </div>

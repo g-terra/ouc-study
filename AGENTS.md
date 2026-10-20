@@ -19,7 +19,7 @@ The current one is named in `STUDENT.md`; otherwise use the semester whose dates
 
 ```
 apps/web/             React + Vite + Tailwind study app (dashboard, timeline, courses, notes, assignments, updates)
-packages/content/     builds apps/web/public/data/*.json from semesters/ (npm run content)
+packages/content/     builds apps/web/public/data/*.json from semesters/ (npm run content); src/search.ts = the app's search (/api/search)
 packages/eclass-sync/ eClass web-service client: src/daily.ts (what changed), src/pull.ts (download files, class videos), src/media.ts (video sources, transcript format), src/moodle.ts
 packages/ai/src/      AI backends (providers.ts), study actions (actions.ts), /api/ai for the app's Ask AI panel (api.ts, stream.ts), slide viewer server (slides.ts: .pptx → PDF + narration), transcripts (transcribe.ts: local Whisper, `ouc transcribe`)
 packages/cli/src/     the `ouc` command (ouc.ts, ai.ts), setup.ts (installer), server.ts (background app), background.ts, update.ts
