@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { SemesterData } from "@ouc/content/types";
 import { enc, useRouter } from "../lib/router";
-import { TOUR, clampStep, markTourSeen, placeCard, tourSeen } from "./tour";
+import { TOUR, clampStep, markTourSeen, placeCard, tourSeen } from "./tour-steps";
 
 // which step is open (null = closed), shared by the profile menu (Take the tour) and the tour itself
 let current: number | null = null;

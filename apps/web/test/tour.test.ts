@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { TOUR, TOUR_KEY, clampStep, markTourSeen, placeCard, tourSeen } from "../src/v2/tour.ts";
+import { TOUR, TOUR_KEY, clampStep, markTourSeen, placeCard, tourSeen } from "../src/v2/tour-steps.ts";
 
 const memory = () => { const m = new Map<string, string>(); return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) }; };
 
