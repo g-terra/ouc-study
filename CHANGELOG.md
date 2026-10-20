@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.0](https://github.com/g-terra/ouc-study/compare/v0.28.0...v0.29.0) (2026-10-20)
+
+
+### Features
+
+* **web:** make a custom quiz on your own topics, and drop every class from the pop-up ([#155](https://github.com/g-terra/ouc-study/issues/155)) ([3a50fd0](https://github.com/g-terra/ouc-study/commit/3a50fd0c67d8b98b6e9fb9fb814ac02b08e25459))
+
 ## [0.28.0](https://github.com/g-terra/ouc-study/compare/v0.27.2...v0.28.0) (2026-10-20)
 
 
