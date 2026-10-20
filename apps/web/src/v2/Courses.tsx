@@ -9,12 +9,16 @@ import { ClassCard, ClassTimeEditor, upcomingClasses } from "../components/Class
 import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
 import { QuizLinks, WeekRow } from "../pages/Courses";
 import { assignmentHref } from "./agenda";
+import { DoneCount } from "../components/Progress";
+import { useProgress } from "../lib/progress";
+import { courseProgress, weekProgress } from "@ouc/content/progress";
 import { Flame, GraduationCap, INLINE, NotebookPen, Trophy, Video } from "../components/icons";
 
 /** Courses: one row per course with where it's at. Notes and quizzes live inside each course. */
 export function CourseList({ data }: { data: SemesterData }) {
   const now = new Date();
   const { stats } = useAttempts(data.id);
+  const progress = useProgress(data.id);
   return (
     <>
       <PageHeader title="Courses" eyebrow={data.label}>
@@ -36,10 +40,10 @@ export function CourseList({ data }: { data: SemesterData }) {
                 <div className="absolute inset-y-0 left-0 w-1.5" style={{ background: c.color }} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2"><span className="font-serif text-xl font-semibold">{c.short}</span><span className="text-xs text-muted">{c.code}</span></div>
-                  <div className="mt-1 text-sm"><span className="text-muted">This week:</span> {wk?.label ?? "between weeks"}</div>
+                  <div className="mt-1 text-sm"><span className="text-muted">This week:</span> {wk?.label ?? "between weeks"}{wk && progress.state === "ok" && <DoneCount count={weekProgress(c.code, wk, progress.done)} long className="ml-2 text-xs" />}</div>
                   <div className="text-sm"><span className="text-muted">Next due:</span> {nd ? `${nd.title}, ${relative(at(nd.due!), now)}` : "nothing open"}</div>
                   <div className="text-sm"><span className="text-muted">Exam:</span> {exam ? `${exam.kind}, ${exam.noTime ? fmtShort(at(exam.at)) : fmtFull(at(exam.at))} (${relative(at(exam.at), now)})` : "no date yet"}</div>
-                  <div className="mt-1.5 text-xs text-muted"><NotebookPen aria-hidden className={INLINE} /> {plural(notes, "note")} · <Trophy aria-hidden className={INLINE} /> {plural(quizzes, "quiz", "quizzes")}</div>
+                  <div className="mt-1.5 text-xs text-muted"><NotebookPen aria-hidden className={INLINE} /> {plural(notes, "note")} · <Trophy aria-hidden className={INLINE} /> {plural(quizzes, "quiz", "quizzes")}{progress.state === "ok" && (() => { const p = courseProgress(c, progress.done); return p.total > 0 && <> · {p.done} of {p.total} watched or read</>; })()}</div>
                 </div>
                 <div className="flex shrink-0 flex-col items-center" title={`${done} of ${as.length} assignments handed in`}>
                   <ProgressRing value={as.length ? done / as.length : 0} color={c.color} label={`${done}/${as.length}`} />

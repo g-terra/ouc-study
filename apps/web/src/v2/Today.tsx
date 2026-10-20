@@ -1,8 +1,8 @@
 import type { SemesterData } from "@ouc/content/types";
 import { Link, enc } from "../lib/router";
-import { courseMap } from "../lib/data";
+import { courseMap, currentWeek } from "../lib/data";
 import { at, daysBetween, fmtFull, relative } from "../lib/dates";
-import { Card, CourseBadge, SectionTitle } from "../components/ui";
+import { Card, CourseBadge, FileLink, SectionTitle, kindIcon } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
 import { ClassCard, upcomingClasses } from "../components/Classes";
 import { PlanCard, currentPlan } from "../pages/Plan";
@@ -10,6 +10,9 @@ import { ORDER, UpdateRow } from "../pages/Updates";
 import { DayGroups, agenda, assignmentHref } from "./agenda";
 import { unreadItems } from "./Notifications";
 import { GraduationCap, INLINE, PartyPopper } from "../components/icons";
+import { DoneBox, DoneCount } from "../components/Progress";
+import { useProgress } from "../lib/progress";
+import { openItems, weekProgress } from "@ouc/content/progress";
 
 /**
  * Today: what to do next and nothing else. The next deadline and class, this week's plan, the next 7 days,
@@ -67,6 +70,8 @@ export function Today({ data }: { data: SemesterData }) {
 
       <PlanCard data={data} className="mt-3" />
 
+      <ThisWeek data={data} now={now} />
+
       <SectionTitle right={<Link to={`${base}/calendar`} className="text-sm text-muted hover:text-ink">Calendar →</Link>}>Next 7 days</SectionTitle>
       <Card className="p-2 sm:p-3">
         {week.length ? <DayGroups events={week} data={data} now={now} /> : <p className="p-4 text-center text-muted">A quiet week: nothing due and no live classes.</p>}
@@ -80,6 +85,49 @@ export function Today({ data }: { data: SemesterData }) {
           </div>
         </>
       )}
+    </>
+  );
+}
+
+const SHOW = 4;
+
+/** What's still to watch and read in the current week of each course, with tick boxes. Hidden until something can be ticked. */
+function ThisWeek({ data, now }: { data: SemesterData; now: Date }) {
+  const progress = useProgress(data.id);
+  if (progress.state !== "ok") return null;
+  const rows = data.courses.flatMap((c) => {
+    const w = currentWeek(c, now);
+    const count = w && weekProgress(c.code, w, progress.done);
+    return w && count?.total ? [{ c, w, count, open: openItems(c.code, w, progress.done) }] : [];
+  });
+  if (!rows.length) return null;
+  return (
+    <>
+      <SectionTitle>This week</SectionTitle>
+      <div data-testid="this-week"><Card className="divide-y divide-line">
+        {rows.map(({ c, w, count, open }) => (
+          <div key={c.code} className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <CourseBadge course={c} />
+              <Link to={`/v2/${enc(data.id)}/courses/${enc(c.code)}#w${w.index}`} className="min-w-0 flex-1 truncate font-semibold hover:underline">{w.label}</Link>
+              <DoneCount count={count} long className="text-xs" />
+            </div>
+            {open.length ? (
+              <ul className="mt-1.5 grid gap-0.5">
+                {open.slice(0, SHOW).map((it, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <DoneBox sem={data.id} code={c.code} w={w} it={it} />
+                    <FileLink href={it.href} className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-1 py-1 text-sm hover:bg-surface-2">
+                      <span aria-hidden>{kindIcon(it.kind, it.ext)}</span><span className="leading-snug">{it.title}{it.external && <span className="text-muted"> ↗</span>}</span>
+                    </FileLink>
+                  </li>
+                ))}
+                {open.length > SHOW && <li className="pl-6 text-xs text-muted">and {open.length - SHOW} more in the week</li>}
+              </ul>
+            ) : <p className="mt-1 text-sm text-ok">All watched and read.</p>}
+          </div>
+        ))}
+      </Card></div>
     </>
   );
 }
