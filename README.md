@@ -160,8 +160,8 @@ How it runs in the background: on macOS two LaunchAgents (`~/Library/LaunchAgent
 
 The top bar has **Today**, **Courses** and **Calendar**, plus the 🔔 bell (notifications) and the profile circle (Settings) on the right.
 
-- **Today**: next deadline, the first final exam, the next 7 days (deadlines and live classes), and what's new on eClass.
-- **Courses**: each course with its weeks (slides, videos, assignments, your notes, the week's live class), notes, quizzes and assignments, plus your grades.
+- **Today**: next deadline, the first final exam, the next 7 days (deadlines and live classes), what's still to watch and read this week in each course, and what's new on eClass.
+- **Courses**: each course with its weeks (slides, videos, assignments, your notes, the week's live class), notes, quizzes and assignments, plus your grades. Tick off each video, slide deck, file and link as you watch or read it (a video ticks itself when it plays to the end, slides when you reach the last one); each week and course shows how much is done. Ticks are kept on your computer in `semesters/<id>/progress.json`, where your AI reads them when it plans your week.
 - **Calendar**: deadlines, live classes and exams week by week, with filters per course and type, and your submitted work.
 - **Slides**: click a PowerPoint on a course week and it opens right in the app, slide by slide (arrow keys, full screen), with no download. Slides with recorded narration have a 🔊 player under them; tick **Play as a lecture** to hear each slide and move on by itself. The app makes a PDF copy the first time you open a deck (a few seconds; kept in `.ouc/slides/`) using [LibreOffice](https://www.libreoffice.org/download/) (free; `ouc setup` offers to install it, or on a Mac `brew install --cask libreoffice`, on Windows `winget install TheDocumentFoundation.LibreOffice`). Animations and videos inside the slides don't play there: use **Download** for those.
 - **Notes**: visual notes with diagrams, LaTeX formulas, comparison tables and flip-card self-tests.

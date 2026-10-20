@@ -10,6 +10,9 @@ import { ClassCard, ClassTimeEditor, JoinButton, upcomingClasses } from "../comp
 import { quizHref, quizScopeLabel } from "./Quizzes";
 import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
 import { pct, useAttempts } from "../lib/quiz";
+import { DoneBox, DoneCount } from "../components/Progress";
+import { useProgress } from "../lib/progress";
+import { tracked, weekProgress } from "@ouc/content/progress";
 import { Clapperboard, ClipboardList, FileText, GraduationCap, INLINE, NotebookPen, Star, Trophy, Video } from "../components/icons";
 
 export function Courses({ data }: { data: SemesterData }) {
@@ -179,7 +182,7 @@ function WeekGroup({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
-function WeekItemRow({ it, base, code }: { it: WeekItem; base: string; code: string }) {
+function WeekItemRow({ it, base, code, sem, w }: { it: WeekItem; base: string; code: string; sem: string; w: Week }) {
   const href = it.kind === "note" ? `${base}/notes/${enc(code)}/${enc(it.noteSlug!)}`
     : it.kind === "assignment" && it.assignmentId ? `${base}/assignments/${it.assignmentId.split("/").map(enc).join("/")}` : it.href;
   const internal = it.kind === "note" || it.kind === "assignment";
@@ -190,12 +193,14 @@ function WeekItemRow({ it, base, code }: { it: WeekItem; base: string; code: str
   const transcript = it.transcript && (it.external
     ? <Link to={transcriptPage(it)} className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-muted underline hover:text-ink">Transcript</Link>
     : <span className="shrink-0 px-2 py-1.5 text-xs text-muted" title="Opens with its transcript"><FileText aria-hidden className={INLINE} /> transcript</span>);
-  return <li className="flex items-start gap-2">{link}{transcript}</li>;
+  return <li className="flex items-start gap-2">{tracked(it) && <DoneBox sem={sem} code={code} w={w} it={it} />}{link}{transcript}</li>;
 }
 
 export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes, quizzes, data }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string; classes: ClassSession[]; quizzes: Quiz[]; data: SemesterData }) {
   const dates = w.start ? `${fmtShort(day(w.start))} – ${fmtShort(day(w.end!))}${w.estimated ? " (est.)" : ""}` : "";
   const counts = w.items.reduce<Record<string, number>>((m, i) => ((m[i.kind] = (m[i.kind] ?? 0) + 1), m), {});
+  const progress = useProgress(data.id);
+  const doneCount = weekProgress(code, w, progress.done);
   return (
     <div id={`w${w.index}`} className={cx("scroll-mt-24 border-b border-line last:border-0", isNow && "bg-warn-bg/50")}>
       <button onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-2/60">
@@ -217,6 +222,7 @@ export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes
           {counts.assignment && <span className="flex items-center gap-0.5"><ClipboardList aria-hidden className="size-3.5" />{counts.assignment}</span>}
           {quizzes.length > 0 && <span className="flex items-center gap-0.5"><Trophy aria-hidden className="size-3.5" />{quizzes.length}</span>}
         </span>
+        {progress.state === "ok" && <DoneCount count={doneCount} className="text-xs" />}
         <span className={cx("text-muted transition", isOpen && "rotate-90")}>›</span>
       </button>
       {isOpen && (
@@ -252,7 +258,7 @@ export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes
             if (!items.length && !notesBtn) return null;
             return (
               <WeekGroup key={key} label={label}>
-                {items.length > 0 && <ul className="grid gap-0.5">{items.map((it, i) => <WeekItemRow key={i} it={it} base={base} code={code} />)}</ul>}
+                {items.length > 0 && <ul className="grid gap-0.5">{items.map((it, i) => <WeekItemRow key={i} it={it} base={base} code={code} sem={data.id} w={w} />)}</ul>}
                 {notesBtn && <div className="px-2"><AskAiButton action="make-notes" params={{ course: code, week: String(w.index) }}>Make notes</AskAiButton></div>}
               </WeekGroup>
             );
