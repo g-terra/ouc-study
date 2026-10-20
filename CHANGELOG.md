@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0](https://github.com/g-terra/ouc-study/compare/v0.26.0...v0.27.0) (2026-10-20)
+
+
+### Features
+
+* **web:** remove and name quizzes, and stop duplicate quizzes ([#147](https://github.com/g-terra/ouc-study/issues/147)) ([1aaf453](https://github.com/g-terra/ouc-study/commit/1aaf453fd3352e61d1612159b667e5ca90bcff92))
+
 ## [0.26.0](https://github.com/g-terra/ouc-study/compare/v0.25.0...v0.26.0) (2026-10-20)
 
 
