@@ -45,6 +45,6 @@ export function toClassic(path: string): string {
 /** The v2 section a path is in ("" for Today), for the nav; pages from the header (notifications, settings) are in none. */
 export function v2Section(path: string): string {
   const [, , section] = split(path).p.split("/").filter(Boolean);
-  const parent: Record<string, string> = { notes: "courses", quizzes: "courses", slides: "courses", assignments: "calendar", plan: "", "ai-work": "" };
+  const parent: Record<string, string> = { notes: "courses", quizzes: "courses", slides: "courses", video: "courses", assignments: "calendar", plan: "", "ai-work": "" };
   return section in parent ? parent[section] : section ?? "";
 }

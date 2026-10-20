@@ -13,6 +13,7 @@ import { PlanPage } from "./pages/Plan";
 import { AiWorkPage } from "./pages/AiWork";
 import { QuizPage, QuizzesPage } from "./pages/Quizzes";
 import { SlidesPage } from "./pages/Slides";
+import { VideoPage } from "./pages/Video";
 import { Shell } from "./v2/Shell";
 import { preferredLook } from "./v2/look";
 import { Today } from "./v2/Today";
@@ -85,6 +86,7 @@ export default function App() {
               ["/v2/:sem/notes/:code/:slug", (p) => <V2Semester sem={p.sem} page={(d) => <NotePage key={p.slug} data={d} code={p.code} slug={p.slug} />} />],
               ["/v2/:sem/quizzes/:code/:name", (p) => <V2Semester sem={p.sem} page={(d) => <QuizPage key={`${p.code}/${p.name}`} data={d} code={p.code} name={p.name} />} />],
               ["/v2/:sem/slides/:file", (p) => <V2Semester sem={p.sem} page={(d) => <SlidesPage key={p.file} data={d} file={p.file} />} />],
+              ["/v2/:sem/video/:file", (p) => <V2Semester sem={p.sem} page={(d) => <VideoPage key={p.file} data={d} file={p.file} />} />],
               ["/v2/:sem/chat", (p) => <V2Semester sem={p.sem} page={(d) => <ChatPage data={d} />} />],
               ["/v2/:sem/chat/:id", (p) => <V2Semester sem={p.sem} page={(d) => <ChatPage data={d} id={p.id} />} />],
               ["/v2/:sem/ai-work", (p) => <V2Semester sem={p.sem} page={(d) => <AiWorkPage data={d} />} />],
@@ -100,6 +102,7 @@ export default function App() {
               ["/:sem/quizzes", (p) => <Semester sem={p.sem} page={(d) => <QuizzesPage data={d} />} />],
               ["/:sem/quizzes/:code/:name", (p) => <Semester sem={p.sem} page={(d) => <QuizPage key={`${p.code}/${p.name}`} data={d} code={p.code} name={p.name} />} />],
               ["/:sem/slides/:file", (p) => <Semester sem={p.sem} page={(d) => <SlidesPage key={p.file} data={d} file={p.file} />} />],
+              ["/:sem/video/:file", (p) => <Semester sem={p.sem} page={(d) => <VideoPage key={p.file} data={d} file={p.file} />} />],
               ["/:sem/chat", (p) => <Semester sem={p.sem} page={(d) => <ChatPage data={d} />} />],
               ["/:sem/chat/:id", (p) => <Semester sem={p.sem} page={(d) => <ChatPage data={d} id={p.id} />} />],
               ["/:sem/ai-work", (p) => <Semester sem={p.sem} page={(d) => <AiWorkPage data={d} />} />],

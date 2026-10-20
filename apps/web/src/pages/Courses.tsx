@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { ClassSession, Quiz, SemesterData, Week, WeekItem } from "@ouc/content/types";
 import { Link, enc, useRouter } from "../lib/router";
+import { transcriptPage } from "../lib/links";
 import { currentWeek, stateOf } from "../lib/data";
 import { at, day, fmtDay, fmtFull, fmtShort, fmtTime, relative } from "../lib/dates";
 import { Card, Empty, FileLink, PageHeader, ProgressRing, SectionTitle, StatePill, cx, isMaterial, kindIcon } from "../components/ui";
@@ -184,7 +185,11 @@ function WeekItemRow({ it, base, code }: { it: WeekItem; base: string; code: str
   const cls = cx("flex min-w-0 flex-1 items-start gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2", it.kind === "note" && "font-semibold");
   const inner = <><span aria-hidden>{kindIcon(it.kind, it.ext)}</span><span className="leading-snug">{it.title}{it.external && <span className="text-muted"> ↗</span>}</span></>;
   const link = !href ? <span className={cls}>{inner}</span> : internal ? <Link to={href} className={cls}>{inner}</Link> : <FileLink href={href} className={cls}>{inner}</FileLink>;
-  return <li className="flex items-start gap-2">{link}{it.transcript && <a href={it.transcript} target="_blank" rel="noreferrer" className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-muted underline hover:text-ink">Transcript</a>}</li>;
+  // a video or narrated slides open with their transcript beside them; a Panopto link's transcript has its own page
+  const transcript = it.transcript && (it.external
+    ? <Link to={transcriptPage(it)} className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-muted underline hover:text-ink">Transcript</Link>
+    : <span className="shrink-0 px-2 py-1.5 text-xs text-muted" title="Opens with its transcript">📝 transcript</span>);
+  return <li className="flex items-start gap-2">{link}{transcript}</li>;
 }
 
 export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes, quizzes, data }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string; classes: ClassSession[]; quizzes: Quiz[]; data: SemesterData }) {
