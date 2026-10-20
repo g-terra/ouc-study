@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.19.0](https://github.com/g-terra/ouc-study/compare/v0.18.3...v0.19.0) (2026-10-20)
+
+
+### Features
+
+* **web:** a grade update opens its assignment, with the grade and feedback at the top ([#112](https://github.com/g-terra/ouc-study/issues/112)) ([f421738](https://github.com/g-terra/ouc-study/commit/f42173852a887c9bd5fb492226e28f69ae070ef7))
+
+
+### Bug Fixes
+
+* **ai:** show students a plain summary on each Ask AI action ([#110](https://github.com/g-terra/ouc-study/issues/110)) ([d6c16c4](https://github.com/g-terra/ouc-study/commit/d6c16c4dabe939a1b2bdaefd287fa85e78e1934e))
+
+## [0.18.3](https://github.com/g-terra/ouc-study/compare/v0.18.2...v0.18.3) (2026-10-20)
+
+
+### Bug Fixes
+
+* **web:** a callout keeps a next line written without "&gt;" ([#109](https://github.com/g-terra/ouc-study/issues/109)) ([989fd9f](https://github.com/g-terra/ouc-study/commit/989fd9fdca30953dfceca5189ebbcf7ca095232b))
+
 ## [0.18.2](https://github.com/g-terra/ouc-study/compare/v0.18.1...v0.18.2) (2026-10-20)
 
 

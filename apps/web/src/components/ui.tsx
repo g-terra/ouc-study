@@ -29,8 +29,9 @@ const STATE_STYLE: Record<State, string> = {
   soon: "bg-warn-bg text-warn ring-1 ring-warn/40",
   todo: "bg-surface-2 text-muted",
 };
-export function StatePill({ state }: { state: State }) {
-  return <span className={cx("rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap", STATE_STYLE[state])}>{STATE_LABEL[state]}</span>;
+/** An assignment's state; once it has a grade, "Graded 7.5" instead. */
+export function StatePill({ state, grade }: { state: State; grade?: string }) {
+  return <span className={cx("rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap", STATE_STYLE[grade ? "done" : state])}>{grade ? `Graded ${grade}` : STATE_LABEL[state]}</span>;
 }
 
 export function Card({ children, className, style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
