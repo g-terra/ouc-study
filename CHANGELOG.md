@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.1](https://github.com/g-terra/ouc-study/compare/v0.27.0...v0.27.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **sync:** download the exam timetable linked from an activity's description ([#149](https://github.com/g-terra/ouc-study/issues/149)) ([10a3606](https://github.com/g-terra/ouc-study/commit/10a360653ac381c2d91839a3f0bcfb78b40adf79))
+
 ## [0.27.0](https://github.com/g-terra/ouc-study/compare/v0.26.0...v0.27.0) (2026-10-20)
 
 
