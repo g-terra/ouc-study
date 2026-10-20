@@ -7,24 +7,27 @@ import { AskAiButton } from "../components/Assistant";
 import { ClassCard, upcomingClasses } from "../components/Classes";
 import { PlanCard, currentPlan } from "../pages/Plan";
 import { ORDER, UpdateRow } from "../pages/Updates";
-import { DayGroups, agenda, assignmentHref } from "./agenda";
+import { DayGroups, EvRow, agenda, assignmentHref } from "./agenda";
 import { unreadItems } from "./Notifications";
 import { GraduationCap, INLINE, PartyPopper } from "../components/icons";
 
 /**
- * Today: what to do next and nothing else. The next deadline and class, this week's plan, the next 7 days,
+ * Today: what to do next and nothing else. Overdue work first (only when there is some), then the next deadline and class, this week's plan, the next 7 days,
  * and what's new on eClass only when something is. Everything else is one tap away (Courses, Calendar, the bell).
  */
 export function Today({ data }: { data: SemesterData }) {
   const now = new Date();
   const base = `/v2/${enc(data.id)}`;
   const C = courseMap(data);
-  const next = data.assignments.find((a) => !a.submitted && a.due && at(a.due) > new Date(now.getTime() - 86_400_000));
+  const next = data.assignments.find((a) => !a.submitted && a.due && at(a.due) > now);
   // the soonest class of any course (data.classes is ordered course by course)
   const nextClass = upcomingClasses(data, now).filter((c) => c.status !== "cancelled").sort((a, b) => at(a.at).getTime() - at(b.at).getTime())[0];
   const exam = data.exams.find((e) => e.kind === "Final exam" && at(e.at) >= now);
   const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
-  const week = agenda(data, now).filter((e) => !e.done && e.t >= new Date(now.getTime() - 3_600_000) && e.t < weekEnd);
+  const all = agenda(data, now).filter((e) => !e.done);
+  // past due and not handed in: first on Today, as on the Calendar
+  const overdue = all.filter((e) => e.kind === "due" && e.t < now);
+  const week = all.filter((e) => !(e.kind === "due" && e.t < now) && e.t >= new Date(now.getTime() - 3_600_000) && e.t < weekEnd);
   const fresh = unreadItems(data).sort((a, b) => ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
   const hour = now.getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -43,6 +46,13 @@ export function Today({ data }: { data: SemesterData }) {
           )}
         </div>
       </header>
+
+      {overdue.length > 0 && (
+        <section className="mb-4" aria-label="Overdue">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-bad">Overdue · {overdue.length}</h2>
+          <Card className="grid grid-cols-1 gap-0.5 border-bad/40 p-2">{overdue.map((e, i) => <EvRow key={i} e={e} course={C[e.code]} now={now} />)}</Card>
+        </section>
+      )}
 
       <div className="grid gap-3 md:grid-cols-2">
         {next ? (

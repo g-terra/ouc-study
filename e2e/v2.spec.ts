@@ -164,3 +164,11 @@ test("v2: an open week groups its items under Watch, Read, My notes and Practice
   await expect(week.getByRole("heading", { name: "Watch" }).locator("..")).toContainText("transcript");
   await expect(week.getByRole("heading", { name: "Practice" }).locator("..").getByRole("button", { name: /Quiz me/ })).toBeVisible();
 });
+
+test("v2: Today lists overdue work first, the same as the Calendar", async ({ page }) => {
+  await page.goto(`/v2${SEM}`);
+  const overdue = page.getByRole("region", { name: "Overdue" });
+  await expect(overdue.getByRole("heading", { name: /Overdue · 1/ })).toBeVisible();
+  await expect(overdue.getByText("Assignment 1")).toBeVisible();
+  await expect(page.getByText("Next deadline")).toBeHidden();
+});
