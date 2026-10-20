@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isCorrect, makeAttempt, parseQuiz, pointsFor, quizStats, shuffledOptions } from "../src/quiz.ts";
+import { isCorrect, makeAttempt, parseQuiz, pointsFor, quizStats, seededRandom, shuffledOptions } from "../src/quiz.ts";
 import { addAttempt, attemptsFile, readAttempts, removeQuiz, resetAttempts } from "../src/quiz-store.ts";
 import type { QuizAttempt, QuizQuestion } from "../src/types.ts";
 
@@ -92,6 +92,17 @@ test("shuffling keeps \"All of the above\" last", () => {
     assert.equal(order.at(-1), 3);
     assert.deepEqual([...order].sort(), [0, 1, 2, 3]);
   }
+});
+
+test("options keep their order for the same seed (the page redraws), and another seed shuffles again", () => {
+  const texts = ["A", "B", "C", "D", "E", "All of the above"];
+  const order = shuffledOptions(6, texts, seededRandom("salt:0:1:Q?"));
+  for (let k = 0; k < 20; k++) assert.deepEqual(shuffledOptions(6, texts, seededRandom("salt:0:1:Q?")), order);
+  assert.equal(order.at(-1), 5);
+  const others = new Set(Array.from({ length: 20 }, (_, k) => shuffledOptions(6, texts, seededRandom(`salt:${k}:1:Q?`)).join()));
+  assert.ok(others.size > 1, "different rounds give different orders");
+  const r = seededRandom("x");
+  for (let k = 0; k < 100; k++) { const v = r(); assert.ok(v >= 0 && v < 1); }
 });
 
 test("attempts: checked, points worked out on the server, appended to attempts.json", () => {

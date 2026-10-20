@@ -139,6 +139,19 @@ export function shuffledOptions(n: number, texts: string[], random = Math.random
   return [...free, ...idx.filter((i) => PINNED_OPTION.test(texts[i] ?? ""))];
 }
 
+/** A random number generator that always gives the same numbers for the same seed (so options keep their order while the page redraws). */
+export function seededRandom(seed: string): () => number {
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) { h = Math.imul(h ^ seed.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+  let a = h >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /** A saved attempt, checked: what POST /api/quiz/attempts accepts (the points are worked out here, not trusted). */
 export function makeAttempt(body: Raw, now = new Date()): QuizAttempt {
   const quiz = String(body?.quiz ?? "");
