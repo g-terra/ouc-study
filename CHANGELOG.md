@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.1](https://github.com/g-terra/ouc-study/compare/v0.24.0...v0.24.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **web:** show a quiz being made in its week, keep it out of the chat, and say why one failed ([#141](https://github.com/g-terra/ouc-study/issues/141)) ([0db2d02](https://github.com/g-terra/ouc-study/commit/0db2d02036a2e54383845d59837002322b60b93f))
+
 ## [0.24.0](https://github.com/g-terra/ouc-study/compare/v0.23.6...v0.24.0) (2026-10-20)
 
 
