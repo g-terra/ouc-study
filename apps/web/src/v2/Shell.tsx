@@ -4,7 +4,7 @@ import { Link, enc, useRouter } from "../lib/router";
 import { useIndex } from "../lib/data";
 import { refreshAi } from "../lib/ai";
 import { cx } from "../components/ui";
-import { AiWorkBar, AppVersion, AskAiFab, ConnectionDetails, ThemePicker, UpdateBar, useConnectionSummary } from "../components/Layout";
+import { AiWorkBar, AppVersion, AskAiFab, ConnectionDetails, ThemePicker, UpdateBar, VideoTranscripts, useConnectionSummary } from "../components/Layout";
 import { toClassic, v2Section } from "./paths";
 import { rememberLook } from "./look";
 import { unreadCount, useInboxVersion } from "./Inbox";
@@ -47,6 +47,7 @@ function Menu({ sem }: { sem: string }) {
           <ConnectionDetails to={`/${enc(sem)}/updates`} onNavigate={() => setOpen(false)} />
           <div className={head}>Colour theme</div>
           <ThemePicker />
+          <VideoTranscripts head={head} />
           <div className={head}>App version</div>
           <AppVersion />
           <div className={head}>Look</div>

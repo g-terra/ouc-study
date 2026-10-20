@@ -12,8 +12,9 @@
 // What gets a transcript: every video or audio file under semesters/<sem>/courses/ and every .pptx
 // with narration (one section per slide). The transcript sits next to it ("Lecture 3.transcript.md",
 // see packages/eclass-sync/src/media.ts) and is never redone. Settings: .ouc/media.json
-// ("transcribe": false turns it off, "model": "small" by default). Files that failed are tried again
-// after a day (.ouc/transcribe-state.json).
+// ("transcribe": false turns it off, "model": "small" by default). Whisper is optional: `ouc setup` asks,
+// and ⚙ Settings in the app can set it up or turn it off. Without it nothing is transcribed and nothing
+// complains. Files that failed are tried again after a day (.ouc/transcribe-state.json).
 import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,7 +23,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
-import { MEDIA_FILE, loadMediaConfig, srtToSegments, transcriptMarkdown, transcriptPath, type Segment } from "../../eclass-sync/src/media.ts";
+import { MEDIA_FILE, loadMediaConfig, saveMediaConfig, srtToSegments, transcriptMarkdown, transcriptPath, type Segment } from "../../eclass-sync/src/media.ts";
 import type { SemesterConfig } from "../../content/src/eclass.ts";
 import { currentSemesterId } from "./context.ts";
 import { unzipEntry } from "./docx.ts";
@@ -235,6 +236,12 @@ export async function transcribeOne(engine: Engine, job: MediaJob, semId: string
 // ---------- the queue (the background app and `ouc transcribe`) ----------
 /** done counts every file tried; made the transcripts written, failed the ones that will be tried again tomorrow. */
 export interface TranscribeStatus { enabled: boolean; busy: boolean; total: number; done: number; made: number; failed: number; current: string | null; error: string | null }
+/**
+ * What ⚙ Settings shows: whether transcripts are on, whether Whisper is set up (engine: which one; null
+ * until first checked), and an install started from the app.
+ */
+export interface WhisperStatus { enabled: boolean; available: boolean | null; engine: string | null; installing: boolean; error: string | null; manual: string }
+type Install = (root: string, o: { log?: (s: string) => void }) => Promise<{ ok: boolean; message: string }>;
 type State = Record<string, { result: "failed" | "noaudio"; at: string }>;
 const stateKey = (j: MediaJob) => { const s = statSync(j.abs); return `${j.rel}|${s.size}|${Math.round(s.mtimeMs)}`; };
 
@@ -243,9 +250,12 @@ const stateKey = (j: MediaJob) => { const s = statSync(j.abs); return `${j.rel}|
  * run({ only }) as soon as the matching files are (they jump the queue: Sync now asks for the weeks
  * about to get notes this way). Files that turn up while it runs join the queue.
  */
-export function createTranscriber(root: string, { engine = () => findEngine(root), semester = () => currentSemesterId(root), now = () => new Date(), on }:
-  { engine?: () => Engine | null; semester?: () => string | null; now?: () => Date; on?: (s: TranscribeStatus, job?: MediaJob) => void } = {}) {
+export function createTranscriber(root: string, { engine = () => findEngine(root), install = installWhisper, semester = () => currentSemesterId(root), now = () => new Date(), on }:
+  { engine?: () => Engine | null; install?: Install; semester?: () => string | null; now?: () => Date; on?: (s: TranscribeStatus, job?: MediaJob) => void } = {}) {
   const st: TranscribeStatus = { enabled: loadMediaConfig(root).transcribe, busy: false, total: 0, done: 0, made: 0, failed: 0, current: null, error: null };
+  const w = { available: null as boolean | null, engine: null as string | null, installing: false, error: null as string | null };
+  /** Looks for Whisper (a moment: it may start Python), and remembers what it found. */
+  const check = () => { const e = engine(); w.available = !!e; w.engine = e?.label ?? null; return e; };
   const statePath = join(root, ".ouc", "transcribe-state.json");
   const readState = (): State => { try { return JSON.parse(readFileSync(statePath, "utf8")); } catch { return {}; } };
   let queue: MediaJob[] = [];
@@ -297,7 +307,7 @@ export function createTranscriber(root: string, { engine = () => findEngine(root
       }
     } finally { st.busy = false; st.current = null; settle(true); on?.(st); }
   }
-  return {
+  const api = {
     run(opts: { only?: (j: MediaJob) => boolean } = {}): Promise<void> {
       return new Promise<void>((done) => {
         const found = scan();
@@ -311,8 +321,8 @@ export function createTranscriber(root: string, { engine = () => findEngine(root
           return settle();
         }
         if (!found.jobs.length) return done();
-        const eng = engine();
-        if (!eng) { st.error = NO_WHISPER; return done(); }
+        const eng = check();
+        if (!eng) return done();   // Whisper isn't set up: no transcripts, and nothing to complain about
         queue = found.jobs;
         Object.assign(st, { total: queue.length, done: 0, made: 0, failed: 0, error: null });
         waiters.push({ only: opts.only, done });
@@ -321,7 +331,31 @@ export function createTranscriber(root: string, { engine = () => findEngine(root
       });
     },
     status: (): TranscribeStatus => ({ ...st }),
+    /** For ⚙ Settings; fresh looks for Whisper again (after installing it by hand). */
+    whisper(fresh = false): WhisperStatus {
+      if ((fresh || w.available === null) && !w.installing) check();
+      return { enabled: loadMediaConfig(root).transcribe, ...w, manual: NO_WHISPER };
+    },
+    /** Turns transcripts on or off (.ouc/media.json); on starts on what's waiting. */
+    setEnabled(on: boolean): WhisperStatus {
+      st.enabled = saveMediaConfig(root, { transcribe: on }).transcribe;
+      if (on) void api.run();
+      return api.whisper();
+    },
+    /** Sets Whisper up in the background (the app's "Set up Whisper"), then transcribes what's waiting. */
+    setup(): WhisperStatus {
+      if (!w.installing) {
+        Object.assign(w, { installing: true, error: null });
+        void install(root, {}).catch((e: Error) => ({ ok: false, message: e.message })).then((r) => {
+          w.installing = false;
+          if (!check()) w.error = r.ok ? "Whisper was installed, but it couldn't be found. Restart the app (ouc restart)." : r.message;
+          else { saveMediaConfig(root, { transcribe: true }); st.enabled = true; void api.run(); }
+        });
+      }
+      return api.whisper();
+    },
   };
+  return api;
 }
 
 // ---------- `ouc transcribe` ----------
@@ -338,7 +372,7 @@ export async function main(args: string[]): Promise<void> {
   const t = createTranscriber(ROOT, { semester: () => semId, on: (s, j) => { if (j) console.log(`  ${s.done + 1}/${s.total} ${j.rel.split("/").pop()}`); } });
   await t.run();
   const s = t.status();
-  if (s.error === NO_WHISPER) { console.log(NO_WHISPER); process.exitCode = 1; return; }
+  if (s.total === 0 && t.whisper().available === false) { console.log(NO_WHISPER); process.exitCode = 1; return; }
   console.log(s.total ? `✓ ${s.made} transcript(s) made, next to each video or slide file (*.transcript.md)${s.failed ? `; ${s.failed} failed (tried again tomorrow)` : ""}.` : "✓ Nothing new to transcribe.");
   if (s.error) console.log(`  Last error: ${s.error}`);
 }

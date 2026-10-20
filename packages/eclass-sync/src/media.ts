@@ -9,7 +9,7 @@
 //
 // A transcript is a Markdown file next to what it transcribes: "Lecture 3.mp4" → "Lecture 3.transcript.md".
 // Settings (all optional) in .ouc/media.json: { "videos": true, "transcribe": true, "model": "small" }.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** Video and audio files a transcript can be made from. */
@@ -21,6 +21,16 @@ export function loadMediaConfig(root: string): MediaConfig {
   let c: Partial<MediaConfig> = {};
   try { c = JSON.parse(readFileSync(join(root, ".ouc", "media.json"), "utf8")); } catch { /* defaults */ }
   return { videos: c.videos !== false, transcribe: c.transcribe !== false, model: typeof c.model === "string" && /^[\w.-]+$/.test(c.model) ? c.model : "small" };
+}
+
+/** Changes some settings in .ouc/media.json, keeping the rest of the file. */
+export function saveMediaConfig(root: string, patch: Partial<MediaConfig>): MediaConfig {
+  const file = join(root, ".ouc", "media.json");
+  let c: Record<string, unknown> = {};
+  try { c = JSON.parse(readFileSync(file, "utf8")); } catch { /* new file */ }
+  mkdirSync(join(root, ".ouc"), { recursive: true });
+  writeFileSync(file, `${JSON.stringify({ ...c, ...patch }, null, 2)}\n`);
+  return loadMediaConfig(root);
 }
 
 /** "Week 3/Lecture.mp4" → "Week 3/Lecture.transcript.md" (any path style). */

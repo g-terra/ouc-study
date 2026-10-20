@@ -98,6 +98,30 @@ test("settings shows the installed app version", async ({ page }) => {
   await expect(page.getByRole("dialog", { name: "Settings" }).getByTestId("app-version")).toContainText(`v${version}`);
 });
 
+test("settings: video transcripts are optional; Set up Whisper, then an on/off switch", async ({ page }) => {
+  let w = { enabled: true, available: false, engine: null as string | null, installing: false, error: null, manual: "ouc transcribe --setup" };
+  const posted: unknown[] = [];
+  await page.route("**/api/ai/transcribe**", (route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON();
+      posted.push(body);
+      w = body.setup ? { ...w, available: true, engine: "whisper.cpp (small)" } : { ...w, enabled: body.enabled };
+    }
+    return route.fulfill({ json: w });
+  });
+  await page.goto(SEM);
+  await page.getByRole("button", { name: /^Settings/ }).click();
+  const box = page.getByRole("dialog", { name: "Settings" }).getByTestId("video-transcripts");
+  await expect(box).toContainText("Whisper isn't set up");
+  await box.getByRole("button", { name: "Set up Whisper" }).click();
+  const sw = box.getByRole("switch", { name: "Make video transcripts" });
+  await expect(sw).toBeChecked();
+  await expect(box).toContainText("whisper.cpp (small)");
+  await sw.uncheck();
+  await expect(box).toContainText("Off");
+  expect(posted).toEqual([{ setup: true }, { enabled: false }]);
+});
+
 test("the app's local APIs answer", async ({ request }) => {
   const u = await request.get("/api/update");
   expect(u.ok()).toBeTruthy();
@@ -107,6 +131,7 @@ test("the app's local APIs answer", async ({ request }) => {
   expect((await request.post("/api/quiz/attempts", { data: { sem: "2026-Demo", quiz: "../x", results: [true] } })).status()).toBe(400);
   expect((await request.delete("/api/quiz?sem=2026-Demo&quiz=DEMO101/nope")).status()).toBe(404);
   expect((await request.get("/api/ai/quiz")).ok()).toBeTruthy();
+  expect(await (await request.get("/api/ai/transcribe")).json()).toHaveProperty("available");
 });
 
 test("a course's slides open in the slide viewer", async ({ page }) => {
