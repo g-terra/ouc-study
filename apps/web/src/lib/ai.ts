@@ -8,6 +8,15 @@ export type ToolState = "connected" | "signedout" | "apikey" | "missing" | "nose
 /** models: what the panel offers; model: what a new chat uses (setting: the default chosen in Settings, else own: the tool's own, when known) */
 export interface AiTool { id: string; label: string; state: ToolState; detail?: string; fix?: string; chosen: boolean; models?: string[]; model?: string; own?: string; setting?: string }
 
+/** Settings: the AI that answers new chats and does the background work. */
+export async function setDefaultTool(tool: string): Promise<string | null> {
+  const res = await fetch("/api/ai/tool", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ tool }) }).catch(() => null);
+  if (res?.status === 403) refreshAi(true);
+  if (!res?.ok) return (await res?.json().catch(() => null))?.error ?? "Couldn't save that. Is the app running on your computer?";
+  await refreshAi(true);
+  return null;
+}
+
 /** Settings: the model an AI uses unless a chat picks another ("": the tool's own). */
 export async function setDefaultModel(tool: string, model: string): Promise<string | null> {
   const res = await fetch("/api/ai/defaults", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ tool, model }) }).catch(() => null);

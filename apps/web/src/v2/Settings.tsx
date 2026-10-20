@@ -3,7 +3,7 @@ import type { SemesterData } from "@ouc/content/types";
 import { useRouter } from "../lib/router";
 import { refreshAi, useAiStatus } from "../lib/ai";
 import { Card, PageHeader } from "../components/ui";
-import { AiTools, AppVersion, DefaultModels, ThemePicker, VideoTranscripts } from "../components/Layout";
+import { AiTools, AppVersion, DefaultAi, DefaultModels, ThemePicker, VideoTranscripts } from "../components/Layout";
 import { ConnectionCard, SetupCard } from "../pages/Updates";
 import { toClassic } from "./paths";
 import { rememberLook } from "./look";
@@ -17,11 +17,16 @@ function Section({ title, id, children }: { title: string; id: string; children:
   );
 }
 
-/** Only when an installed AI offers models to pick from. */
-function DefaultModelsCard() {
+/** The default AI and models: only when an AI is installed. */
+function DefaultsCard() {
   const ai = useAiStatus();
-  return ai.state === "ok" && ai.tools.some((t) => t.state !== "missing" && t.models?.length)
-    ? <Card className="mt-3 p-3 text-sm"><DefaultModels /></Card> : null;
+  if (ai.state !== "ok" || !ai.tools.some((t) => t.state !== "missing")) return null;
+  return (
+    <Card className="mt-3 p-3 text-sm">
+      <DefaultAi />
+      <DefaultModels className="mt-4 border-t border-line pt-3" />
+    </Card>
+  );
 }
 
 /** Settings (from the profile menu): eClass, AI tools, video transcripts, appearance and the app version, one section each. */
@@ -39,7 +44,7 @@ export function SettingsPage({ data }: { data: SemesterData }) {
       </Section>
       <Section title="AI tools" id="settings-ai">
         <Card className="p-3 text-sm"><AiTools /></Card>
-        <DefaultModelsCard />
+        <DefaultsCard />
       </Section>
       <Section title="Video transcripts" id="settings-transcripts">
         <Card className="p-3 text-sm"><VideoTranscripts head="hidden" fallback={<p className="px-2 text-muted">Only shown when the app runs on your computer (ouc open).</p>} /></Card>

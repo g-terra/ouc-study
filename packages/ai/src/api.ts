@@ -3,6 +3,7 @@
 //
 //   GET  /api/ai/status        which coding tools are installed and signed in (cached 5 min, ?fresh=1)
 //   GET  /api/ai/actions       the study actions (one per skill in ai/skills/)
+//   POST /api/ai/tool          { tool } the AI that answers new chats and does the background work (Settings), saved in .ouc/ai.json
 //   POST /api/ai/defaults      { tool, model } the model an AI uses unless a chat picks another ("" = the tool's own), saved in .ouc/ai.json
 //   POST /api/ai/run           { sem, chatId?, action?, params?, message, tool?, model? } → Server-Sent Events (model: one of the tool's `models` in status)
 //   POST /api/ai/stop          { chatId }
@@ -642,6 +643,16 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         return chat ? json(res, { ...chat, running: runs.has(id) }) : json(res, { error: "Not found" }, 404);
       }
       if (p === "/api/ai/run" && req.method === "POST") return await run(req, res);
+      if (p === "/api/ai/tool" && req.method === "POST") {
+        // Settings: the AI that answers new chats and does the background work (what `ouc ai setup` chose)
+        const { tool } = await readBody(req);
+        const cfg = loadConfig(root) ?? { tool: null };
+        if (!["claude", "codex", "opencode", "local"].includes(tool)) return json(res, { error: "Bad request" }, 400);
+        if ((tool === "opencode" && !cfg.opencode) || (tool === "local" && !cfg.local)) return json(res, { error: `${TOOL_LABEL[tool as keyof typeof TOOL_LABEL]} has no local model set up yet. In Terminal, run: ouc ai setup` }, 400);
+        saveConfig(root, { ...cfg, tool });
+        cache = undefined;
+        return json(res, { ok: true, tool });
+      }
       if (p === "/api/ai/defaults" && req.method === "POST") {
         // Settings: the model each AI uses unless a chat picks another ("" = the tool's own)
         const { tool, model } = await readBody(req);

@@ -306,3 +306,26 @@ test("v2: a quiz being made shows in its week with spinning gears, then says why
   await banner.getByRole("button", { name: "Dismiss" }).click();
   await expect(banner).toHaveCount(0);
 });
+
+test("v2 settings: the default AI is picked from the installed ones and saved", async ({ page }) => {
+  let chosen = "claude";
+  const posted: unknown[] = [];
+  const tool = (id: string, label: string, state = "connected") => ({ id, label, state, chosen: id === chosen });
+  await page.route("**/api/ai/status**", (route) => route.fulfill({ json: {
+    chosen, label: chosen, agentic: true, ready: true, reason: "", token: "t",
+    tools: [tool("claude", "Claude Code"), tool("codex", "Codex"), tool("opencode", "opencode", "missing")],
+  } }));
+  await page.route("**/api/ai/tool", (route) => {
+    const body = route.request().postDataJSON();
+    posted.push(body);
+    chosen = body.tool;
+    return route.fulfill({ json: { ok: true, tool: body.tool } });
+  });
+  await page.goto(`/v2${SEM}/settings`);
+  const pick = page.getByRole("combobox", { name: "Default AI" });
+  await expect(pick.locator("option")).toHaveText(["Claude Code", "Codex"]);   // only installed ones
+  await expect(pick).toHaveValue("claude");
+  await pick.selectOption("codex");
+  await expect(pick).toHaveValue("codex");
+  expect(posted).toEqual([{ tool: "codex" }]);
+});

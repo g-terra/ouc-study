@@ -3,7 +3,7 @@ import { Link, linkHref, useRouter, enc } from "../lib/router";
 import { useIndex, useSemester } from "../lib/data";
 import { Switch, cx } from "./ui";
 import { CONN_LABEL, useConnection } from "../lib/connection";
-import { TOOL_STATE, getWhisper, refreshAi, setDefaultModel, setWhisper, useAiStatus, usePrepStatus, workLabel, type WhisperStatus } from "../lib/ai";
+import { TOOL_STATE, getWhisper, refreshAi, setDefaultModel, setDefaultTool, setWhisper, useAiStatus, usePrepStatus, workLabel, type WhisperStatus } from "../lib/ai";
 import { useAssistant } from "./Assistant";
 import { dismissJob, useQuizJobs } from "../lib/quiz";
 import { quizJobLabel, quizPhase } from "./MakeQuiz";
@@ -55,8 +55,36 @@ export function AiTools() {
           ))}
         </ul>
       )}
-      {aiKnown && !ai.chosen && <p className="mt-2 px-2 text-xs text-muted">Choose one in Terminal: <code>ouc ai setup</code></p>}
+      {aiKnown && !ai.chosen && <p className="mt-2 px-2 text-xs text-muted">Pick the Default AI below, or in Terminal: <code>ouc ai setup</code></p>}
     </>
+  );
+}
+
+/** Settings: which installed AI answers new chats and does the background work (notes, prep packs, quizzes). */
+export function DefaultAi({ className }: { className?: string }) {
+  const ai = useAiStatus();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const tools = ai.tools.filter((t) => t.state !== "missing");
+  if (ai.state !== "ok" || !tools.length) return null;
+  const save = async (tool: string) => {
+    setSaving(true); setError(null);
+    setError(await setDefaultTool(tool));
+    setSaving(false);
+  };
+  return (
+    <div className={className}>
+      <div className="flex items-center gap-2 px-2 py-1.5">
+        <label htmlFor="default-ai" className="flex-1 font-semibold">Default AI</label>
+        <select id="default-ai" value={ai.chosen ?? ""} disabled={saving} onChange={(e) => save(e.target.value)}
+          className="min-w-0 max-w-[14rem] truncate rounded-lg border border-line bg-surface py-1 pl-2 pr-1 text-xs disabled:opacity-60">
+          {!ai.chosen && <option value="">Choose an AI</option>}
+          {tools.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+      </div>
+      <p className="px-2 text-xs text-muted">Answers new chats and does the background work (notes, prep packs, quizzes). A chat can still pick another next to Send.</p>
+      {error && <p role="alert" className="mt-1 px-2 text-xs text-warn">{error}</p>}
+    </div>
   );
 }
 
@@ -170,6 +198,7 @@ function SettingsFab({ to }: { to: string }) {
           className="absolute bottom-full left-0 z-50 mb-2 max-h-[calc(100vh-8rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-line bg-surface p-3 text-sm shadow-xl">
           <div className="mb-2 px-2 font-serif text-lg font-semibold">Settings</div>
           <ConnectionDetails to={to} onNavigate={() => setOpen(false)} />
+          <DefaultAi className="mt-4 border-t border-line pt-3" />
           <DefaultModels className="mt-4 border-t border-line pt-3" />
           <div className="mt-4 mb-1 border-t border-line px-2 pt-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Colour theme</div>
           <ThemePicker />

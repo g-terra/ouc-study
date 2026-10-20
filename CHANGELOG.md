@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.24.0](https://github.com/g-terra/ouc-study/compare/v0.23.6...v0.24.0) (2026-10-20)
+
+
+### Features
+
+* **ai:** choose the default ai in settings ([#138](https://github.com/g-terra/ouc-study/issues/138)) ([b1b5198](https://github.com/g-terra/ouc-study/commit/b1b519893758f8ad833d573e7972cf518073e26c))
+
+## [0.23.6](https://github.com/g-terra/ouc-study/compare/v0.23.5...v0.23.6) (2026-10-20)
+
+
+### Bug Fixes
+
+* **content:** read exams from the exam timetable when exams.json is empty ([#137](https://github.com/g-terra/ouc-study/issues/137)) ([ea55637](https://github.com/g-terra/ouc-study/commit/ea556374a510d5a9c4aaff0ad6dfd69a359bb9e2))
+
 ## [0.23.5](https://github.com/g-terra/ouc-study/compare/v0.23.4...v0.23.5) (2026-10-20)
 
 
