@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.2](https://github.com/g-terra/ouc-study/compare/v0.27.1...v0.27.2) (2026-10-20)
+
+
+### Documentation
+
+* retake readme screenshots when a change alters the ui they show ([#151](https://github.com/g-terra/ouc-study/issues/151)) ([b66ea3c](https://github.com/g-terra/ouc-study/commit/b66ea3c6f88dd618d5d34943bc8dd833df9c3d78))
+
 ## [0.27.1](https://github.com/g-terra/ouc-study/compare/v0.27.0...v0.27.1) (2026-10-20)
 
 
