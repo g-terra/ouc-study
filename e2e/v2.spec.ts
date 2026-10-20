@@ -21,7 +21,10 @@ for (const [path, name, heading] of [["", "Today", /Good (morning|afternoon|even
 }
 
 test("v2 header: the logo links home, and icons are drawn (SVG), not emoji", async ({ page }) => {
+  // made-up: a newer release is out, so the update bar shows too (whatever version this checkout is)
+  await page.route("**/api/update", (r) => r.fulfill({ json: { available: true, current: "0.1.0", latest: "9.9.9", canUpdate: false, notes: "" } }));
   await page.goto(`/v2${SEM}/calendar`);
+  await expect(page.getByText("Update available: v9.9.9")).toBeVisible();
   const header = page.locator("header").first();
   await header.getByRole("link", { name: "OUC Study, Today" }).click();
   await expect(page).toHaveURL(/\/v2\/2026-Demo$/);
