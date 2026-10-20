@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.0](https://github.com/g-terra/ouc-study/compare/v0.23.6...v0.24.0) (2026-10-20)
+
+
+### Features
+
+* **ai:** choose the default ai in settings ([#138](https://github.com/g-terra/ouc-study/issues/138)) ([b1b5198](https://github.com/g-terra/ouc-study/commit/b1b519893758f8ad833d573e7972cf518073e26c))
+
 ## [0.23.6](https://github.com/g-terra/ouc-study/compare/v0.23.5...v0.23.6) (2026-10-20)
 
 
