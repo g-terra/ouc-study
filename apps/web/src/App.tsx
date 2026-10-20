@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { RouterProvider, Routes, setLinkRewrite, useRouter, enc } from "./lib/router";
 import { DataProvider, Loading, Problem, currentSemesterId, useIndex, useSemester } from "./lib/data";
 import { Layout } from "./components/Layout";
-import { AssistantPanel, AssistantProvider } from "./components/Assistant";
+import { AssistantPanel, AssistantProvider, ChatPage } from "./components/Assistant";
 import { Dashboard } from "./pages/Dashboard";
 import { Timeline } from "./pages/Timeline";
 import { CoursePage, Courses } from "./pages/Courses";
@@ -77,6 +77,8 @@ export default function App() {
               ["/v2/:sem/notes/:code/:slug", (p) => <V2Semester sem={p.sem} page={(d) => <NotePage key={p.slug} data={d} code={p.code} slug={p.slug} />} />],
               ["/v2/:sem/quizzes/:code/:name", (p) => <V2Semester sem={p.sem} page={(d) => <QuizPage key={`${p.code}/${p.name}`} data={d} code={p.code} name={p.name} />} />],
               ["/v2/:sem/slides/:file", (p) => <V2Semester sem={p.sem} page={(d) => <SlidesPage key={p.file} data={d} file={p.file} />} />],
+              ["/v2/:sem/chat", (p) => <V2Semester sem={p.sem} page={(d) => <ChatPage data={d} />} />],
+              ["/v2/:sem/chat/:id", (p) => <V2Semester sem={p.sem} page={(d) => <ChatPage data={d} id={p.id} />} />],
               ["/v2/:sem/ai-work", (p) => <V2Semester sem={p.sem} page={(d) => <AiWorkPage data={d} />} />],
               ["/v2/:sem/assignments/:code/:folder", (p) => <V2Semester sem={p.sem} page={(d) => <AssignmentPage key={p.folder} data={d} id={`${p.code}/${p.folder}`} />} />],
               ["/:sem", (p) => <Semester sem={p.sem} page={(d) => <Dashboard data={d} />} />],
@@ -90,6 +92,8 @@ export default function App() {
               ["/:sem/quizzes", (p) => <Semester sem={p.sem} page={(d) => <QuizzesPage data={d} />} />],
               ["/:sem/quizzes/:code/:name", (p) => <Semester sem={p.sem} page={(d) => <QuizPage key={`${p.code}/${p.name}`} data={d} code={p.code} name={p.name} />} />],
               ["/:sem/slides/:file", (p) => <Semester sem={p.sem} page={(d) => <SlidesPage key={p.file} data={d} file={p.file} />} />],
+              ["/:sem/chat", (p) => <Semester sem={p.sem} page={(d) => <ChatPage data={d} />} />],
+              ["/:sem/chat/:id", (p) => <Semester sem={p.sem} page={(d) => <ChatPage data={d} id={p.id} />} />],
               ["/:sem/ai-work", (p) => <Semester sem={p.sem} page={(d) => <AiWorkPage data={d} />} />],
               ["/:sem/updates", (p) => <Semester sem={p.sem} page={(d) => <UpdatesPage data={d} />} />],
               ["/:sem/assignments", (p) => <Semester sem={p.sem} page={(d) => <AssignmentsPage data={d} />} />],

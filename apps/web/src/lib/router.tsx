@@ -4,7 +4,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type AnchorHTMLAttributes, type ReactNode } from "react";
 
 type Params = Record<string, string>;
-type Navigate = (to: string, opts?: { raw?: boolean }) => void;
+type Navigate = (to: string, opts?: { raw?: boolean; replace?: boolean }) => void;
 const RouterCtx = createContext<{ path: string; navigate: Navigate }>({ path: "/", navigate: () => {} });
 
 // Maps a link before it opens (the v2 preview keeps classic links inside v2, see v2/paths.ts); raw skips it.
@@ -30,6 +30,8 @@ export function RouterProvider({ children }: { children: ReactNode }) {
   const navigate: Navigate = (target, opts) => {
     const to = opts?.raw ? target : rewrite(target);
     if (to === window.location.pathname + window.location.hash) return;
+    // replace: same page, a new address (no history entry, no scroll)
+    if (opts?.replace) { window.history.replaceState({}, "", to); setPath(to); return; }
     window.history.pushState({}, "", to);
     setPath(to);
     if (!to.includes("#")) window.scrollTo({ top: 0 });

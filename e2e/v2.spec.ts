@@ -49,3 +49,19 @@ test("the look switches both ways and is remembered", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/2026-Demo$/);
 });
+
+test("v2: Ask AI expands to a full page inside v2, and the page opens on its own", async ({ page }) => {
+  await page.goto(`/v2${SEM}/calendar`);
+  await page.getByRole("button", { name: "Ask AI" }).click();
+  await page.getByRole("dialog", { name: "Ask AI" }).getByRole("button", { name: "Open as a full page" }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/chat$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Ask AI" })).toBeVisible();
+  await page.getByRole("button", { name: "Back to the pop-up" }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/calendar$/);
+  await expect(page.getByRole("dialog", { name: "Ask AI" })).toBeVisible();
+  // a bookmarked chat page: Back to the pop-up lands on the semester's home
+  await page.goto(`/v2${SEM}/chat`);
+  await expect(page.getByRole("dialog", { name: "Ask AI" })).toBeHidden();
+  await page.getByRole("button", { name: "Back to the pop-up" }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo$/);
+});

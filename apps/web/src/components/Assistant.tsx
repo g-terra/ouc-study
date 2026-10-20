@@ -1,11 +1,13 @@
 /**
  * The "Ask AI" panel: chat with the AI chosen in `ouc ai setup` and run any study action
  * (one per skill in ai/skills/). The conversation lives in AssistantProvider, so it keeps going
- * while the student moves around the app or closes the panel.
+ * while the student moves around the app or closes the panel. The same chat opens as a full page
+ * (ChatPage, at /<sem>/chat/<id>) for longer conversations.
  */
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { SemesterData } from "@ouc/content/types";
 import { Link, useRouter, enc } from "../lib/router";
+import { chatPathFor, isChatPath } from "../lib/chat-path";
 import { mdToHtml } from "../lib/markdown";
 import { linkLabel } from "../lib/links";
 import { TOOL_STATE, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
@@ -14,7 +16,7 @@ import { cx } from "./ui";
 
 interface Draft { action: string; params: Record<string, string> }
 /** One tab in the panel: a chat (or a draft action), with its own run. */
-export interface Session { key: string; chat: Chat | null; busy: boolean; error?: string; draft: Draft | null; tool?: string }
+export interface Session { key: string; chat: Chat | null; busy: boolean; error?: string; draft: Draft | null; tool?: string; /** a saved chat being read back after a reload */ loading?: string }
 interface Ctx {
   open: boolean; setOpen: (o: boolean) => void;
   /** All open chats (tabs); several can run at the same time. */
@@ -27,6 +29,10 @@ interface Ctx {
   /** The coding tool for the active tab: its own, else the one picked in the panel (null = the one from `ouc ai setup`). */
   tool: string | null; setTool: (t: string | null) => void;
   stop: () => void; reset: () => void; load: (id: string) => Promise<void>;
+  /** What's typed in the reply box: shared by the popup and the full page, so it survives switching. */
+  input: string; setInput: (s: string) => void;
+  /** The chats saved before a reload are back in their tabs (they may still be loading). */
+  ready: boolean;
 }
 const AssistantCtx = createContext<Ctx | null>(null);
 const store = {
@@ -41,6 +47,8 @@ const blank = (): Session => ({ key: `s${++seq}`, chat: null, busy: false, draft
 
 export function AssistantProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [input, setInput] = useState("");
+  const [ready, setReady] = useState(false);
   const [sessions, setSessions] = useState<Session[]>(() => [blank()]);
   const [activeKey, setActiveKey] = useState(() => sessions[0].key);
   const [tool, setToolState] = useState<string | null>(() => { try { return localStorage.getItem("ouc-ai-tool"); } catch { return null; } });
@@ -51,7 +59,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
 
   const active = sessions.find((x) => x.key === activeKey) ?? sessions[0];
   const update = (key: string, f: (x: Session) => Session) => setSessions((all) => all.map((x) => (x.key === key ? f(x) : x)));
-  const empty = (x: Session) => !x.chat && !x.busy;
+  const empty = (x: Session) => !x.chat && !x.busy && !x.loading;
   /** A tab to start something new in: the active one if it's empty, else a new one. */
   const freeTab = (): string => {
     const cur = live.current.find((x) => x.key === activeKey);
@@ -60,11 +68,14 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     if (spare) { setActiveKey(spare.key); return spare.key; }
     const n = blank();
     // keep at most MAX_TABS: drop the oldest finished chat (it stays in History)
-    setSessions((all) => {
+    const trim = (all: Session[]) => {
       let next = [...all, n];
       while (next.length > MAX_TABS) { const i = next.findIndex((x) => !x.busy); if (i < 0) break; next = next.filter((_, j) => j !== i); }
       return next;
-    });
+    };
+    // seen straight away by a second call before the next render (React runs effects twice in development)
+    live.current = trim(live.current);
+    setSessions(trim);
     setActiveKey(n.key);
     return n.key;
   };
@@ -96,15 +107,18 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   };
   const openChat = async (key: string, id: string) => {
     const c = await getChat(id);
-    if (!c) return false;
-    update(key, (x) => ({ ...x, chat: c, draft: null, error: undefined, busy: !!c.running, tool: c.tool }));
+    if (!c) { update(key, (x) => ({ ...x, loading: undefined })); return false; }
+    update(key, (x) => ({ ...x, chat: c, draft: null, error: undefined, busy: !!c.running, tool: c.tool, loading: undefined }));
     if (c.running) follow(key, c.id);
     return true;
   };
   const load = async (id: string) => {
-    const there = live.current.find((x) => x.chat?.id === id);
+    const there = live.current.find((x) => x.chat?.id === id || x.loading === id);
     if (there) { setActiveKey(there.key); return; }
-    await openChat(freeTab(), id);
+    const key = freeTab();
+    live.current = live.current.map((x) => (x.key === key ? { ...x, loading: id } : x));
+    update(key, (x) => ({ ...x, loading: id }));
+    await openChat(key, id);
   };
   useEffect(() => () => polls.current.forEach((t) => window.clearInterval(t)), []);
   // The app reloads itself when an agent writes a note; pick the chats (and the open panel) back up.
@@ -112,16 +126,18 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     const saved = store.get();
     if (saved?.open) setOpen(true);
     const ids = (saved?.chats ?? []).slice(0, MAX_TABS);
+    setReady(true);
     if (!ids.length) return;
-    const restored = ids.map(() => blank());
+    const restored = ids.map((id) => ({ ...blank(), loading: id }));
+    live.current = restored;
     setSessions(restored);
     setActiveKey(restored[Math.min(saved?.active ?? 0, restored.length - 1)].key);
     ids.forEach((id, i) => openChat(restored[i].key, id));
   }, []);
   useEffect(() => {
-    const withChat = sessions.filter((x) => x.chat?.id);
-    store.set({ chats: withChat.map((x) => x.chat!.id), active: Math.max(0, withChat.findIndex((x) => x.key === activeKey)), open });
-  }, [sessions.map((x) => x.chat?.id).join(), activeKey, open]);
+    const withChat = sessions.filter((x) => x.chat?.id || x.loading);
+    store.set({ chats: withChat.map((x) => x.chat?.id ?? x.loading!), active: Math.max(0, withChat.findIndex((x) => x.key === activeKey)), open });
+  }, [sessions.map((x) => x.chat?.id ?? x.loading).join(), activeKey, open]);
 
   const send = async (sem: string, message: string, title?: string) => {
     const key = active.key;
@@ -176,7 +192,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       open, setOpen, sessions, activeKey: active.key, activate: setActiveKey, close,
       chat: active.chat, busy: active.busy, error: active.error, draft: active.draft,
       setDraft: (d) => update(active.key, (x) => ({ ...x, draft: d })),
-      start, send, stop, reset, load,
+      start, send, stop, reset, load, input, setInput, ready,
       tool: active.tool ?? tool,
       // a tab started for a given AI keeps its own choice; otherwise this is the default for new chats
       setTool: (t) => (active.tool ? update(active.key, (x) => ({ ...x, tool: t ?? undefined })) : setTool(t)),
@@ -198,29 +214,72 @@ export function AskAiButton({ action, params, children, className }: { action: s
 }
 
 // ---------------------------------------------------------------------------
+// where "Back to the pop-up" returns to: the page the chat was expanded from
+let expandedFrom: string | null = null;
+const BTN = "rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-ink";
+
+/** The chat as a popup over the page; it stays out of the way while the full-page chat is open. */
 export function AssistantPanel({ data }: { data: SemesterData }) {
   const a = useAssistant();
-  const ai = useAiStatus();
-  const actions = useActions();
-  const [input, setInput] = useState("");
-  const [history, setHistory] = useState<ChatSummary[] | null>(null);
-  const end = useRef<HTMLDivElement>(null);
-  // the reply box starts at four lines and grows with what's typed (up to its max height, then it scrolls)
-  const field = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { const t = field.current; if (t) { t.style.height = "auto"; t.style.height = `${t.scrollHeight + 2}px`; } }, [input]);
+  const { path } = useRouter();
   const box = useRef<HTMLElement>(null);
-  const last = a.chat?.messages[a.chat.messages.length - 1];
-  useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [a.chat?.messages.length, last?.text, last?.steps?.length]);
+  const page = isChatPath(path);
   useEffect(() => {
-    if (!a.open) return;
+    if (!a.open || page) return;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && a.setOpen(false);
     // it's a popup: a click on the page closes it (chats keep running; the robot button brings it back)
     const away = (e: MouseEvent) => { const t = e.target as HTMLElement; if (!box.current?.contains(t) && !t.closest?.("[data-ask-ai]")) a.setOpen(false); };
     window.addEventListener("keydown", esc);
     document.addEventListener("mousedown", away);
     return () => { window.removeEventListener("keydown", esc); document.removeEventListener("mousedown", away); };
-  }, [a.open]);
-  if (!a.open) return null;
+  }, [a.open, page]);
+  if (!a.open || page) return null;
+  return (
+    <aside ref={box} role="dialog" aria-label="Ask AI"
+      className="fixed inset-0 z-50 flex flex-col bg-bg shadow-2xl sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[min(78vh,760px)] sm:w-[440px] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-line">
+      <ChatView data={data} />
+    </aside>
+  );
+}
+
+/** The same chats as a full page, for longer conversations: history on the side, the address follows the open chat. */
+export function ChatPage({ data, id }: { data: SemesterData; id?: string }) {
+  const a = useAssistant();
+  const { path, navigate } = useRouter();
+  const [synced, setSynced] = useState(false);
+  useEffect(() => { a.setOpen(false); }, []);
+  // open the chat in the address (a bookmark, a new tab, Back)…
+  useEffect(() => {
+    if (!a.ready) return;
+    if (!id || a.chat?.id === id) { setSynced(true); return; }
+    a.load(id).finally(() => setSynced(true));
+  }, [a.ready, id]);
+  // …and once it's open, the address follows the chat on screen
+  useEffect(() => {
+    if (!synced) return;
+    const want = chatPathFor(path, a.chat?.id || undefined);
+    if (want !== path.split("#")[0]) navigate(want, { raw: true, replace: true });
+  }, [synced, a.chat?.id]);
+  return <ChatView data={data} page />;
+}
+
+/** Header, tabs, the conversation (or the action picker) and the reply box, as a popup or a full page. */
+function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }) {
+  const a = useAssistant();
+  const ai = useAiStatus();
+  const actions = useActions();
+  const { path, navigate } = useRouter();
+  const { input, setInput } = a;
+  const [history, setHistory] = useState<ChatSummary[] | null>(null);
+  // the full page always lists the chats on the side (wide screens); refreshed when a chat starts or ends
+  const [side, setSide] = useState<ChatSummary[] | null>(null);
+  useEffect(() => { if (page) listChats().then(setSide); }, [page, a.chat?.id, a.busy]);
+  const end = useRef<HTMLDivElement>(null);
+  // the reply box starts at four lines and grows with what's typed (up to its max height, then it scrolls)
+  const field = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { const t = field.current; if (t) { t.style.height = "auto"; t.style.height = `${t.scrollHeight + 2}px`; } }, [input]);
+  const last = a.chat?.messages[a.chat.messages.length - 1];
+  useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [a.chat?.messages.length, last?.text, last?.steps?.length]);
 
   const meta = actions.find((x) => x.id === (a.draft?.action ?? a.chat?.action));
   // the tool picked in the panel, if it's still there; else the one from `ouc ai setup`
@@ -239,13 +298,45 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
     setInput("");
     await a.send(data.id, msg, meta?.title);
   };
+  const pick = async (id: string) => { setHistory(null); await a.load(id); };
+  const expand = () => {
+    expandedFrom = path;
+    a.setOpen(false);
+    // a classic path: the router keeps it in v2 while v2 is open
+    navigate(`/${enc(data.id)}/chat${a.chat?.id ? `/${enc(a.chat.id)}` : ""}`);
+  };
+  const collapse = () => {
+    const back = expandedFrom && !isChatPath(expandedFrom) ? expandedFrom : path.replace(/\/chat(\/.*)?$/, "");
+    expandedFrom = null;
+    navigate(back, { raw: true });
+    a.setOpen(true);
+  };
 
-  return (
-    <aside ref={box} role="dialog" aria-label="Ask AI"
-      className="fixed inset-0 z-50 flex flex-col bg-bg shadow-2xl sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[min(78vh,760px)] sm:w-[440px] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-line">
-      <header className="flex items-center gap-2 border-b border-line px-4 py-3">
+  const conversation = (
+    <>
+      {history ? (
+        <HistoryList chats={history} onPick={pick} />
+      ) : !a.chat ? (
+        <>
+          {!a.draft && <Intro />}
+          <ActionPicker actions={actions} agentic={agentic} picked={a.draft?.action} wide={page} onPick={(id) => a.setDraft(id === a.draft?.action ? null : { action: id, params: {} })} />
+          {a.draft && meta && <ActionForm data={data} action={meta} params={a.draft.params} onChange={(params) => a.setDraft({ action: meta.id, params })} />}
+        </>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {a.chat.messages.map((m, i) => <Message key={i} msg={m} sem={a.chat!.sem ?? data.id} live={a.busy && i === a.chat!.messages.length - 1} />)}
+        </div>
+      )}
+      {a.error && <p className="mt-4 rounded-xl bg-bad-bg px-3 py-2 text-sm text-bad">{a.error}</p>}
+      <div ref={end} className={cx(page && "scroll-mb-48")} />
+    </>
+  );
+
+  const view = (
+    <>
+      <header className={cx("flex items-center gap-2 border-b border-line", page ? "pb-3" : "px-4 py-3")}>
         <div className="min-w-0 flex-1">
-          <div className="font-serif text-lg font-semibold leading-tight">Ask AI</div>
+          {page ? <h1 className="font-serif text-2xl font-semibold leading-tight">Ask AI</h1> : <div className="font-serif text-lg font-semibold leading-tight">Ask AI</div>}
           <div className="flex items-center gap-1.5 truncate text-xs text-muted">
             <span className={cx("inline-block size-2 shrink-0 rounded-full", ai.state === "checking" ? "animate-pulse bg-muted" : ready ? "bg-ok" : "bg-warn")} />
             {ai.state === "ok" && ai.tools.some((t) => t.state !== "missing") ? (
@@ -260,34 +351,25 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
             ) : ai.state === "checking" ? "Checking your AI…" : ai.label ?? "No AI chosen"}
           </div>
         </div>
-        <button type="button" className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-ink"
+        <button type="button" className={cx(BTN, page && "lg:hidden")}
           onClick={async () => setHistory(history ? null : await listChats())}>History</button>
-        <button type="button" className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-ink disabled:opacity-40" disabled={!a.chat && !a.draft}
+        <button type="button" className={cx(BTN, "disabled:opacity-40")} disabled={!a.chat && !a.draft}
           onClick={() => { a.reset(); setHistory(null); }}>New chat</button>
-        <button type="button" aria-label="Close" className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-ink" onClick={() => a.setOpen(false)}>✕</button>
+        {page ? (
+          <button type="button" aria-label="Back to the pop-up" title="Back to the pop-up" className={BTN} onClick={collapse}>
+            <span aria-hidden>⤡</span><span className="hidden sm:inline"> Pop-up</span>
+          </button>
+        ) : (
+          <button type="button" aria-label="Open as a full page" title="Open as a full page (for longer chats)" className="hidden size-8 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-ink sm:grid" onClick={expand}>⤢</button>
+        )}
+        {!page && <button type="button" aria-label="Close" className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-ink" onClick={() => a.setOpen(false)}>✕</button>}
       </header>
       <RunningTasks sem={data.id} />
       {a.sessions.length > 1 && <Tabs actions={actions} onPick={() => setHistory(null)} />}
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        {history ? (
-          <HistoryList chats={history} onPick={async (id) => { setHistory(null); await a.load(id); }} />
-        ) : !a.chat ? (
-          <>
-            {!a.draft && <Intro />}
-            <ActionPicker actions={actions} agentic={agentic} picked={a.draft?.action} onPick={(id) => a.setDraft(id === a.draft?.action ? null : { action: id, params: {} })} />
-            {a.draft && meta && <ActionForm data={data} action={meta} params={a.draft.params} onChange={(params) => a.setDraft({ action: meta.id, params })} />}
-          </>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {a.chat.messages.map((m, i) => <Message key={i} msg={m} sem={a.chat!.sem ?? data.id} live={a.busy && i === a.chat!.messages.length - 1} />)}
-          </div>
-        )}
-        {a.error && <p className="mt-4 rounded-xl bg-bad-bg px-3 py-2 text-sm text-bad">{a.error}</p>}
-        <div ref={end} />
-      </div>
+      {page ? <div className="flex-1 py-6">{conversation}</div> : <div className="flex-1 overflow-y-auto px-4 py-4">{conversation}</div>}
 
-      <footer className="border-t border-line p-3">
+      <footer className={cx("border-t border-line", page ? "sticky bottom-16 z-20 bg-bg py-3 sm:bottom-0" : "p-3")}>
         {(blocked || needsAgent) && (
           <p className="mb-2 rounded-lg bg-warn-bg px-3 py-2 text-xs text-warn">
             {needsAgent ?? blocked} <button type="button" className="underline" onClick={() => refreshAi(true)}>Check again</button>
@@ -295,7 +377,7 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
         )}
         {(meta?.id === "assignment-helper" || meta?.id === "assignment-prep") && <p className="mb-2 text-xs text-muted">The AI explains, hints and reviews; it won't write answers for you to submit.</p>}
         <div className="flex items-end gap-2">
-          <textarea ref={field} value={input} onChange={(e) => setInput(e.target.value)} rows={4}
+          <textarea ref={field} value={input} onChange={(e) => setInput(e.target.value)} rows={4} aria-label="Message"
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
             placeholder={a.chat ? "Reply…" : a.draft ? "Anything to add? (optional)" : "Ask anything about your courses…"}
             className="max-h-64 min-h-[6.5rem] flex-1 resize-none rounded-xl border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-muted" />
@@ -304,7 +386,18 @@ export function AssistantPanel({ data }: { data: SemesterData }) {
             : <button type="button" onClick={submit} disabled={!canSend} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-bg disabled:opacity-40">{!a.chat && a.draft ? "Start" : "Send"}</button>}
         </div>
       </footer>
-    </aside>
+    </>
+  );
+
+  if (!page) return view;
+  return (
+    <section aria-label="Ask AI" className="flex gap-8">
+      <nav aria-label="Chat history" className="sticky top-24 hidden max-h-[calc(100vh-8rem)] w-64 shrink-0 self-start overflow-y-auto lg:block">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">History</div>
+        {side ? <HistoryList chats={side} active={a.chat?.id} onPick={pick} /> : <p className="text-sm text-muted">Loading…</p>}
+      </nav>
+      <div className="flex min-h-[70vh] min-w-0 flex-1 flex-col">{view}</div>
+    </section>
   );
 }
 
@@ -338,9 +431,9 @@ function Intro() {
   );
 }
 
-function ActionPicker({ actions, agentic, picked, onPick }: { actions: AiAction[]; agentic: boolean; picked?: string; onPick: (id: string) => void }) {
+function ActionPicker({ actions, agentic, picked, wide, onPick }: { actions: AiAction[]; agentic: boolean; picked?: string; wide?: boolean; onPick: (id: string) => void }) {
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className={cx("grid grid-cols-2 gap-2", wide && "md:grid-cols-3")}>
       {actions.map((x) => {
         const off = x.agentOnly && !agentic;
         return (
@@ -522,13 +615,14 @@ function Message({ msg, live, sem }: { msg: ChatMessage; live: boolean; sem?: st
   );
 }
 
-function HistoryList({ chats, onPick }: { chats: ChatSummary[]; onPick: (id: string) => void }) {
+function HistoryList({ chats, active, onPick }: { chats: ChatSummary[]; active?: string; onPick: (id: string) => void }) {
   if (!chats.length) return <p className="text-sm text-muted">No chats yet.</p>;
   return (
     <ul className="flex flex-col gap-1">
       {chats.map((c) => (
         <li key={c.id}>
-          <button type="button" onClick={() => onPick(c.id)} className="w-full rounded-lg px-3 py-2 text-left hover:bg-surface-2">
+          <button type="button" onClick={() => onPick(c.id)} aria-current={c.id === active ? "true" : undefined}
+            className={cx("w-full rounded-lg px-3 py-2 text-left hover:bg-surface-2", c.id === active && "bg-surface-2")}>
             <div className="truncate text-sm font-semibold">{c.title}</div>
             <div className="text-xs text-muted">{new Date(c.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}{c.tool ? ` · ${c.tool}` : ""}</div>
           </button>
