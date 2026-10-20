@@ -32,3 +32,12 @@ for (const f of readdirSync(join(AI, "agents")).filter((f) => f.endsWith(".md"))
     assert.ok(fm.tools, "lists its tools (opencode permissions are derived from them)");
   });
 }
+
+// the student asked for plans without time estimates ("2 h", "30 min", "estimated hours"): too personal to guess
+test("study planning never asks for or shows time estimates", () => {
+  const files = ["agents/study-planner.md", "skills/plan-week/SKILL.md", "skills/assignment-helper/SKILL.md"];
+  for (const f of files) {
+    const text = readFileSync(join(AI, f), "utf8").replace(/[^\n]*Never estimate[^\n]*|[^\n]*Don't estimate[^\n]*|\(no time estimates\)/g, "");
+    assert.doesNotMatch(text, /\b\d+(\s*[-–]\s*\d+)?\s*(h|hrs?|hours?|min|minutes?)\b|estimated hours|time-boxed|\b\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}/i, `${f} has no durations`);
+  }
+});
