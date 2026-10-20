@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.1](https://github.com/g-terra/ouc-study/compare/v0.23.0...v0.23.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **web:** line up a formula's symbol list, one row per symbol ([#122](https://github.com/g-terra/ouc-study/issues/122)) ([fc40275](https://github.com/g-terra/ouc-study/commit/fc40275b1a5be07255fa9d86d1579dfd13cb701a))
+
 ## [0.23.0](https://github.com/g-terra/ouc-study/compare/v0.22.0...v0.23.0) (2026-10-20)
 
 
