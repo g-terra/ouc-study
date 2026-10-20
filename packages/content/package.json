@@ -8,7 +8,8 @@
     "./types": "./src/types.ts",
     "./quiz": "./src/quiz.ts",
     "./yaml-blocks": "./src/yaml-blocks.ts",
-    "./progress": "./src/progress.ts"
+    "./progress": "./src/progress.ts",
+    "./search-text": "./src/search-text.ts"
   },
   "scripts": {
     "content": "tsx src/build.ts",

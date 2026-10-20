@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createAiApi } from "../../packages/ai/src/api.ts";
 import { addAttempt, readAttempts, removeQuiz, resetAttempts } from "../../packages/content/src/quiz-store.ts";
 import { readProgress, setDone } from "../../packages/content/src/progress-store.ts";
+import { search, semesterDocs } from "../../packages/content/src/search.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { checkForUpdate, restartDetached } from "../../packages/cli/src/update.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
@@ -222,6 +223,31 @@ function progressApi(): Plugin {
   return { name: "progress-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
 }
 
+/**
+ * /api/search?sem=…&q=… (GET): notes, slides and PDFs (their text copies), transcripts, assignments and
+ * eClass posts that have every word of q, best first (packages/content/src/search.ts). Nothing leaves this computer.
+ */
+function searchApi(): Plugin {
+  const PUBLIC = process.env.OUC_PUBLIC ? resolve(process.env.OUC_PUBLIC) : resolve(HERE, "public");
+  const built = new Map<string, { key: string; data: any }>();   // the app data, re-read when it is rebuilt
+  const send = (res: any, body: any, status = 200) => { res.statusCode = status; res.setHeader("Content-Type", "application/json"); res.setHeader("Cache-Control", "no-store"); res.end(JSON.stringify(body)); };
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    if (!/^\/api\/search(\?|$)/.test(req.url ?? "")) return next();
+    const url = new URL(req.url!, "http://x");
+    const sem = url.searchParams.get("sem") ?? "";
+    const file = resolve(PUBLIC, "data", `${sem}.json`);
+    if (!/^\w[\w.-]*$/.test(sem) || !existsSync(file) || !existsSync(resolve(SEMESTERS, sem))) return send(res, { error: "No such semester." }, 404);
+    try {
+      const st = statSync(file), key = `${st.size}:${st.mtimeMs}`;
+      let b = built.get(sem);
+      if (b?.key !== key) built.set(sem, (b = { key, data: JSON.parse(readFileSync(file, "utf8")) }));
+      const q = (url.searchParams.get("q") ?? "").slice(0, 200);
+      send(res, { q, hits: search(semesterDocs(b.data, resolve(SEMESTERS, sem)), q, b.data) });
+    } catch (e) { send(res, { error: (e as Error).message }, 500); }
+  };
+  return { name: "search-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
+}
+
 /** Serves the course files from ../../semesters at /files/<semester>/<path> (dev + preview). */
 function semesterFiles(): Plugin {
   const handler: Connect.NextHandleFunction = (req, res, next) => {
@@ -275,7 +301,7 @@ function slidesApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), quizApi(), progressApi()],
+  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), quizApi(), progressApi(), searchApi()],
   server: { port: 5173 },
   ...(process.env.OUC_PUBLIC ? { publicDir: resolve(process.env.OUC_PUBLIC) } : {}),
 });

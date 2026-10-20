@@ -4,6 +4,7 @@
  * link, not a file here) shows its transcript with each line opening Panopto at that time.
  *
  * /<sem>/video/<path>: the video's path in the semester folder, or the transcript's for a Panopto link.
+ * #t=<seconds> starts there (a search result links to the moment a word is said).
  */
 import { useEffect, useRef, useState } from "react";
 import type { SemesterData, WeekItem } from "@ouc/content/types";
@@ -45,11 +46,14 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
   }, [transcriptHref]);
 
   const video = useRef<HTMLVideoElement>(null);
-  const [now, setNow] = useState(0);
+  const [startAt] = useState(() => Number(window.location.hash.match(/^#t=(\d+)/)?.[1]) || 0);
+  const [now, setNow] = useState(startAt);
+  // before the video has loaded this is where it will start
+  useEffect(() => { if (startAt && video.current) video.current.currentTime = startAt; }, [startAt, videoSrc]);
   const [follow, setFollowState] = useState(readFollow);
   const setFollow = (on: boolean) => { setFollowState(on); try { localStorage.setItem(FOLLOW, on ? "1" : "0"); } catch { /* private mode */ } };
   const lines: TranscriptLine[] = t?.sections.flatMap((s) => s.lines) ?? [];
-  const current = videoSrc ? lineAt(lines, now) : -1;
+  const current = videoSrc || startAt ? lineAt(lines, now) : -1;
   const seek = (sec: number) => {
     const v = video.current;
     if (!v) return;
