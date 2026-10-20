@@ -127,6 +127,7 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
               <ClassTimeEditor data={data} code={code} current={nextClass} source={c.classTimeFrom} />
             </div>
           )}
+          <QuizJobs data={data} course={code} week={null} />
           <Card className="overflow-hidden">
             {c.weeks.map((w) => <WeekRow key={w.index} w={w} isOpen={open.has(w.index)} isNow={w.index === cur?.index} color={c.color} onToggle={() => toggle(w.index)} base={base} code={code} classes={classes.filter((x) => x.weekIndex === w.index)} quizzes={quizzes.filter((q) => q.scope === "lecture" && q.section === w.index)} data={data} />)}
           </Card>

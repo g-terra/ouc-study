@@ -5,12 +5,14 @@ import { Switch, cx } from "./ui";
 import { CONN_LABEL, useConnection } from "../lib/connection";
 import { TOOL_STATE, getWhisper, refreshAi, setDefaultModel, setWhisper, useAiStatus, usePrepStatus, workLabel, type WhisperStatus } from "../lib/ai";
 import { useAssistant } from "./Assistant";
+import { dismissJob, useQuizJobs } from "../lib/quiz";
+import { quizJobLabel, quizPhase } from "./MakeQuiz";
 import { THEMES, setTheme, useTheme, type ThemeChoice } from "../lib/theme";
 import { releaseHighlights, useUpdate } from "../lib/update";
 import { rememberLook } from "../v2/look";
 import { toV2 } from "../v2/paths";
 import { isChatPath } from "../lib/chat-path";
-import { ArrowUpCircle, Bot, Headphones, INLINE, RefreshCw, Sparkles, X } from "./icons";
+import { ArrowUpCircle, Bot, Headphones, INLINE, RefreshCw, Settings, Sparkles, TriangleAlert, X } from "./icons";
 
 /** eClass and the AI coding tools: one summary dot, plus the details shown in Settings. */
 export function useConnectionSummary() {
@@ -292,11 +294,24 @@ export function AiWorkBar({ sem }: { sem: string }) {
   const [open, setOpenDetails] = useState(() => { try { return localStorage.getItem("ouc-activity-open") === "1"; } catch { return false; } });
   const toggle = () => { setOpenDetails(!open); try { localStorage.setItem("ouc-activity-open", open ? "0" : "1"); } catch { /* private window */ } };
   const tr = st?.transcribe;
-  const syncing = !!conn.syncing, transcribing = !!(tr?.busy && tr.total), ai = !!(st?.busy && st.total);
-  if (!syncing && !transcribing && !ai) {
+  const quizJobs = useQuizJobs(sem);
+  const making = quizJobs.filter((j) => j.running || j.queued), failedQuiz = quizJobs.find((j) => !j.running && !j.queued);
+  const syncing = !!conn.syncing, transcribing = !!(tr?.busy && tr.total), ai = !!(st?.busy && st.total), quizzing = making.length > 0;
+  // a quiz that couldn't be made: a banner with the reason, until it's dismissed
+  const quizBanner = failedQuiz && data && (
+    <div className="border-t border-line bg-bad-bg" role="alert">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 text-xs text-bad">
+        <TriangleAlert aria-hidden className="size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1">The quiz for <b>{quizJobLabel(data, failedQuiz.course, failedQuiz.week)}</b> wasn't made: {failedQuiz.error}</span>
+        <Link to={`/${enc(sem)}/ai-work`} className="font-semibold underline">What happened</Link>
+        <button type="button" aria-label="Dismiss" className="px-1 hover:text-ink" onClick={() => dismissJob(failedQuiz.id)}><X aria-hidden className="size-3.5" /></button>
+      </div>
+    </div>
+  );
+  if (!syncing && !transcribing && !ai && !quizzing) {
     return st?.error && !st.busy && st.total ? (
-      <div className="border-t border-line bg-bad-bg px-4 py-1.5 text-center text-xs text-bad">The AI stopped its background work: {st.error}</div>
-    ) : null;
+      <>{quizBanner}<div className="border-t border-line bg-bad-bg px-4 py-1.5 text-center text-xs text-bad">The AI stopped its background work: {st.error}</div></>
+    ) : quizBanner || null;
   }
   const label = (id: string) => workLabel(id, data);
   const p = conn.progress;
@@ -305,17 +320,19 @@ export function AiWorkBar({ sem }: { sem: string }) {
   const [Icon, title, pct] = syncing
     ? [RefreshCw, `${SYNC_STEPS[(p?.step ?? 1) - 1] ?? "Syncing"}${downloading ? `: ${p.done} of ${p.total}` : "…"}`, downloading ? (p.done! / p.total!) * 100 : ((p?.step ?? 1) - 1) * 33]
     : transcribing ? [Headphones, `Transcribing class videos: ${tr!.done} of ${tr!.total}`, (tr!.done / tr!.total) * 100]
-    : [Sparkles, `AI is making notes, prep packs and quizzes: ${st!.done} of ${st!.total} done`, (st!.done / st!.total) * 100];
+    : ai ? [Sparkles, `AI is making notes, prep packs and quizzes: ${st!.done} of ${st!.total} done`, (st!.done / st!.total) * 100]
+    : [Settings, making.length > 1 ? `AI is making ${making.length} quizzes` : `AI is making a quiz: ${data ? quizJobLabel(data, making[0]!.course, making[0]!.week) : making[0]!.course}. ${quizPhase(making[0]!)}`, making[0]!.phase === "writing" ? 60 : 20];
   const row = "flex flex-wrap items-center gap-x-3 gap-y-1";
   const mark = (state: "done" | "now" | "todo") => <span className={cx("w-4 shrink-0 text-center", state === "done" ? "text-ok" : state === "now" ? "text-accent" : "text-muted")}>{state === "done" ? "✓" : state === "now" ? "●" : "○"}</span>;
   return (
+    <>{quizBanner}
     <div className="border-t border-line">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs">
-        <span className="flex items-center gap-1.5 font-semibold"><Icon aria-hidden className={cx("size-3.5", Icon === RefreshCw && "animate-spin")} />{title}</span>
-        {[syncing, transcribing, ai].filter(Boolean).length > 1 && <span className="text-muted">and {[syncing && "sync", transcribing && "transcripts", ai && "AI notes"].filter(Boolean).slice(1).join(", ")} too</span>}
+        <span className="flex items-center gap-1.5 font-semibold"><Icon aria-hidden className={cx("size-3.5", (Icon === RefreshCw || Icon === Settings) && "animate-spin")} />{title}</span>
+        {[syncing, transcribing, ai, quizzing].filter(Boolean).length > 1 && <span className="text-muted">and {[syncing && "sync", transcribing && "transcripts", ai && "AI notes", quizzing && "quizzes"].filter(Boolean).slice(1).join(", ")} too</span>}
         <span className="flex-1" />
         <button type="button" onClick={toggle} aria-expanded={open} className="rounded-full border border-line bg-surface px-2.5 py-0.5 font-semibold hover:border-muted">{open ? "Hide details ▴" : "Details ▾"}</button>
-        {ai && <a href={linkHref(`/${enc(sem)}/ai-work`)} target="_blank" rel="noreferrer" title="See everything the AI is doing in a new window"
+        {(ai || quizzing) && <a href={linkHref(`/${enc(sem)}/ai-work`)} target="_blank" rel="noreferrer" title="See everything the AI is doing in a new window"
           className="rounded-full border border-line bg-surface px-2.5 py-0.5 font-semibold hover:border-muted">Open ↗</a>}
       </div>
       {open && (
@@ -369,6 +386,7 @@ export function AiWorkBar({ sem }: { sem: string }) {
         <div className="h-full bg-accent transition-[width] duration-500" style={{ width: `${Math.max(pct, 3)}%` }} />
       </div>
     </div>
+    </>
   );
 }
 

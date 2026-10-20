@@ -283,3 +283,26 @@ test("v2 calendar lists the exams read from the exam timetable in the course fil
   await expect(page.getByText("Demo Studies · Repeat exam")).toBeVisible();
   await expect(page.getByText("Nothing coming up.")).toHaveCount(0);
 });
+
+test("v2: a quiz being made shows in its week with spinning gears, then says why it failed", async ({ page }) => {
+  const job = { id: "j1", chatId: "c1", sem: "2026-Demo", course: "DEMO101", week: "1", started: new Date().toISOString(), running: true, phase: "planning" } as Record<string, unknown>;
+  await page.route("**/api/ai/quiz", (r) => r.fulfill({ json: { jobs: [job] } }));
+  await page.route("**/api/ai/prep", (r) => r.fulfill({ json: { enabled: true, busy: false, running: [], finished: [], queue: [], total: 0, done: 0, error: null } }));
+  await page.goto(`/v2${SEM}/courses/DEMO101`);
+  await page.getByRole("button", { name: /Getting started/ }).first().click();
+  const practice = page.locator("#w1").getByRole("heading", { name: "Practice" }).locator("..");
+  await expect(practice.getByRole("status")).toContainText("Planning the quiz…");
+  await expect(page.getByText("AI is making a quiz: Demo Studies · Getting started. Planning the quiz…")).toBeVisible();   // the work bar too
+  Object.assign(job, { phase: "writing" });
+  await expect(practice.getByRole("status")).toContainText("Creating the quiz…");   // the page checks again every few seconds
+  Object.assign(job, { running: false, ok: false, error: "The AI finished without saving a quiz." });
+  await expect(practice.getByRole("status")).toContainText("The quiz wasn't made: The AI finished without saving a quiz.");
+  // and a banner says so on every page, with a link to the AI background work page (no chat opens)
+  const banner = page.getByRole("alert").filter({ hasText: "wasn't made" });
+  await expect(banner).toContainText("The quiz for Demo Studies · Getting started wasn't made: The AI finished without saving a quiz.");
+  await practice.getByRole("link", { name: "See what happened" }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/ai-work$/);
+  await expect(page.getByRole("region", { name: "Quizzes" })).toContainText("Quiz · Demo Studies · Getting started: The AI finished without saving a quiz.");
+  await banner.getByRole("button", { name: "Dismiss" }).click();
+  await expect(banner).toHaveCount(0);
+});
