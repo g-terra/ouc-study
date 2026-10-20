@@ -1,0 +1,6 @@
+{
+ "dates": [
+  { "id": "d-final", "code": "DEMO101", "title": "Final exam", "kind": "exam", "date": "2026-12-05", "time": "13:00", "topics": "Weeks 1 to 10" },
+  { "id": "d-repeat", "code": "DEMO101", "title": "Repeat exam", "kind": "exam", "date": "2027-01-11" }
+ ]
+}

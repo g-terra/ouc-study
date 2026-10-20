@@ -18,7 +18,6 @@ export interface SemesterConfig {
   label: string;
   start: string;
   end: string;
-  examTimetable?: string;
   courses: CourseConfig[];
 }
 

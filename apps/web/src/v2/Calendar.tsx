@@ -6,7 +6,7 @@ import { Card, CourseDot, Empty, PageHeader, cx } from "../components/ui";
 import { DayGroups, EvRow, agenda, type Ev } from "./agenda";
 import { ClipboardList, GraduationCap, INLINE, Video } from "../components/icons";
 
-type Show = "all" | "due" | "class" | "exam";
+type Show = "all" | "due" | "class" | "date";
 type View = "upcoming" | "done";
 
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
@@ -31,7 +31,7 @@ export function Calendar({ data }: { data: SemesterData }) {
   const all = agenda(data, now).filter((e) => course === "all" || e.code === course);
   const open = data.assignments.filter((a) => !a.submitted).length;
 
-  const upcoming = all.filter((e) => !e.done && (show === "all" || e.kind === show));
+  const upcoming = all.filter((e) => !e.done && (show === "all" || e.kind === show || (show === "date" && e.kind === "exam")));
   const overdue = upcoming.filter((e) => e.kind === "due" && e.t < now);
   const ahead = upcoming.filter((e) => !(e.kind === "due" && e.t < now));
   const weeks: { start: Date; evs: Ev[] }[] = [];
@@ -47,7 +47,7 @@ export function Calendar({ data }: { data: SemesterData }) {
 
   return (
     <>
-      <PageHeader title="Calendar" eyebrow={data.label}>{open} assignment{open === 1 ? "" : "s"} still to hand in. Deadlines, live classes and exams, week by week.</PageHeader>
+      <PageHeader title="Calendar" eyebrow={data.label}>{open} assignment{open === 1 ? "" : "s"} still to hand in. Deadlines, live classes, exams and other dates, week by week.</PageHeader>
       <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="View">
         <Chip on={view === "upcoming"} onClick={() => setView("upcoming")}>Upcoming</Chip>
         <Chip on={view === "done"} onClick={() => setView("done")}>Submitted <span className="opacity-60">{data.assignments.length - open}</span></Chip>
@@ -60,8 +60,8 @@ export function Calendar({ data }: { data: SemesterData }) {
       </div>
       {view === "upcoming" && (
         <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Show">
-          {(["all", "due", "class", "exam"] as const).map((k) => (
-            <Chip key={k} on={show === k} onClick={() => setShow(k)}>{{ all: "Everything", due: <><ClipboardList aria-hidden className={INLINE} /> Deadlines</>, class: <><Video aria-hidden className={INLINE} /> Classes</>, exam: <><GraduationCap aria-hidden className={INLINE} /> Exams</> }[k]}</Chip>
+          {(["all", "due", "class", "date"] as const).map((k) => (
+            <Chip key={k} on={show === k} onClick={() => setShow(k)}>{{ all: "Everything", due: <><ClipboardList aria-hidden className={INLINE} /> Deadlines</>, class: <><Video aria-hidden className={INLINE} /> Classes</>, date: <><GraduationCap aria-hidden className={INLINE} /> Dates</> }[k]}</Chip>
           ))}
         </div>
       )}
@@ -85,7 +85,7 @@ export function Calendar({ data }: { data: SemesterData }) {
               </Card>
             </section>
           ))}
-          {!weeks.length && !overdue.length && <Empty>{show === "exam" && !data.exams.length ? "No exam dates yet. They show up here once the exam timetable is in your course files." : "Nothing coming up."}</Empty>}
+          {!weeks.length && !overdue.length && <Empty>{show === "date" && !data.dates?.length ? "No exams or other important dates yet. Add them on a course's Dates tab, or ask the AI." : "Nothing coming up."}</Empty>}
         </div>
       ) : (
         <Card className="grid grid-cols-1 gap-0.5 p-2">

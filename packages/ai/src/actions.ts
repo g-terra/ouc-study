@@ -28,11 +28,12 @@ const FIELDS: Record<string, Field[]> = {
   "assignment-prep": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "assignment-review": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "sync-eclass": [],
+  "important-dates": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }],
 };
 const TITLE: Record<string, string> = {
   "make-notes": "Make notes", "quiz-me": "Quiz me", "make-quiz": "Make a quiz", "plan-week": "Plan my week", "research-topic": "Research a topic",
   "find-material": "Find material", "assignment-helper": "Assignment help", "assignment-prep": "Prep an assignment",
-  "assignment-review": "Review my draft", "sync-eclass": "Sync eClass",
+  "assignment-review": "Review my draft", "sync-eclass": "Sync eClass", "important-dates": "Important dates",
 };
 // What the app shows the student about each action (the skill's description is written for the AI: paths, trigger phrases)
 const SUMMARY: Record<string, string> = {
@@ -46,8 +47,9 @@ const SUMMARY: Record<string, string> = {
   "assignment-prep": "Makes a prep pack for an assignment: what it asks, hints, the material to read and a plan.",
   "assignment-review": "Reviews the draft you uploaded against the brief and says what to fix, without rewriting it.",
   "sync-eclass": "Checks eClass for new files, grades, feedback and deadlines.",
+  "important-dates": "Adds, changes or removes exam dates and other important dates on a course, as you tell it.",
 };
-const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄" };
+const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄", "important-dates": "📅" };
 // What a plain local model (no file or web tools) can do from the app (it gets the material in its
 // prompt; a quiz it answers with is saved by the app server).
 const CHAT_OK = new Set(["quiz-me", "make-quiz"]);
@@ -288,6 +290,9 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       if (!a) throw new Error("That assignment isn't in the app data.");
       body = reviewPrompt(root, semId, data, a, params.version) + extra; break;
     }
+    case "important-dates":
+      body = `Use the important-dates skill${course ? ` for ${course.title} (${course.code})` : ""}: the dates are in semesters/${semId}/_meta/dates.json. ` +
+        `${msg ? `Add, change or remove what I say.${extra}` : "Ask me which dates to add, change or remove."}`; break;
     default:
       if (!existsSync(join(root, "ai/skills", action, "SKILL.md"))) throw new Error(`Unknown action "${action}".`);
       body = `Use the ${action} skill${msg ? `: ${msg}` : "."}`;

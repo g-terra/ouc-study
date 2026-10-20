@@ -10,6 +10,7 @@ import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
 import { QuizLinks, WeekRow } from "../pages/Courses";
 import { confirmRemoveAll } from "../pages/Quizzes";
 import { assignmentHref } from "./agenda";
+import { DatesTab } from "./Dates";
 import { DoneCount } from "../components/Progress";
 import { useProgress } from "../lib/progress";
 import { courseProgress, weekProgress } from "@ouc/content/progress";
@@ -59,7 +60,7 @@ export function CourseList({ data }: { data: SemesterData }) {
   );
 }
 
-const TABS = [["weeks", "Weeks"], ["work", "Assignments"], ["notes", "Notes"], ["quizzes", "Quizzes"]] as const;
+const TABS = [["weeks", "Weeks"], ["work", "Assignments"], ["notes", "Notes"], ["quizzes", "Quizzes"], ["dates", "Dates"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 /** One course: a slim header and tabs, instead of a long page with a sidebar. */
@@ -93,16 +94,16 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
   const quizzes = (data.quizzes ?? []).filter((q) => q.code === code);
   const classes = (data.classes ?? []).filter((x) => x.code === code);
   const nextClass = upcomingClasses(data, now).find((x) => x.code === code && x.status !== "cancelled");
-  const exam = data.exams.find((e) => e.code === code && e.kind === "Final exam");
+  const exam = data.exams.find((e) => e.code === code && at(e.at) >= now);
   const toggle = (i: number) => setOpen((o) => { const n = new Set(o); n.has(i) ? n.delete(i) : n.add(i); return n; });
-  const count: Record<Tab, number | undefined> = { weeks: undefined, work: as.length, notes: notes.length, quizzes: quizzes.length };
+  const count: Record<Tab, number | undefined> = { weeks: undefined, work: as.length, notes: notes.length, quizzes: quizzes.length, dates: (data.dates ?? []).filter((d) => d.code === code).length };
 
   return (
     <>
       <Link to={`/v2/${enc(data.id)}/courses`} className="text-sm text-muted hover:text-ink">← Courses</Link>
       <header className="mt-2 mb-4 flex flex-wrap items-end gap-x-4 gap-y-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-sm text-muted"><span className="size-2.5 rounded-full" style={{ background: c.color }} />{c.code}{exam && <> · <GraduationCap aria-hidden className={INLINE} /> Final {fmtWhen(at(exam.at), exam.noTime)}</>}</div>
+          <div className="flex items-center gap-2 text-sm text-muted"><span className="size-2.5 rounded-full" style={{ background: c.color }} />{c.code}{exam && <> · <GraduationCap aria-hidden className={INLINE} /> {exam.kind} {fmtWhen(at(exam.at), exam.noTime)}</>}</div>
           <h1 className="font-serif text-3xl font-semibold leading-tight tracking-tight">{c.title}</h1>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
@@ -170,6 +171,8 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
           ))}
         </div>
       ) : <Empty>No notes yet. Open a week and press “Make notes”, or ask the AI.</Empty>)}
+
+      {tab === "dates" && <DatesTab data={data} code={code} />}
 
       {tab === "quizzes" && (
         <>

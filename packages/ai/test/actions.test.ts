@@ -109,3 +109,15 @@ test("a plain chat starts lean: ask how to help, read files only when needed", (
   assert.match(system, /ask how you can help/);
   assert.doesNotMatch(system, /Repository map/);
 });
+
+test("important dates: an action for one course that points the AI at the dates file", () => {
+  const a = listActions(join(dirname(fileURLToPath(import.meta.url)), "../../..")).find((x) => x.id === "important-dates");
+  assert.equal(a?.title, "Important dates");
+  assert.deepEqual(a?.fields.map((f) => [f.key, f.required ?? false]), [["course", false]]);
+  const p = buildPrompt({ root: ".", semId: "S", data, action: "important-dates", params: { course: "AAA" }, message: "final exam on 5 Dec at 13:00" });
+  assert.match(p, /important-dates skill/);
+  assert.match(p, /AAA course \(AAA\)/);
+  assert.match(p, /semesters\/S\/_meta\/dates\.json/);
+  assert.match(p, /The student adds: final exam on 5 Dec at 13:00/);
+  assert.match(buildPrompt({ root: ".", semId: "S", data, action: "important-dates" }), /Ask me which dates/);
+});
