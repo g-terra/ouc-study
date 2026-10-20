@@ -66,3 +66,20 @@ test("v2: Ask AI expands to a full page inside v2, and the page opens on its own
   await page.getByRole("button", { name: "Back to the pop-up" }).click();
   await expect(page).toHaveURL(/\/v2\/2026-Demo$/);
 });
+
+test("v2: links to the AI background work page stay in v2, new windows included", async ({ page }) => {
+  // made-up running AI work so the activity bar and Ask AI show their links
+  await page.route("**/api/ai/prep", (r) => r.fulfill({ json: {
+    enabled: true, busy: true, running: [{ id: "notes:DEMO101", chatId: "made-up" }], queue: [], finished: [], total: 2, done: 1, error: null,
+  } }));
+  await page.goto(`/v2${SEM}`);
+  await expect(page.getByRole("link", { name: "Open ↗" })).toHaveAttribute("href", "/v2/2026-Demo/ai-work");
+  await page.getByRole("button", { name: "Ask AI" }).click();
+  await expect(page.getByRole("dialog", { name: "Ask AI" }).getByRole("link", { name: /background task/ })).toHaveAttribute("href", "/v2/2026-Demo/ai-work");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Settings/ }).click();
+  const menuLink = page.getByRole("link", { name: "✨ AI background work" });
+  await expect(menuLink).toHaveAttribute("href", "/v2/2026-Demo/ai-work");
+  await menuLink.click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/ai-work$/);
+});

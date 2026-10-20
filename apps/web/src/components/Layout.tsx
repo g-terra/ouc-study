@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useRouter, enc } from "../lib/router";
+import { Link, linkHref, useRouter, enc } from "../lib/router";
 import { useIndex, useSemester } from "../lib/data";
 import { cx } from "./ui";
 import { CONN_LABEL, useConnection } from "../lib/connection";
@@ -270,7 +270,7 @@ export function AiWorkBar({ sem }: { sem: string }) {
         {[syncing, transcribing, ai].filter(Boolean).length > 1 && <span className="text-muted">and {[syncing && "sync", transcribing && "transcripts", ai && "AI notes"].filter(Boolean).slice(1).join(", ")} too</span>}
         <span className="flex-1" />
         <button type="button" onClick={toggle} aria-expanded={open} className="rounded-full border border-line bg-surface px-2.5 py-0.5 font-semibold hover:border-muted">{open ? "Hide details ▴" : "Details ▾"}</button>
-        {ai && <a href={`/${enc(sem)}/ai-work`} target="_blank" rel="noreferrer" title="See everything the AI is doing in a new window"
+        {ai && <a href={linkHref(`/${enc(sem)}/ai-work`)} target="_blank" rel="noreferrer" title="See everything the AI is doing in a new window"
           className="rounded-full border border-line bg-surface px-2.5 py-0.5 font-semibold hover:border-muted">Open ↗</a>}
       </div>
       {open && (
