@@ -137,6 +137,8 @@ test("the app's local APIs answer", async ({ request }) => {
   expect((await request.get("/api/quiz/attempts?sem=2026-Demo")).ok()).toBeTruthy();
   expect((await request.post("/api/quiz/attempts", { data: { sem: "2026-Demo", quiz: "../x", results: [true] } })).status()).toBe(400);
   expect((await request.delete("/api/quiz?sem=2026-Demo&quiz=DEMO101/nope")).status()).toBe(404);
+  expect((await request.delete("/api/quiz?sem=2026-Demo&course=NOPE101")).ok()).toBeTruthy();   // nothing to remove
+  expect((await request.delete("/api/quiz?sem=2026-Demo&course=../x")).status()).toBe(400);
   expect((await request.get("/api/ai/quiz")).ok()).toBeTruthy();
   expect(await (await request.get("/api/ai/transcribe")).json()).toHaveProperty("available");
 });

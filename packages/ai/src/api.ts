@@ -485,6 +485,8 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
           while (!stop && prep.queue.length) {
             const job = jobs.find((j) => j.id === prep.queue[0])!;
             prep.queue = prep.queue.slice(1);
+            // a quiz made meanwhile (from the pop-up or the chat): don't make a second one
+            if (job.id.startsWith("quiz:") && !quizzesToMake(semId, data).some((x) => `quiz:${x.course}/${x.week}` === job.id)) { prep.done++; continue; }
             tried[job.id] = new Date().toISOString();
             mkdirSync(join(root, ".ouc"), { recursive: true });
             writeFileSync(prepState, JSON.stringify(tried, null, 1));
@@ -538,9 +540,14 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
       if (job.queued) startQuizJob(job);
     }
   }
-  /** The classes still without a quiz, leaving out the ones being made from the pop-up. */
+  /** The classes a quiz is being made for (or waits to be), from the pop-up or from Sync now: "<CODE>/<week>". */
+  const quizzesBusy = () => new Set([
+    ...quizJobs.filter((j) => j.queued || j.running).map((j) => `${j.course}/${j.week}`),
+    ...[...prep.running.map((x) => x.id), ...prep.queue].filter((id) => id.startsWith("quiz:")).map((id) => id.slice(5)),
+  ]);
+  /** The classes still without a quiz, leaving out the ones being made. */
   const quizzesToMake = (semId: string, data: SemesterData) => {
-    const busy = new Set(quizJobs.filter((j) => j.queued || j.running).map((j) => `${j.course}/${j.week}`));
+    const busy = quizzesBusy();
     return data.courses.flatMap((c) => weeksWithoutQuiz(root, semId, data, c).map((w) => ({ course: c.code, week: String(w.index) })))
       .filter((x) => !busy.has(`${x.course}/${x.week}`));
   };
@@ -556,7 +563,10 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
       added = quizzesToMake(semId!, { ...data, courses: [c] }).map((x) => job(x.week));
       if (!added.length) throw Object.assign(new Error(`Every class of ${c.short} with material already has a quiz.`), { code: 400 });
     } else {
-      added = [job(b.week !== undefined && b.week !== null && b.week !== "" ? String(b.week) : undefined)];
+      const week = b.week !== undefined && b.week !== null && b.week !== "" ? String(b.week) : undefined;
+      // two runs at once would both write a quiz for the same class
+      if (quizzesBusy().has(`${course}/${week}`)) throw Object.assign(new Error(`A quiz for ${week === undefined ? "the whole course" : "this class"} is already being made.`), { code: 409 });
+      added = [job(week)];
     }
     // keep the last few finished ones, so the page can say how it went
     const recent = quizJobs.filter((j) => !j.queued && !j.running && Date.now() - new Date(j.started).getTime() < 3600_000).slice(-20);

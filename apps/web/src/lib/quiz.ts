@@ -69,6 +69,14 @@ export async function removeQuiz(sem: string, quiz: string): Promise<void> {
   window.setTimeout(refreshData, 800);   // in case the file watcher missed it
 }
 
+/** Deletes every quiz of a course and their scores. */
+export async function removeCourseQuizzes(sem: string, code: string): Promise<void> {
+  const res = await fetch(`/api/quiz?sem=${encodeURIComponent(sem)}&course=${encodeURIComponent(code)}`, { method: "DELETE" }).catch(() => null);
+  if (!res?.ok) throw new Error(await failed(res));
+  set(sem, (await res.json()).attempts ?? []);
+  window.setTimeout(refreshData, 800);   // in case the file watcher missed it
+}
+
 // ---------- quizzes being made ----------
 /** queued: waiting for a free slot (the AI makes a few at a time); chatId is set once it starts; phase: reading the material, then writing the quiz. */
 export interface QuizJob { id: string; chatId?: string; sem: string; course: string; week?: string; quiz?: string; started: string; queued?: boolean; running: boolean; phase?: "planning" | "writing"; ok?: boolean; error?: string }

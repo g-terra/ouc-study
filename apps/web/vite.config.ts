@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { createAiApi } from "../../packages/ai/src/api.ts";
-import { addAttempt, readAttempts, removeQuiz, resetAttempts } from "../../packages/content/src/quiz-store.ts";
+import { addAttempt, readAttempts, removeCourseQuizzes, removeQuiz, resetAttempts } from "../../packages/content/src/quiz-store.ts";
 import { readProgress, setDone } from "../../packages/content/src/progress-store.ts";
 import { search, semesterDocs } from "../../packages/content/src/search.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
@@ -156,6 +156,7 @@ const semDir = (sem: unknown) => {
  * /api/quiz/attempts (POST { sem, quiz, title, results }): saves a finished quiz (points worked out on the server).
  * /api/quiz/attempts?sem=…&quiz=CODE/name (DELETE): starts a quiz over (its scores cleared); without quiz, every quiz.
  * /api/quiz?sem=…&quiz=CODE/name (DELETE): removes the quiz file and its scores (the app data rebuilds on its own).
+ * /api/quiz?sem=…&course=CODE (DELETE): removes every quiz of a course and their scores.
  * Stored in semesters/<sem>/quizzes/attempts.json, see packages/content/src/quiz-store.ts.
  */
 function quizApi(): Plugin {
@@ -170,7 +171,9 @@ function quizApi(): Plugin {
       if (!dir) return send(res, { error: "No such semester." }, 404);
       const quiz = url.searchParams.get("quiz") ?? undefined;
       try {
+        const course = url.searchParams.get("course");
         if (url.pathname === "/api/quiz" && quiz) removeQuiz(dir, quiz);
+        else if (url.pathname === "/api/quiz" && course !== null) removeCourseQuizzes(dir, course);
         else if (url.pathname === "/api/quiz/attempts") resetAttempts(dir, quiz);
         else return send(res, { error: "Not found" }, 404);
       } catch (e) { return send(res, { error: (e as Error).message }, (e as { code?: number }).code === 404 ? 404 : 400); }

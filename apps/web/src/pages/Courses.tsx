@@ -7,13 +7,13 @@ import { at, day, fmtDay, fmtFull, fmtShort, fmtTime, fmtWhen, plural, relative 
 import { Card, Empty, FileLink, PageHeader, ProgressRing, SectionTitle, StatePill, cx, isMaterial, kindIcon } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
 import { ClassCard, ClassTimeEditor, JoinButton, upcomingClasses } from "../components/Classes";
-import { quizHref, quizScopeLabel } from "./Quizzes";
+import { confirmRemove, quizHref, quizScopeLabel } from "./Quizzes";
 import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
 import { pct, useAttempts, useQuizJobs } from "../lib/quiz";
 import { DoneBox, DoneCount } from "../components/Progress";
 import { useProgress } from "../lib/progress";
 import { tracked, weekProgress } from "@ouc/content/progress";
-import { Clapperboard, ClipboardList, FileText, GraduationCap, INLINE, NotebookPen, Star, Trophy, Video } from "../components/icons";
+import { Clapperboard, ClipboardList, FileText, GraduationCap, INLINE, NotebookPen, Star, Trash2, Trophy, Video } from "../components/icons";
 
 export function Courses({ data }: { data: SemesterData }) {
   const base = `/${enc(data.id)}`;
@@ -127,7 +127,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
           <div>
             <SectionTitle right={<MakeQuizButton data={data} course={code}>Make a quiz</MakeQuizButton>}>Quizzes</SectionTitle>
             <QuizJobs data={data} course={code} />
-            {quizzes.length ? <QuizLinks sem={data.id} quizzes={quizzes} withScope /> : <Empty>No quizzes yet. Press “Make a quiz” to make one for one class or the whole course.</Empty>}
+            {quizzes.length ? <QuizLinks sem={data.id} quizzes={quizzes} withScope removable /> : <Empty>No quizzes yet. Press “Make a quiz” to make one for one class or the whole course.</Empty>}
           </div>
           <div>
             <SectionTitle>Notes</SectionTitle>
@@ -148,18 +148,26 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
 }
 
 /** Links to quizzes with the best score so far. */
-export function QuizLinks({ sem, quizzes, withScope = false }: { sem: string; quizzes: Quiz[]; withScope?: boolean }) {
+export function QuizLinks({ sem, quizzes, withScope = false, removable = false }: { sem: string; quizzes: Quiz[]; withScope?: boolean; removable?: boolean }) {
   const { stats } = useAttempts(sem);
   return (
     <div className="grid gap-1.5">
       {quizzes.map((q) => {
         const b = stats.best[q.id];
         return (
-          <Link key={q.id} to={quizHref(sem, q)} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
-            <Trophy aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
-            <span className="min-w-0 flex-1 leading-snug">{withScope && q.scope === "course" ? `${quizScopeLabel(q)}: ` : ""}{q.title}</span>
-            <span className={cx("shrink-0 text-xs", b?.pct === 1 ? "font-semibold text-ok" : "text-muted")}>{b ? `best ${pct(b.pct)}` : `${q.questions.length} questions`}</span>
-          </Link>
+          <div key={q.id} className="group flex items-center gap-1">
+            <Link to={quizHref(sem, q)} className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
+              <Trophy aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
+              <span className="min-w-0 flex-1 leading-snug">{withScope && q.scope === "course" ? `${quizScopeLabel(q)}: ` : ""}{q.title}</span>
+              <span className={cx("shrink-0 text-xs", b?.pct === 1 ? "font-semibold text-ok" : "text-muted")}>{b ? `best ${pct(b.pct)}` : `${q.questions.length} questions`}</span>
+            </Link>
+            {removable && (
+              <button type="button" aria-label={`Remove the quiz ${q.title}`} title="Remove this quiz" onClick={() => confirmRemove(sem, q)}
+                className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-bad">
+                <Trash2 aria-hidden className="size-4" />
+              </button>
+            )}
+          </div>
         );
       })}
     </div>

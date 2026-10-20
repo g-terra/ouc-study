@@ -57,6 +57,20 @@ test("v2 calendar lists the overdue assignment; a course keeps its notes and qui
   await expect(page.getByRole("navigation", { name: "Main" }).first().getByRole("link", { name: "Courses", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
+test("v2 course quizzes: each quiz has Remove, and Remove all asks first", async ({ page }) => {
+  await page.goto(`/v2${SEM}/courses/DEMO101`);
+  await page.getByRole("tab", { name: /Quizzes/ }).click();
+  const asked: string[] = [];
+  page.on("dialog", (d) => { asked.push(d.message()); void d.dismiss(); });
+  await page.getByRole("button", { name: "Remove the quiz Week 1 · Getting started" }).click();
+  await page.getByRole("button", { name: "Remove all quizzes" }).click();
+  await expect.poll(() => asked.length).toBe(2);
+  expect(asked[0]).toContain("Week 1 · Getting started");
+  expect(asked[1]).toMatch(/^Remove all 1 quiz of /);
+  // dismissed: still there
+  await expect(page.getByRole("link", { name: /Week 1 · Getting started/ })).toBeVisible();
+});
+
 test("the new look is the default; the classic look can be chosen and is remembered", async ({ page }) => {
   // a first visit, and classic addresses, open the new look
   await page.goto("/");

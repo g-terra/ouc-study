@@ -3,7 +3,7 @@ import type { Course, Quiz, QuizQuestion, SemesterData } from "@ouc/content/type
 import { isCorrect, pointsFor, seededRandom, shuffledOptions, type QuizAnswer } from "@ouc/content/quiz";
 import { Link, enc, useRouter } from "../lib/router";
 import { courseMap } from "../lib/data";
-import { pct, removeQuiz, resetProgress, saveAttempt, useAttempts } from "../lib/quiz";
+import { pct, removeCourseQuizzes, removeQuiz, resetProgress, saveAttempt, useAttempts } from "../lib/quiz";
 import { Card, CourseBadge, CourseDot, Empty, PageHeader, ProgressRing, SectionTitle, cx } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
 import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
@@ -16,6 +16,10 @@ export async function confirmReset(sem: string, q?: Pick<Quiz, "id" | "title">):
 export async function confirmRemove(sem: string, q: Pick<Quiz, "id" | "title">): Promise<boolean> {
   if (!window.confirm(`Remove the quiz “${q.title}”? The quiz and its scores are deleted.`)) return false;
   try { await removeQuiz(sem, q.id); return true; } catch (e) { window.alert((e as Error).message); return false; }
+}
+export async function confirmRemoveAll(sem: string, c: Pick<Course, "code" | "short">, n: number): Promise<boolean> {
+  if (!window.confirm(`Remove all ${n} ${n === 1 ? "quiz" : "quizzes"} of ${c.short}? The quizzes and their scores are deleted.`)) return false;
+  try { await removeCourseQuizzes(sem, c.code); return true; } catch (e) { window.alert((e as Error).message); return false; }
 }
 const smallBtn = "rounded-full px-2.5 py-1 text-xs text-muted hover:bg-surface-2 hover:text-ink";
 

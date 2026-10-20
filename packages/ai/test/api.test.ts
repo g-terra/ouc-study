@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -492,4 +492,36 @@ test("Video transcripts in Settings: whether Whisper is set up, set it up, turn 
   assert.deepEqual(await json(fetch(`${base}/api/ai/transcribe`)), { ...first, available: true, engine: "fake" });
   assert.equal((await json(post({ enabled: false }))).enabled, false);
   assert.deepEqual(JSON.parse(readFileSync(join(root, ".ouc/media.json"), "utf8")), { transcribe: false });
+});
+
+test("no second quiz for a class while one is being made, from the pop-up or from Sync now", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-ai-"));
+  cpSync(join(REPO, "ai/skills"), join(root, "ai/skills"), { recursive: true });
+  mkdirSync(join(root, ".ouc"), { recursive: true });
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude" }));
+  twoClasses(root);
+  const mw = createAiApi(root, { bin: join(HERE, "fixtures/fake-agent.mjs"), status: async () => ({ ready: true }), noAutoPrep: true });
+  const server = http.createServer((req, res) => mw(req, res, () => { res.statusCode = 404; res.end(); }));
+  await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok));
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${portOf(server)}`;
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const post = (body: object) => fetch(`${base}/api/ai/quiz`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
+
+  assert.equal((await post({ sem: "S", course: "AAA", week: 1 })).status, 200);
+  const again = await post({ sem: "S", course: "AAA", week: 1 });   // still being made
+  assert.equal(again.status, 409);
+  assert.match(((await again.json()) as Ev).error, /already being made/);
+  // Sync now leaves the class being made alone and makes only the other one
+  assert.equal(mw.catchUp().quizzes, 1);
+  while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
+  // and a class Sync now is making can't be started again from the pop-up
+  rmSync(join(root, "semesters/S/quizzes/AAA/week-02-more.json"));
+  mw.catchUp();
+  await new Promise((ok) => setTimeout(ok, 5));
+  const during = await post({ sem: "S", course: "AAA", week: 2 });
+  if (!mw.prepIdle()) assert.equal(during.status, 409);
+  while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
+  for (let i = 0; i < 100 && (await json(fetch(`${base}/api/ai/quiz`))).jobs.some((j: Ev) => j.running); i++) await new Promise((ok) => setTimeout(ok, 20));
+  assert.deepEqual(readdirSync(join(root, "semesters/S/quizzes/AAA")).sort(), ["week-01-intro.json", "week-02-more.json"]);
 });

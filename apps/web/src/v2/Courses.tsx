@@ -8,11 +8,12 @@ import { Card, Empty, PageHeader, ProgressRing, StatePill, cx } from "../compone
 import { ClassCard, ClassTimeEditor, upcomingClasses } from "../components/Classes";
 import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
 import { QuizLinks, WeekRow } from "../pages/Courses";
+import { confirmRemoveAll } from "../pages/Quizzes";
 import { assignmentHref } from "./agenda";
 import { DoneCount } from "../components/Progress";
 import { useProgress } from "../lib/progress";
 import { courseProgress, weekProgress } from "@ouc/content/progress";
-import { Flame, GraduationCap, INLINE, NotebookPen, Trophy, Video } from "../components/icons";
+import { Flame, GraduationCap, INLINE, NotebookPen, Trash2, Trophy, Video } from "../components/icons";
 
 /** Courses: one row per course with where it's at. Notes and quizzes live inside each course. */
 export function CourseList({ data }: { data: SemesterData }) {
@@ -172,9 +173,17 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
 
       {tab === "quizzes" && (
         <>
-          <div className="mb-3 flex justify-end"><MakeQuizButton data={data} course={code}>Make a quiz</MakeQuizButton></div>
+          <div className="mb-3 flex flex-wrap justify-end gap-2">
+            {quizzes.length > 0 && (
+              <button type="button" onClick={() => confirmRemoveAll(data.id, c, quizzes.length)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-sm font-medium text-muted transition hover:border-muted hover:text-bad">
+                <Trash2 aria-hidden className="size-4" />Remove all quizzes
+              </button>
+            )}
+            <MakeQuizButton data={data} course={code}>Make a quiz</MakeQuizButton>
+          </div>
           <QuizJobs data={data} course={code} />
-          {quizzes.length ? <Card className="p-2"><QuizLinks sem={data.id} quizzes={quizzes} withScope /></Card>
+          {quizzes.length ? <Card className="p-2"><QuizLinks sem={data.id} quizzes={quizzes} withScope removable /></Card>
             : <Empty>No quizzes yet. Press “Make a quiz” to make one for one class or the whole course.</Empty>}
         </>
       )}

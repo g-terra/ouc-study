@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isCorrect, makeAttempt, parseQuiz, pointsFor, quizStats, seededRandom, shuffledOptions } from "../src/quiz.ts";
-import { addAttempt, attemptsFile, readAttempts, removeQuiz, resetAttempts } from "../src/quiz-store.ts";
+import { addAttempt, attemptsFile, readAttempts, removeCourseQuizzes, removeQuiz, resetAttempts } from "../src/quiz-store.ts";
 import type { QuizAttempt, QuizQuestion } from "../src/types.ts";
 
 const where = { code: "AAA", name: "lecture-01-intro" };
@@ -139,4 +139,18 @@ test("reset one quiz's progress or all of it, and remove a quiz with its scores"
 
   assert.equal(resetAttempts(dir), 1);
   assert.deepEqual(readAttempts(dir), []);
+});
+
+test("remove every quiz of a course with its scores, leaving other courses alone", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ouc-quiz-"));
+  mkdirSync(join(dir, "quizzes/AAA"), { recursive: true });
+  mkdirSync(join(dir, "quizzes/BBB"), { recursive: true });
+  for (const f of ["AAA/one", "AAA/two", "BBB/three"]) { writeFileSync(join(dir, `quizzes/${f}.json`), "{}"); addAttempt(dir, { quiz: f, results: [true] }); }
+  writeFileSync(join(dir, "quizzes/AAA/notes.txt"), "not a quiz");
+  assert.equal(removeCourseQuizzes(dir, "AAA"), 2);
+  assert.deepEqual(["one", "two"].map((n) => existsSync(join(dir, `quizzes/AAA/${n}.json`))), [false, false]);
+  assert.ok(existsSync(join(dir, "quizzes/AAA/notes.txt")) && existsSync(join(dir, "quizzes/BBB/three.json")));
+  assert.deepEqual(readAttempts(dir).map((a) => a.quiz), ["BBB/three"]);
+  assert.equal(removeCourseQuizzes(dir, "CCC"), 0);   // nothing there
+  assert.throws(() => removeCourseQuizzes(dir, "../x"), /Bad course/);
 });
