@@ -200,7 +200,7 @@ test("v2: a grade update opens its assignment, with the grade and the tutor's fe
 
 test("v2: course cards count in the singular, and the bell's drop-down fits on a phone", async ({ page }) => {
   await page.goto(`/v2${SEM}/courses`);
-  await expect(page.getByText(/1 note · .*1 quiz$/)).toBeVisible();
+  await expect(page.getByText(/1 note · .*1 quiz\b/).first()).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: /^Notifications/ }).click();
   const box = await page.getByRole("dialog", { name: "Notifications" }).boundingBox();
@@ -233,9 +233,35 @@ test("v2: going back from a video or an assignment keeps the course week open an
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses\/DEMO101(#w\d+)?$/);
 });
 
+test("v2 settings: each AI's default model is picked and saved", async ({ page }) => {
+  let setting: string | undefined;
+  const posted: unknown[] = [];
+  await page.route("**/api/ai/status**", (route) => route.fulfill({ json: {
+    chosen: "opencode", label: "opencode", agentic: true, ready: true, reason: "", token: "t",
+    tools: [
+      { id: "claude", label: "Claude Code", state: "missing" },
+      { id: "opencode", label: "opencode", state: "connected", chosen: true, models: ["qwen3:8b", "gemma3:4b"], own: "qwen3:8b", model: setting ?? "qwen3:8b", setting },
+    ],
+  } }));
+  await page.route("**/api/ai/defaults", (route) => {
+    const body = route.request().postDataJSON();
+    posted.push(body);
+    setting = body.model || undefined;
+    return route.fulfill({ json: { ok: true } });
+  });
+  await page.goto(`/v2${SEM}/settings`);
+  const pick = page.getByTestId("default-models").getByRole("combobox", { name: "opencode" });
+  await expect(pick.locator("option")).toHaveText(["opencode's own (qwen3:8b)", "qwen3:8b", "gemma3:4b"]);
+  await expect(pick).toHaveValue("");
+  await pick.selectOption("gemma3:4b");
+  await expect(pick).toHaveValue("gemma3:4b");
+  expect(posted).toEqual([{ tool: "opencode", model: "gemma3:4b" }]);
+  await expect(page.getByTestId("default-models").getByRole("combobox")).toHaveCount(1);   // not for AIs that aren't installed
+});
+
 test("a formula's symbol list is one aligned row per symbol", async ({ page }) => {
   await page.goto(`/v2${SEM}/notes/DEMO101/week-01-getting-started`);
-  const where = page.getByTestId("formula-where");
+  const where = page.getByTestId("formula-where").filter({ hasText: "candidate class" });
   await expect(where.locator("dt")).toHaveCount(3);
   const xs = await where.locator("dd").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
   const ys = await where.locator("dd").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));

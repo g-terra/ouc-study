@@ -44,6 +44,12 @@ test("the search button finds slides, notes and eClass posts; Enter opens the se
   await box.fill("smoke tests");
   await expect(dialog.getByRole("option", { name: /Week 1 · Getting started/ }).first()).toContainText("Note");
 
+  // a note's formula block shows as its words, not its YAML or LaTeX
+  await box.fill("speed of light");
+  const formula = dialog.getByRole("option", { name: /Week 1 · Getting started/ }).first();
+  await expect(formula).toContainText("Mass-energy equivalence · c: speed of light");
+  await expect(formula).not.toContainText("tex:");
+
   await box.fill("spaced repetition");
   const slides = dialog.getByRole("option", { name: /Demo lecture/ });
   await expect(slides).toContainText("Slides · slide 2");
@@ -58,6 +64,13 @@ test("Escape closes search, and the API answers only for a semester it knows", a
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.keyboard.press("Control+k");
   await expect(page.getByRole("dialog", { name: "Search" })).toBeVisible();
+  // like Spotlight: the whole page, header included, dimmed; the box in the middle, well below the header
+  const view = page.viewportSize()!;
+  const backdrop = (await page.getByTestId("search-backdrop").boundingBox())!;
+  expect([backdrop.y, backdrop.height]).toEqual([0, view.height]);
+  const box = (await page.getByRole("dialog", { name: "Search" }).boundingBox())!;
+  expect(Math.abs(box.x + box.width / 2 - view.width / 2)).toBeLessThan(2);
+  expect(box.y).toBeGreaterThan(view.height * 0.15);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Search" })).toBeHidden();
   expect((await request.get("/api/search?sem=..&q=x")).status()).toBe(404);

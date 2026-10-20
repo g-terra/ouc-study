@@ -248,12 +248,12 @@ test("a flow in a chat reply shows as a Mermaid diagram; code that isn't a diagr
   await expect(page.getByText("this is not mermaid -->")).toBeVisible();
 });
 
-test("the AI and its model are picked next to Send; the model is remembered and sent", async ({ page }) => {
-  // a made-up status: Claude Code and Codex signed in
-  const tool = (id: string, label: string, models: string[], chosen = false) => ({ id, label, state: "connected", chosen, models });
+test("the AI and its model are picked next to Send; the default is named and the pick is sent", async ({ page }) => {
+  // a made-up status: Claude Code (its own default unknown) and Codex (default gpt-5)
+  const tool = (id: string, label: string, models: string[], chosen = false, model?: string) => ({ id, label, state: "connected", chosen, models, model });
   await page.route("**/api/ai/status**", (route) => route.fulfill({ json: {
     chosen: "claude", label: "Claude Code", agentic: true, ready: true, reason: "", token: "t",
-    tools: [tool("claude", "Claude Code", ["sonnet", "opus", "haiku"], true), tool("codex", "Codex", ["gpt-5-codex", "gpt-5"])],
+    tools: [tool("claude", "Claude Code", ["sonnet", "opus", "haiku"], true), tool("codex", "Codex", ["gpt-5", "gpt-5-codex"], false, "gpt-5")],
   } }));
   let sent: Record<string, unknown> | undefined;
   await page.route("**/api/ai/run", (route) => {
@@ -262,16 +262,19 @@ test("the AI and its model are picked next to Send; the model is remembered and 
   });
   await page.goto(`${SEM}/chat`);
   const model = page.getByRole("combobox", { name: "Model" });
-  await expect(model.locator("option")).toHaveText(["Default model", "sonnet", "opus", "haiku"]);
+  await expect(model.locator("option")).toHaveText(["Default (Claude Code's own)", "sonnet", "opus", "haiku"]);
   await model.selectOption("opus");
-  await page.reload();
-  await expect(page.getByRole("combobox", { name: "Model" })).toHaveValue("opus");
-  // another AI has its own models (and its own remembered pick)
+  // another AI has its own models, its default named
   await page.getByRole("combobox", { name: "Which AI answers" }).selectOption("codex");
-  await expect(page.getByRole("combobox", { name: "Model" })).toHaveValue("");
+  await expect(model.locator("option")).toHaveText(["Default (gpt-5)", "gpt-5-codex"]);
+  await expect(model).toHaveValue("");
   await page.getByRole("combobox", { name: "Which AI answers" }).selectOption("claude");
+  await expect(model).toHaveValue("opus");
   await page.getByRole("textbox", { name: "Message" }).fill("Hello");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("Hi!")).toBeVisible();
   expect(sent).toMatchObject({ message: "Hello", model: "opus" });
+  // the pick isn't kept: the default is set in Settings
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Model" })).toHaveValue("");
 });

@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAiApi, needsPrep, readPrepMeta, stampQuiz } from "../src/api.ts";
+import { setServerModels } from "../src/providers.ts";
 import { json, portOf, type Ev } from "./helpers.ts";
 import type { Server } from "node:http";
 
@@ -30,7 +31,7 @@ async function sse(res: Response): Promise<Ev[]> {
 }
 
 test("actions, guard, run and follow-up", async (t) => {
-  const { server, base } = await setup();
+  const { root, server, base } = await setup();
   t.after(() => server.close());
 
   const { actions } = await json(fetch(`${base}/api/ai/actions`));
@@ -79,6 +80,22 @@ test("actions, guard, run and follow-up", async (t) => {
   assert.equal(withModel.filter((e) => e.type === "text").map((e) => e.text).join(""), "Second turn. [opus]");
   assert.equal((await post("/api/ai/run", { chatId, message: "again", model: "--dangerously-skip-permissions" })).status, 400);
 
+  // Settings: each AI's default model, saved in .ouc/ai.json and used when a chat picks none
+  assert.equal((await post("/api/ai/defaults", { tool: "claude", model: "haiku" }, { "X-OUC-AI": "nope" })).status, 403);
+  assert.equal((await post("/api/ai/defaults", { tool: "claude", model: "--yolo" })).status, 400);
+  assert.equal((await post("/api/ai/defaults", { tool: "gpt-9", model: "" })).status, 400);
+  assert.equal((await json(post("/api/ai/defaults", { tool: "claude", model: "haiku" }))).setting, "haiku");
+  assert.deepEqual(JSON.parse(readFileSync(join(root, ".ouc/ai.json"), "utf8")).defaultModels, { claude: "haiku" });
+  assert.equal((await json(fetch(`${base}/api/ai/status`))).tools.find((x: { id: string }) => x.id === "claude").model, "haiku");
+  const byDefault = await sse(await post("/api/ai/run", { chatId, message: "again" }));
+  assert.equal(byDefault.filter((e) => e.type === "text").map((e) => e.text).join(""), "Second turn. [haiku]");
+  const picked = await sse(await post("/api/ai/run", { chatId, message: "again", model: "opus" }));   // a pick still wins
+  assert.equal(picked.filter((e) => e.type === "text").map((e) => e.text).join(""), "Second turn. [opus]");
+  await post("/api/ai/defaults", { tool: "claude", model: "" });   // back to Claude Code's own
+  assert.equal(JSON.parse(readFileSync(join(root, ".ouc/ai.json"), "utf8")).defaultModels.claude, undefined);
+  const own = await sse(await post("/api/ai/run", { chatId, message: "again" }));
+  assert.equal(own.filter((e) => e.type === "text").map((e) => e.text).join(""), "Second turn.");
+
   // deleting: needs the app's token; one chat, then all of them
   const del = (path: string, t = token) => fetch(`${base}${path}`, { method: "DELETE", headers: { "X-OUC-AI": t } });
   assert.equal((await del(`/api/ai/chats/${chatId}`, "nope")).status, 403);
@@ -89,6 +106,24 @@ test("actions, guard, run and follow-up", async (t) => {
   assert.deepEqual((await json(fetch(`${base}/api/ai/chats`))).chats.map((c: { id: string }) => c.id), [other]);
   assert.deepEqual(await json(del("/api/ai/chats")), { deleted: 1, kept: 0 });
   assert.deepEqual((await json(fetch(`${base}/api/ai/chats`))).chats, []);
+});
+
+test("opencode can use any model the local server has: it's added to opencode's config", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  const opencode = { kind: "ollama", baseUrl: "http://127.0.0.1:9", model: "qwen3:8b" };
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "opencode", opencode }));
+  mkdirSync(join(root, ".opencode"));
+  writeFileSync(join(root, ".opencode/opencode.json"), "{}");
+  setServerModels("opencode", ["qwen3:8b", "gemma3:4b"]);   // what Ollama has (read with the status)
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const post = (body: object) => fetch(`${base}/api/ai/run`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
+  assert.equal((await post({ message: "hi", model: "not-there" })).status, 400);
+  await sse(await post({ message: "hi", model: "gemma3:4b" }));
+  const oc = JSON.parse(readFileSync(join(root, ".opencode/opencode.json"), "utf8"));
+  assert.deepEqual(Object.keys(oc.provider.ollama.models), ["qwen3:8b", "gemma3:4b"]);
+  assert.equal(oc.model, "ollama/qwen3:8b");   // its own default stays
+  assert.deepEqual(JSON.parse(readFileSync(join(root, ".ouc/ai.json"), "utf8")).opencode.models, ["qwen3:8b", "gemma3:4b"]);
 });
 
 test("a failing agent reports its error", async (t) => {

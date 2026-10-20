@@ -22,6 +22,14 @@ flowchart LR
 The demo formula: $E = mc^2$.
 
 ```formula
+title: Mass-energy equivalence
+tex: 'E = m c^{2}'
+where:
+  - ['c', 'speed of light']
+note: A made-up formula block for the search test.
+```
+
+```formula
 title: Naive Bayes decision rule
 tex: '\hat{c} = \arg\max_{c} P(c) \prod_{i=1}^{n} P(w_i \mid c)'
 where:

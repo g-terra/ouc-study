@@ -4,6 +4,7 @@
  * course and week; a transcript hit opens the video at that moment or the slides at that slide.
  */
 import { useEffect, useRef, useState, type KeyboardEvent as KeyEvent } from "react";
+import { createPortal } from "react-dom";
 import type { SemesterData } from "@ouc/content/types";
 import { marks, queryWords, type SearchHit, type SearchKind } from "@ouc/content/search-text";
 import { useRouter } from "../lib/router";
@@ -96,10 +97,12 @@ export function SearchDialog({ data, onClose }: { data: SemesterData; onClose: (
   };
 
   const course = (code?: string) => data.courses.find((c) => c.code === code);
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-[8vh]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+  // on <body>: inside the header (backdrop-blur) a fixed layer would only cover the header.
+  // Like Spotlight: in the middle of the screen, a third of the way down, the whole page dimmed behind it
+  return createPortal(
+    <div data-testid="search-backdrop" className="fixed inset-0 z-[60] flex items-start justify-center bg-black/45 px-4 pt-[18vh] backdrop-blur-[2px]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div role="dialog" aria-modal="true" aria-label="Search" onKeyDown={onKey}
-        className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
+        className="flex max-h-[72vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
         <div className="flex items-center gap-2 border-b border-line px-4">
           <Search aria-hidden className="size-5 shrink-0 text-muted" />
           <input autoFocus type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search notes, slides, transcripts, assignments…"
@@ -153,6 +156,7 @@ export function SearchDialog({ data, onClose }: { data: SemesterData; onClose: (
           <div className="border-t border-line px-4 py-2 text-xs text-muted">↑ ↓ to move, Enter to open, Esc to close</div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
