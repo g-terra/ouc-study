@@ -1,7 +1,7 @@
 // The daily sync's change detection (src/daily.ts diff), on small made-up snapshots.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { diff, type Snapshot } from "../src/daily.ts";
+import { diff, paragraphs, type Snapshot } from "../src/daily.ts";
 
 const snap = (s: Partial<Snapshot> = {}): Snapshot => ({ userid: 1, user: "Test Student", grades: {}, assignments: {}, modules: {}, files: {}, discussions: {}, notifications: {}, events: {}, courses: {}, ...s });
 const kinds = (items: { type: string; title: string }[]) => items.map((i) => `${i.type}: ${i.title}`);
@@ -51,4 +51,26 @@ test("new material, updated files, forum posts, notifications and events", () =>
     "notification: eClass notification",
     "event: Upcoming: Quiz 1",
   ]);
+});
+
+test("forum posts keep their whole text, paragraphs included; new replies show the newest reply", () => {
+  const long = "word ".repeat(200).trim();
+  const prev = snap({ discussions: { 9: { code: "ABC101", forum: "Q&A", subject: "Exam?", text: "When?", modified: 100, url: "d9", announcement: false } } });
+  const cur = snap({
+    discussions: {
+      9: { ...prev.discussions![9]!, modified: 150, last: { by: "Tutor", text: "On 12 January.\n\nSee the timetable." } },
+      10: { code: "ABC101", forum: "News", subject: "Welcome", by: "Tutor", text: long, url: "d10", announcement: true },
+    },
+  });
+  const [reply, post] = diff(prev, cur);
+  assert.equal(reply!.detail, "Tutor: On 12 January.\n\nSee the timetable.");
+  assert.equal(post!.detail, `Tutor: ${long}`);
+  // without the newest reply (an older eClass), the forum's name as before
+  assert.equal(diff(prev, snap({ discussions: { 9: { ...prev.discussions![9]!, modified: 150 } } }))[0]!.detail, "Q&A");
+});
+
+test("forum HTML becomes plain text with its paragraphs and line breaks", () => {
+  assert.equal(paragraphs("<p>Dear all,</p><p>The exam is on <b>12&nbsp;January</b>.<br>Room&nbsp;2.</p><ul><li>Bring ID</li><li>Pens</li></ul>"),
+    "Dear all,\n\nThe exam is on 12 January .\nRoom 2.\n\n• Bring ID\n\n• Pens");
+  assert.equal(paragraphs("<div><p>One</p></div>\n\n<p></p><p>Two</p>"), "One\n\nTwo");
 });

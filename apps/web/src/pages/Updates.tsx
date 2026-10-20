@@ -28,39 +28,51 @@ export function SyncStatus({ data }: { data: SemesterData }) {
   return <span>✓ Checked eClass {relative(new Date(s.lastRun))}</span>;
 }
 
+/** Longer than this (or more than a few lines), a message folds with "Show more". */
+const FOLD = 420;
+export const isLong = (text: string) => text.length > FOLD || text.split("\n").length > 6;
+
+/**
+ * One update. Forum posts and announcements carry their whole message (kept with its paragraphs), so it can be
+ * read here without opening eClass; long ones fold. compact: two lines at most, as in a short list.
+ */
 export function UpdateRow({ u, data, compact }: { u: UpdateItem; data: SemesterData; compact?: boolean }) {
   const C = courseMap(data);
   const m = UPDATE_META[u.type] ?? UPDATE_META.notification;
-  const body = (
+  const [more, setMore] = useState(false);
+  const long = !compact && isLong(u.detail);
+  const title = <span className="font-semibold leading-snug">{u.title}</span>;
+  return (
     <div className={cx("flex gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition", u.url && "hover:border-muted", (u.type === "grade" || u.type === "feedback") && "border-ok/40")}>
       <span className={cx("grid size-9 shrink-0 place-items-center rounded-lg text-lg", m.tone)}>{m.icon}</span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold leading-snug">{u.title}</span>
+          {u.url ? <a href={u.url} target="_blank" rel="noreferrer" className="hover:underline">{title}</a> : title}
           {C[u.code] && <CourseBadge course={C[u.code]} />}
         </div>
-        {u.detail && <div className={cx("mt-0.5 text-sm text-muted", compact && "line-clamp-1")}>{u.detail}</div>}
+        {u.detail && (
+          <div data-testid="update-detail" className={cx("mt-0.5 text-sm text-muted", compact ? "line-clamp-2" : "whitespace-pre-line break-words", long && !more && "line-clamp-4")}>
+            {u.detail}
+          </div>
+        )}
+        {long && (
+          <button type="button" onClick={() => setMore(!more)} aria-expanded={more} className="mt-1 text-sm font-semibold text-ink underline">
+            {more ? "Show less" : "Show more"}
+          </button>
+        )}
       </div>
-      {u.url && <span className="self-center text-muted">↗</span>}
+      {u.url && <a href={u.url} target="_blank" rel="noreferrer" aria-label="Open on eClass" title="Open on eClass" className="self-start p-1 text-muted hover:text-ink">↗</a>}
     </div>
   );
-  return u.url ? <a href={u.url} target="_blank" rel="noreferrer">{body}</a> : body;
 }
 
-export function UpdatesPage({ data }: { data: SemesterData }) {
+/** The type filters and the updates day by day (the classic Daily updates page and the new look's Notifications). */
+export function UpdatesList({ data }: { data: SemesterData }) {
   const [type, setType] = useState<UpdateType | "all">("all");
   const days = data.updates.days;
   const counts = days.flatMap((d) => d.items).reduce<Record<string, number>>((m, i) => ((m[i.type] = (m[i.type] ?? 0) + 1), m), {});
-  const s = data.updates.status;
   return (
     <>
-      <PageHeader title="Daily updates" eyebrow={data.label}>
-        What changed on eClass each day: grades, feedback, new materials, deadline changes and announcements. <SyncStatus data={data} />.
-      </PageHeader>
-
-      <ConnectionCard />
-      {(!s || !s.ok) && <SetupCard error={s?.error} />}
-
       {days.length > 0 && (
         <div className="mb-6 flex flex-wrap gap-2">
           <Chip on={type === "all"} onClick={() => setType("all")}>All</Chip>
@@ -69,9 +81,6 @@ export function UpdatesPage({ data }: { data: SemesterData }) {
           ))}
         </div>
       )}
-
-      {days.length === 0 && s?.ok && <Empty>No changes found yet. The next check runs tomorrow morning (or whenever you start the app).</Empty>}
-
       <div className="space-y-8">
         {days.map((d) => {
           const items = d.items.filter((i) => type === "all" || i.type === type)
@@ -88,6 +97,24 @@ export function UpdatesPage({ data }: { data: SemesterData }) {
           );
         })}
       </div>
+    </>
+  );
+}
+
+export function UpdatesPage({ data }: { data: SemesterData }) {
+  const days = data.updates.days;
+  const s = data.updates.status;
+  return (
+    <>
+      <PageHeader title="Daily updates" eyebrow={data.label}>
+        What changed on eClass each day: grades, feedback, new materials, deadline changes and announcements. <SyncStatus data={data} />.
+      </PageHeader>
+
+      <ConnectionCard />
+      {(!s || !s.ok) && <SetupCard error={s?.error} />}
+
+      {days.length === 0 && s?.ok && <Empty>No changes found yet. The next check runs tomorrow morning (or whenever you start the app).</Empty>}
+      <UpdatesList data={data} />
       {s?.lastRun && <p className="mt-10 text-xs text-muted">Last run {fmtFull(new Date(s.lastRun))}{s.warnings?.length ? ` · ${s.warnings.length} parts skipped` : ""}.</p>}
     </>
   );
@@ -97,7 +124,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   return <button onClick={onClick} className={cx("flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm", on ? "border-ink bg-ink text-bg" : "border-line bg-surface text-muted")}>{children}</button>;
 }
 
-function SetupCard({ error }: { error?: string }) {
+export function SetupCard({ error }: { error?: string }) {
   return (
     <Card className="mb-8 p-5">
       <div className="mb-2 font-semibold">🔑 Set up daily updates</div>
@@ -111,10 +138,10 @@ function SetupCard({ error }: { error?: string }) {
   );
 }
 
-function ConnectionCard() {
+/** Sync now (eClass news, new files, the app data, then missing notes, prep packs and quizzes) and what it found. */
+export function useSync() {
   const c = useConnection();
   const [msg, setMsg] = useState<string>();
-  const l = CONN_LABEL[c.state];
   const canSync = c.state === "connected" || c.state === "offline" || c.state === "error";
   const run = async () => {
     setMsg(undefined);
@@ -128,8 +155,14 @@ function ConnectionCard() {
     }
     else setMsg(r.error ?? "Sync failed.");
   };
+  return { c, msg, canSync, run };
+}
+
+export function ConnectionCard({ className = "mb-6" }: { className?: string }) {
+  const { c, msg, canSync, run } = useSync();
+  const l = CONN_LABEL[c.state];
   return (
-    <Card className="mb-6 flex flex-wrap items-center gap-4 p-4">
+    <Card className={cx(className, "flex flex-wrap items-center gap-4 p-4")}>
       <span className={cx("grid size-10 place-items-center rounded-xl text-lg", c.state === "connected" ? "bg-ok-bg" : c.state === "offline" ? "bg-warn-bg" : c.state === "checking" || c.state === "nokey" || c.state === "unavailable" ? "bg-surface-2" : "bg-bad-bg")}>
         {c.state === "connected" ? "🟢" : c.state === "offline" ? "🟠" : c.state === "checking" ? "⏳" : c.state === "nokey" || c.state === "unavailable" ? "⚪" : "🔴"}
       </span>
