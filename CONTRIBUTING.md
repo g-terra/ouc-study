@@ -49,6 +49,7 @@ You don't need an OUC account to work on most of the code. To try it with real d
 | `packages/eclass-sync/` | eClass (Moodle web service) client | `npm run typecheck`, `npm test` |
 | `packages/ai/` | AI backends, study actions, `/api/ai` | `npm test` |
 | `ai/` | **the single source** of the study skills and agents | `npm test` (front matter) |
+| `dev/` | setup for contributors' AI coding agents (guide, skills, cloud hook) | `npm test` |
 | `packages/cli/` | `ouc` command, installer, background server, updates | `npm run typecheck`, `npm test` |
 | `bin/` | small launchers that start `packages/cli` (their paths are used by installed copies, so keep them) | `npm run lint` |
 | `docs/` | note format and examples | |
@@ -61,7 +62,7 @@ The code is TypeScript. Node runs it through [tsx](https://tsx.is), so there is 
 
 - Each package has its own `tsconfig.json` (strict, `noEmit`). Import local files with their `.ts` extension.
 - Use only syntax Node can strip (`erasableSyntaxOnly`): no `enum`, `namespace` or constructor parameter properties, and `import type` for types. That keeps the door open to running on Node's own type stripping later.
-- The only JavaScript left is the launchers (`bin/*.mjs`, `packages/eclass-sync/*.mjs`, `packages/ai/validate.mjs`), `ai/install.mjs` (dependency-free, so any AI tool can run it with plain `node`) and test fixtures that stand in for other programs. Write new code in TypeScript.
+- The only JavaScript left is the launchers (`bin/*.mjs`, `packages/eclass-sync/*.mjs`, `packages/ai/validate.mjs`), `ai/install.mjs` and `dev/*.mjs` (dependency-free, so any AI tool can run it with plain `node`) and test fixtures that stand in for other programs. Write new code in TypeScript.
 - The smoke tests (`e2e/`) are TypeScript too; Playwright reads `e2e/playwright.config.ts`.
 
 ## Make a change
@@ -109,17 +110,18 @@ Add `BREAKING CHANGE: ...` in the body, or `!` after the type, for anything that
 
 ## Working with an AI coding agent
 
-This repo is meant to be extended with **any** agentic coding tool: Claude Code, Codex, opencode (including local models), Cursor, Copilot, Gemini CLI and others.
+This repo is meant to be extended with **any** agentic coding tool: Claude Code, Codex, opencode (including local models), Cursor, Copilot, Gemini CLI and others. Their setup lives in [`dev/`](dev/README.md), apart from the students' study AI in `ai/`.
 
-- **`AGENTS.md` is the entry point.** Most tools read it automatically (Claude Code through `CLAUDE.md`). Its section *Changing the tool itself* gives agents the contributor rules in short. If your tool doesn't read `AGENTS.md`, point it there first: "Read AGENTS.md and CONTRIBUTING.md, then ...".
-- **One command to verify:** `npm run check` (plus `npm run build`). Ask your agent to run it before it says it's done.
-- **Hand it an issue.** The issue forms ask for acceptance criteria so an agent can work from them: "Implement issue #12. Follow CONTRIBUTING.md. Run npm run check."
-- **Personal data is off limits to agents too.** `opencode.json` blocks the eClass key for opencode, and `AGENTS.md` tells every agent never to read, print or commit it. Don't paste course material into a prompt for a public issue or PR.
+- **Set up once:** `npm run dev:agents` installs the project's contributor skills (`dev/skills/ouc-dev-*`) for Claude Code, Codex and opencode, and the [Superpowers](https://github.com/obra/superpowers) plugin for Claude Code in this checkout. [`dev/README.md`](dev/README.md) has Superpowers for the other tools. Claude Code cloud sessions set themselves up through the SessionStart hook in `.claude/settings.json`.
+- **`AGENTS.md` is the entry point.** Most tools read it automatically (Claude Code through `CLAUDE.md`). Its section *Changing the tool itself* sends agents to [`dev/CODING.md`](dev/CODING.md): workflow, conventions, and what to test where.
+- **Verify:** `npm run check`, `npm run build` and `npm run e2e`. Ask your agent to run them and show you the output before it says it's done.
+- **Hand it an issue.** The issue forms ask for acceptance criteria so an agent can work from them: "Implement issue #12."
+- **Personal data is off limits to agents too.** `.claude/settings.json` and `opencode.json` block the eClass key, and `AGENTS.md` tells every agent never to read, print or commit it. Don't paste course material into a prompt for a public issue or PR.
 - **Review the diff yourself** before opening the PR, and keep it small.
 
 Prompt that works well with any agent:
 
-> Read AGENTS.md (section "Changing the tool itself") and CONTRIBUTING.md. Implement <the change / issue #N>. Add tests, update the docs, run `npm run check` and `npm run build`, and propose a Conventional Commits PR title.
+> Read AGENTS.md (section "Changing the tool itself") and dev/CODING.md. Implement <the change / issue #N> test-first. Update the docs, run `npm run check`, `npm run build` and `npm run e2e`, and propose a Conventional Commits PR title.
 
 ## Releases
 

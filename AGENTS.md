@@ -2,7 +2,7 @@
 
 _Read by Codex, Claude Code (through CLAUDE.md), Cursor, opencode and other tools that support AGENTS.md. Local models get it through `ouc ai`._
 
-> **Changing the tool's code rather than studying?** Skip to [Changing the tool itself](#changing-the-tool-itself) and follow `CONTRIBUTING.md`; the study-assistant sections don't apply, and `STUDENT.md` may not exist.
+> **Changing the tool's code rather than studying?** Skip to [Changing the tool itself](#changing-the-tool-itself) and follow `dev/CODING.md`; the study-assistant sections don't apply, and `STUDENT.md` may not exist.
 
 You are the study assistant for a student at the **Open University of Cyprus (OUC)**.
 **Who they are, how they learn and which semester is current are in `STUDENT.md`** (personal, created by `ouc setup`, never committed). **Read it first.**
@@ -37,7 +37,8 @@ semesters/<id>/       ← personal, git-ignored
   plans/, research/   weekly plans, research digests
   updates/            daily eClass change feed
 memory/               long-term memory, shared across semesters (personal, git-ignored)
-ai/                   agents and skills, the single source (installed into .claude/, .agents/skills/ and .opencode/agents/ by setup or `ouc ai install`)
+ai/                   the students' study agents and skills, the single source (installed into .claude/, .agents/skills/ and .opencode/agents/ by setup or `ouc ai install`)
+dev/                  for contributors' coding agents only: CODING.md (coding guide), skills/ouc-dev-* (installed by `npm run dev:agents`), the cloud SessionStart hook
 tools/                Python helpers (extract_text.py, build_from_export.py, transcribe.py)
 docs/NOTE_FORMAT.md   how to write visual notes; docs/QUIZ_FORMAT.md how to write quizzes
 .github/              CI (tests on every PR), PR-title check, release-please, issue and PR templates
@@ -82,12 +83,13 @@ When a request matches a skill, follow its `SKILL.md`. If the installed copies a
 
 ## Changing the tool itself
 
-When the task is to change this repo's code, docs, skills or agents (not to help with studying), you are a contributor. Full guide: `CONTRIBUTING.md`. In short:
+When the task is to change this repo's code, docs, skills or agents (not to help with studying), you are a contributor. Don't read `STUDENT.md`, `memory/` or `semesters/`, and don't follow the study sections above.
+**Read `dev/CODING.md` first**: workflow (Superpowers), stack conventions, what to test where. Then use the matching contributor skill from `dev/skills/` (installed as `ouc-dev-*` skills by `npm run dev:agents`; read the file if your tool doesn't list it): `ouc-dev-testing`, `ouc-dev-web`, `ouc-dev-study-ai`, `ouc-dev-ship`. People's guide: `CONTRIBUTING.md`. In short:
 
-- **Verify with one command:** `npm run check` (lint, `node:test` unit tests, typecheck, public check), plus `npm run build` and, for UI changes, `npm run e2e` (Playwright smoke test on the demo semester in `e2e/demo/`). CI runs them all; run them before saying you're done.
+- **Verify:** `npm run check` (lint, `node:test` unit tests, typecheck, public check), `npm run build` and, when the app or server changed, `npm run e2e` (Playwright on the demo semester in `e2e/demo/`). CI runs them all; run them and read the output before saying you're done.
+- **Test first:** every behaviour change comes with a test that fails without it (`packages/<pkg>/test/`, `apps/web/test/`, `e2e/`). Never skip or loosen a test to get green.
 - **Never touch personal data:** don't read, print or commit `.eclass-token`, and don't commit anything from `semesters/`, `memory/`, `STUDENT.md`, `CLAUDE.local.md` or `.ouc/`. Tests use small made-up fixtures, never course material.
-- **Skills and agents:** edit `ai/` only, keep the `name`/`description` front matter (agents also `tools`); `npm test` checks it. Every skill becomes an Ask AI action in the app.
-- **Tests:** add or update `packages/<pkg>/test/*.test.ts` for behaviour you change.
-- **Docs:** README for students, this file for AI tools, `CONTRIBUTING.md` for contributors.
+- **Two AI toolsets, kept apart:** the students' skills and agents live in `ai/` (every skill there becomes an Ask AI action; keep the `name`/`description` front matter, agents also `tools`); contributor tooling lives in `dev/`. Never mix them, and never edit the generated copies in `.claude/skills`, `.claude/agents`, `.agents/skills` or `.opencode/agents`.
+- **Docs:** README for students, this file for AI tools, `CONTRIBUTING.md` for contributors, `dev/` for coding agents.
 - **Commits and PR titles:** Conventional Commits, lower-case subject, e.g. `feat(web): add a course filter to the timeline`, `fix(sync): ...`; scopes `web`, `content`, `sync`, `ai`, `cli`, `setup`, `docs`, `deps`; `!` for breaking changes. PRs are squash-merged and release-please turns the titles into versions and `CHANGELOG.md`.
 - **PRs:** fill in `.github/pull_request_template.md`, including which AI agent helped. Keep each PR to one purpose.

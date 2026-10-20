@@ -6,6 +6,7 @@ import { spawn, spawnSync, type ChildProcess, type SpawnOptions, type SpawnSyncO
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, win32 } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 /** The AI the student chose: an agent tool that reads the repo itself, or a plain local chat model. */
 export type Tool = "claude" | "codex" | "opencode" | "local";
@@ -377,6 +378,8 @@ export function writeOpencodeConfig(root: string, local: LocalModel): string {
 }
 
 // ---------- agent tools ----------
+/** Extra Claude Code settings for study runs: contributor plugins (Superpowers, see dev/README.md) stay off. */
+export const CLAUDE_STUDY_SETTINGS = fileURLToPath(new URL("../claude-study-settings.json", import.meta.url));
 const CLAUDE_TOOLS = "Read,Write,Edit,Glob,Grep,Bash(node packages/ai/validate.mjs *),Bash(python3 tools/extract_text.py *),Bash(python tools/extract_text.py *),Bash(ls *),Bash(grep *),Bash(date),Bash(node bin/ouc sync*),Bash(node bin/ouc pull*)";
 /**
  * [bin, args] for an agent run. interactive: the tool's own terminal UI.
@@ -385,9 +388,10 @@ const CLAUDE_TOOLS = "Read,Write,Edit,Glob,Grep,Bash(node packages/ai/validate.m
  */
 export function agentCommand(cfg: Pick<AiConfig, "tool" | "opencode">, prompt: string, { interactive = false, json = false, resume, model }: { interactive?: boolean; json?: boolean; resume?: string; model?: string } = {}): [bin: string, args: string[]] {
   if (cfg.tool === "claude") {
-    if (interactive) return ["claude", prompt ? [prompt] : []];
+    const study = ["--settings", CLAUDE_STUDY_SETTINGS];
+    if (interactive) return ["claude", prompt ? [...study, prompt] : study];
     const tools = json ? `${CLAUDE_TOOLS},WebSearch,WebFetch` : CLAUDE_TOOLS;
-    return ["claude", ["-p", prompt, "--permission-mode", "acceptEdits", "--allowedTools", tools,
+    return ["claude", [...study, "-p", prompt, "--permission-mode", "acceptEdits", "--allowedTools", tools,
       ...(json ? ["--output-format", "stream-json", "--verbose", "--disallowedTools", "Read(.eclass-token),Read(./.eclass-token)"] : []),
       ...(resume ? ["--resume", resume] : []), ...(model ? ["--model", model] : [])]];
   }

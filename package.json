@@ -1,7 +1,7 @@
 {
   "name": "ouc-study",
   "private": true,
-  "version": "0.23.1",
+  "version": "0.23.2",
   "description": "OUC study workspace: course files, notes and a React study dashboard",
   "packageManager": "npm@10.9.0",
   "workspaces": [
@@ -30,7 +30,8 @@
     "typecheck": "turbo run typecheck",
     "lint": "node --import tsx packages/cli/scripts/lint.ts",
     "check": "npm run lint && npm test && npm run typecheck && npm run check:public",
-    "e2e": "playwright test -c e2e"
+    "e2e": "playwright test -c e2e",
+    "dev:agents": "node dev/install.mjs"
   },
   "dependencies": {
     "tsx": "^4.19.2"
