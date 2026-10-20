@@ -20,6 +20,18 @@ for (const [path, name, heading] of [["", "Today", /Good (morning|afternoon|even
   });
 }
 
+test("v2 header: the logo links home, and icons are drawn (SVG), not emoji", async ({ page }) => {
+  await page.goto(`/v2${SEM}/calendar`);
+  const header = page.locator("header").first();
+  await header.getByRole("link", { name: "OUC Study, Today" }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo$/);
+  await expect(header.getByRole("button", { name: /Notifications/ }).locator("svg")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 800 });
+  const tabs = page.getByRole("navigation", { name: "Main" }).last();
+  await expect(tabs.locator("svg")).toHaveCount(3);
+  expect(await page.locator("header, nav").evaluateAll((els) => els.map((e) => e.textContent).join(""))).not.toMatch(/\p{Extended_Pictographic}/u);
+});
+
 test("v2 calendar lists the overdue assignment; a course keeps its notes and quizzes in tabs", async ({ page }) => {
   await page.goto(`/v2${SEM}/calendar`);
   await expect(page.getByRole("heading", { name: "Overdue" })).toBeVisible();
@@ -149,6 +161,6 @@ test("v2: an open week groups its items under Watch, Read, My notes and Practice
   await page.getByRole("button", { name: /Getting started/ }).first().click();
   const week = page.locator("#w1");
   for (const name of ["Watch", "Read", "My notes", "Practice"]) await expect(week.getByRole("heading", { name, exact: true })).toBeVisible();
-  await expect(week.getByRole("heading", { name: "Watch" }).locator("..")).toContainText("📝 transcript");
+  await expect(week.getByRole("heading", { name: "Watch" }).locator("..")).toContainText("transcript");
   await expect(week.getByRole("heading", { name: "Practice" }).locator("..").getByRole("button", { name: /Quiz me/ })).toBeVisible();
 });

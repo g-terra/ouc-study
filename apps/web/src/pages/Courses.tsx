@@ -10,6 +10,7 @@ import { ClassCard, ClassTimeEditor, JoinButton, upcomingClasses } from "../comp
 import { quizHref, quizScopeLabel } from "./Quizzes";
 import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
 import { pct, useAttempts } from "../lib/quiz";
+import { Clapperboard, ClipboardList, FileText, GraduationCap, INLINE, NotebookPen, Star, Trophy, Video } from "../components/icons";
 
 export function Courses({ data }: { data: SemesterData }) {
   const base = `/${enc(data.id)}`;
@@ -73,9 +74,9 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
         <h1 className="font-serif text-3xl font-semibold sm:text-4xl">{c.title}</h1>
         <div className="mt-4 flex flex-wrap gap-2 text-sm">
           <span className="rounded-full bg-white/20 px-3 py-1">{as.filter((a) => a.submitted).length}/{as.length} assignments submitted</span>
-          <span className="rounded-full bg-white/20 px-3 py-1">📒 {notes.length} notes</span>
-          {exams.filter((e) => e.kind === "Final exam").map((e) => <span key={e.at} className="rounded-full bg-white/20 px-3 py-1">🎓 Final {fmtFull(at(e.at))}</span>)}
-          {c.joinUrl && <a href={c.joinUrl} target="_blank" rel="noreferrer" className="rounded-full bg-white/20 px-3 py-1 hover:bg-white/30">🎥 Webconference ↗</a>}
+          <span className="rounded-full bg-white/20 px-3 py-1"><NotebookPen aria-hidden className={INLINE} /> {notes.length} notes</span>
+          {exams.filter((e) => e.kind === "Final exam").map((e) => <span key={e.at} className="rounded-full bg-white/20 px-3 py-1"><GraduationCap aria-hidden className={INLINE} /> Final {fmtFull(at(e.at))}</span>)}
+          {c.joinUrl && <a href={c.joinUrl} target="_blank" rel="noreferrer" className="rounded-full bg-white/20 px-3 py-1 hover:bg-white/30"><Video aria-hidden className={INLINE} /> Webconference ↗</a>}
           {c.eclassUrl && <a href={c.eclassUrl} target="_blank" rel="noreferrer" className="rounded-full bg-white px-3 py-1 font-semibold" style={{ color: c.color }}>Open on eClass ↗</a>}
         </div>
       </div>
@@ -131,7 +132,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
               <div className="grid gap-1.5">
                 {notes.map((n) => (
                   <Link key={n.slug} to={`${base}/notes/${enc(code)}/${enc(n.slug)}`} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
-                    <span>📒</span><span className="leading-snug">{n.title}</span>
+                    <NotebookPen aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" /><span className="leading-snug">{n.title}</span>
                   </Link>
                 ))}
               </div>
@@ -152,7 +153,7 @@ export function QuizLinks({ sem, quizzes, withScope = false }: { sem: string; qu
         const b = stats.best[q.id];
         return (
           <Link key={q.id} to={quizHref(sem, q)} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
-            <span aria-hidden>🏆</span>
+            <Trophy aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
             <span className="min-w-0 flex-1 leading-snug">{withScope && q.scope === "course" ? `${quizScopeLabel(q)}: ` : ""}{q.title}</span>
             <span className={cx("shrink-0 text-xs", b?.pct === 1 ? "font-semibold text-ok" : "text-muted")}>{b ? `best ${pct(b.pct)}` : `${q.questions.length} questions`}</span>
           </Link>
@@ -188,7 +189,7 @@ function WeekItemRow({ it, base, code }: { it: WeekItem; base: string; code: str
   // a video or narrated slides open with their transcript beside them; a Panopto link's transcript has its own page
   const transcript = it.transcript && (it.external
     ? <Link to={transcriptPage(it)} className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-muted underline hover:text-ink">Transcript</Link>
-    : <span className="shrink-0 px-2 py-1.5 text-xs text-muted" title="Opens with its transcript">📝 transcript</span>);
+    : <span className="shrink-0 px-2 py-1.5 text-xs text-muted" title="Opens with its transcript"><FileText aria-hidden className={INLINE} /> transcript</span>);
   return <li className="flex items-start gap-2">{link}{transcript}</li>;
 }
 
@@ -199,22 +200,22 @@ export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes
     <div id={`w${w.index}`} className={cx("scroll-mt-24 border-b border-line last:border-0", isNow && "bg-warn-bg/50")}>
       <button onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-2/60">
         <span className="grid size-8 shrink-0 place-items-center rounded-lg text-xs font-bold" style={isNow ? { background: color, color: "white" } : { background: "var(--surface-2)" }}>
-          {w.index === 0 ? "★" : w.index}
+          {w.index === 0 ? <Star aria-hidden className="size-3.5" /> : w.index}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate font-semibold">{w.label}</span>
           <span className="block text-xs text-muted">
             {dates}
-            {classes.map((x) => <span key={x.at} className={cx("ml-2", x.status === "cancelled" && "line-through")}>🎥 {fmtDay(at(x.at))} {fmtTime(at(x.at))}</span>)}
+            {classes.map((x) => <span key={x.at} className={cx("ml-2", x.status === "cancelled" && "line-through")}><Video aria-hidden className={INLINE} /> {fmtDay(at(x.at))} {fmtTime(at(x.at))}</span>)}
             {isNow && <b className="ml-2 uppercase tracking-wider text-accent">This week</b>}
           </span>
         </span>
         <span className="hidden gap-2 text-xs text-muted sm:flex">
-          {counts.note && <span>📒{counts.note}</span>}
-          {counts.file && <span>📄{counts.file}</span>}
-          {counts.video && <span>🎬{counts.video}</span>}
-          {counts.assignment && <span>📝{counts.assignment}</span>}
-          {quizzes.length > 0 && <span>🏆{quizzes.length}</span>}
+          {counts.note && <span className="flex items-center gap-0.5"><NotebookPen aria-hidden className="size-3.5" />{counts.note}</span>}
+          {counts.file && <span className="flex items-center gap-0.5"><FileText aria-hidden className="size-3.5" />{counts.file}</span>}
+          {counts.video && <span className="flex items-center gap-0.5"><Clapperboard aria-hidden className="size-3.5" />{counts.video}</span>}
+          {counts.assignment && <span className="flex items-center gap-0.5"><ClipboardList aria-hidden className="size-3.5" />{counts.assignment}</span>}
+          {quizzes.length > 0 && <span className="flex items-center gap-0.5"><Trophy aria-hidden className="size-3.5" />{quizzes.length}</span>}
         </span>
         <span className={cx("text-muted transition", isOpen && "rotate-90")}>›</span>
       </button>
@@ -223,7 +224,7 @@ export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes
           {w.summary && <p className="mb-3 text-sm text-muted">{w.summary}</p>}
           {classes.map((x) => (
             <div key={x.at} className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
-              <span className={cx(x.status === "cancelled" && "line-through")}>🎥 Live class {fmtDay(at(x.at))}, {fmtTime(at(x.at))}</span>
+              <span className={cx(x.status === "cancelled" && "line-through")}><Video aria-hidden className={INLINE} /> Live class {fmtDay(at(x.at))}, {fmtTime(at(x.at))}</span>
               {x.status !== "scheduled" && <span className="text-xs text-warn">{x.status}{x.note ? ` · ${x.note}` : ""}</span>}
               {x.extras.map((f) => <FileLink key={f.href} href={f.href} className="text-xs underline">{f.title}</FileLink>)}
               <JoinButton c={x} className="ml-auto" />

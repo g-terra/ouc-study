@@ -161,7 +161,7 @@ test("a class video opens on its own page, the transcript beside it: a line jump
   const video = page.getByRole("link", { name: /Welcome to the demo/ });
   if (!(await video.isVisible())) await page.getByRole("button", { name: /Getting started/ }).click();
   // a video and narrated slides open with their transcript (marked on the week), not as .md files
-  await expect(page.getByText("📝 transcript")).toHaveCount(2);
+  await expect(page.getByText("transcript", { exact: true })).toHaveCount(2);
   await expect(video).toHaveAttribute("href", /\/video\/.*Welcome\.mp4$/);
   await video.click();
   await expect(page).toHaveURL(/\/video\/courses%2FDEMO101/);

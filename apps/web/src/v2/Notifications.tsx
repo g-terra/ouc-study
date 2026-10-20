@@ -4,6 +4,7 @@ import { Link, enc } from "../lib/router";
 import { Empty, PageHeader, cx } from "../components/ui";
 import { ORDER, SetupCard, SyncStatus, UpdateRow, UpdatesList, useSync } from "../pages/Updates";
 import { PANEL, usePopover } from "./popover";
+import { Bell } from "../components/icons";
 
 // The newest update day already seen, per semester (this browser only): newer days count as new.
 // (The key keeps its old name so what was read in the Inbox stays read.)
@@ -72,7 +73,7 @@ export function NotificationsBell({ data }: { data?: SemesterData | null }) {
       <button type="button" onClick={toggle} aria-haspopup="dialog" aria-expanded={open}
         aria-label={unread ? `Notifications · ${unread} new` : "Notifications"} title="Notifications"
         className="relative grid size-9 place-items-center rounded-full border border-line bg-surface text-lg hover:border-muted">
-        <span aria-hidden>🔔</span>
+        <Bell aria-hidden className="size-[18px]" />
         {unread > 0 && (
           <span className="absolute -right-1.5 -top-1.5 min-w-5 rounded-full border-2 border-bg bg-accent px-1 text-center text-[10px] font-semibold leading-4 text-bg">
             {unread > 99 ? "99+" : unread}

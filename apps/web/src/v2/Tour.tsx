@@ -89,7 +89,7 @@ export function Tour({ data }: { data?: SemesterData | null }) {
         className="fixed w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-line bg-surface p-4 text-sm shadow-2xl transition-[top,left] duration-300"
         style={pos}>
         <div className="mb-1 text-xs text-muted">{step + 1} of {TOUR.length}</div>
-        <h2 id="tour-title" className="font-serif text-lg font-semibold">{s.title}</h2>
+        <h2 id="tour-title" className="flex items-center gap-2 font-serif text-lg font-semibold">{s.icon && <s.icon aria-hidden className="size-5 shrink-0 text-accent" />}{s.title}</h2>
         <p id="tour-text" className="mt-1.5 leading-relaxed text-muted">{s.text}</p>
         <div className="mt-4 flex items-center gap-2">
           {!last && <button type="button" onClick={close} className="mr-auto text-muted hover:text-ink">Skip tour</button>}

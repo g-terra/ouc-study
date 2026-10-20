@@ -4,6 +4,7 @@ import { useAiStatus } from "../lib/ai";
 import { dismissJob, makeQuiz, useQuizJobs } from "../lib/quiz";
 import { useAssistant } from "./Assistant";
 import { cx, isMaterial } from "./ui";
+import { Hourglass, TriangleAlert, Trophy, X } from "./icons";
 
 /** The classes a quiz can be made for: weeks with files or a note. */
 export const quizWeeks = (data: SemesterData, c: Course): Week[] =>
@@ -83,7 +84,7 @@ export function MakeQuizButton({ data, course, week, children, className }: { da
     <>
       <button type="button" onClick={() => setOpen(true)}
         className={cx("inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink transition hover:border-muted", className)}>
-        <span aria-hidden>🏆</span>{children}
+        <Trophy aria-hidden className="size-4 text-muted" />{children}
       </button>
       {open && <MakeQuizDialog data={data} course={course} week={week} onClose={() => setOpen(false)} />}
     </>
@@ -106,17 +107,17 @@ export function QuizJobs({ data, course }: { data: SemesterData; course?: string
     <div className="mb-4 grid gap-2">
       {jobs.filter((j) => !j.queued).map((j) => (
         <div key={j.id} className={cx("flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm", j.running ? "border-line bg-surface" : "border-bad/40 bg-bad-bg")} role="status">
-          {j.running ? <span className="size-2 shrink-0 animate-pulse rounded-full bg-accent" /> : <span aria-hidden>⚠️</span>}
+          {j.running ? <span className="size-2 shrink-0 animate-pulse rounded-full bg-accent" /> : <TriangleAlert aria-hidden className="size-4 shrink-0 text-bad" />}
           <span className="min-w-0 flex-1">
             {j.running ? <>Making a quiz: <b>{what(j.course, j.week)}</b>…</> : <>The quiz for <b>{what(j.course, j.week)}</b> wasn't made: {j.error}</>}
           </span>
           {j.chatId && <button type="button" data-ask-ai className="text-xs text-muted underline hover:text-ink" onClick={() => { setOpen(true); load(j.chatId!); }}>{j.running ? "Watch it work" : "See what happened"}</button>}
-          {!j.running && <button type="button" aria-label="Dismiss" className="px-1 text-muted hover:text-ink" onClick={() => dismissJob(j.id)}>✕</button>}
+          {!j.running && <button type="button" aria-label="Dismiss" className="px-1 text-muted hover:text-ink" onClick={() => dismissJob(j.id)}><X aria-hidden className="size-4" /></button>}
         </div>
       ))}
       {waiting.length > 0 && (
         <div className="flex items-center gap-2 rounded-xl border border-dashed border-line px-3 py-2 text-sm text-muted" role="status">
-          <span aria-hidden>⏳</span>
+          <Hourglass aria-hidden className="size-4 shrink-0" />
           <span>Waiting their turn ({waiting.length}): {waiting.map((j) => what(j.course, j.week)).join(", ")}</span>
         </div>
       )}
