@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.5](https://github.com/g-terra/ouc-study/compare/v0.23.4...v0.23.5) (2026-10-20)
+
+
+### Documentation
+
+* spell out the coding flow with mandatory tdd ([#135](https://github.com/g-terra/ouc-study/issues/135)) ([9563a85](https://github.com/g-terra/ouc-study/commit/9563a85dbbb99a549d95991fd8b7cacfd712c4df))
+
 ## [0.23.4](https://github.com/g-terra/ouc-study/compare/v0.23.3...v0.23.4) (2026-10-20)
 
 

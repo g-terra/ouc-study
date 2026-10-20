@@ -17,6 +17,7 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MEDIA_FILE, transcriptPath } from "../../eclass-sync/src/media.ts";
 import { buildClasses, detectClasses, type ClassesConfig } from "./classes.ts";
+import { findTimetableText, parseExamTimetable } from "./exams.ts";
 import { gradeFor } from "./grades.ts";
 import { parsePlan } from "./plan.ts";
 import { parseQuiz } from "./quiz.ts";
@@ -115,7 +116,8 @@ function buildSemester(id: string): SemesterData | undefined {
   const meta = readJson<any[]>(join(dir, "_meta/eclass-meta.json"), []);
   const subs = readJson<{ subs: any[] }>(join(dir, "_meta/submissions.json"), { subs: [] }).subs;
   const resources = readJson<Record<string, any>>(join(dir, "_meta/resources.json"), {});
-  const examsRaw = readJson<any[]>(join(dir, "_meta/exams.json"), []);
+  const examsJson = readJson<any>(join(dir, "_meta/exams.json"), []);
+  const examsRaw: any[] = Array.isArray(examsJson) ? [...examsJson] : Array.isArray(examsJson?.exams) ? [...examsJson.exams] : [];
   const subByKey = new Map(subs.map((s) => [`${s.code}|${s.name}`, s]));
   // live data from the daily API sync (packages/eclass-sync), newer than the scrape
   const live = readJson<{ updated?: string; assignments?: Record<string, any>; grades?: any[]; courses?: Record<string, { joinUrl?: string; groups?: string[]; posts?: { at?: string; text: string }[] }> }>(join(dir, "_meta/live.json"), {});
@@ -311,9 +313,18 @@ function buildSemester(id: string): SemesterData | undefined {
   }
 
   assignments.sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
-  const exams: Exam[] = examsRaw.map((e) => ({
-    code: e.code, kind: e.kind, at: e.at.length === 16 ? `${e.at}:00` : e.at, noTime: !!e.notime,
-    source: cfg.examTimetable ? fileHref(id, cfg.examTimetable) : undefined,
+  // no exams written down yet: read them from the exam timetable in the course files
+  let timetable = cfg.examTimetable;
+  if (!examsRaw.length) {
+    const t = findTimetableText(dir, cfg.examTimetable);
+    if (t) {
+      examsRaw.push(...parseExamTimetable(t.text, cfg.courses.map((c) => c.code), cfg.start, cfg.end));
+      if (!timetable || !existsSync(join(dir, timetable))) timetable = t.pdf;
+    }
+  }
+  const exams: Exam[] = examsRaw.filter((e) => e?.code && typeof e.at === "string").map((e) => ({
+    code: e.code, kind: e.kind ?? "Exam", at: e.at.length === 16 ? `${e.at}:00` : e.at, noTime: !!e.notime,
+    source: timetable ? fileHref(id, timetable) : undefined,
   })).sort((a, b) => a.at.localeCompare(b.at));
 
   // daily update feed
