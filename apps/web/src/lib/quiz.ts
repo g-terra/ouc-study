@@ -70,8 +70,8 @@ export async function removeQuiz(sem: string, quiz: string): Promise<void> {
 }
 
 // ---------- quizzes being made ----------
-/** queued: waiting for a free slot (the AI makes a few at a time); chatId is set once it starts. */
-export interface QuizJob { id: string; chatId?: string; sem: string; course: string; week?: string; quiz?: string; started: string; queued?: boolean; running: boolean; ok?: boolean; error?: string }
+/** queued: waiting for a free slot (the AI makes a few at a time); chatId is set once it starts; phase: reading the material, then writing the quiz. */
+export interface QuizJob { id: string; chatId?: string; sem: string; course: string; week?: string; quiz?: string; started: string; queued?: boolean; running: boolean; phase?: "planning" | "writing"; ok?: boolean; error?: string }
 let jobs: QuizJob[] = [];
 let dismissed = new Set<string>();
 const jobListeners = new Set<() => void>();
@@ -87,8 +87,8 @@ async function pollJobs() {
   jobTimer = jobs.some((x) => x.running || x.queued) ? window.setTimeout(pollJobs, 3000) : undefined;
 }
 
-/** The quizzes being made (and ones that just failed) for a semester, optionally one course. */
-export function useQuizJobs(sem: string, course?: string): QuizJob[] {
+/** The quizzes being made (and ones that just failed) for a semester, optionally one course; `all` keeps the finished ones too. */
+export function useQuizJobs(sem: string, course?: string, all = false): QuizJob[] {
   const [, tick] = useState(0);
   useEffect(() => {
     const l = () => tick((n) => n + 1);
@@ -96,7 +96,7 @@ export function useQuizJobs(sem: string, course?: string): QuizJob[] {
     if (jobListeners.size === 1) pollJobs();
     return () => { jobListeners.delete(l); };
   }, []);
-  return jobs.filter((j) => j.sem === sem && (!course || j.course === course) && (j.running || j.queued || (!j.ok && !dismissed.has(j.id))));
+  return jobs.filter((j) => j.sem === sem && (!course || j.course === course) && (all || j.running || j.queued || (!j.ok && !dismissed.has(j.id))));
 }
 export const dismissJob = (id: string) => { dismissed = new Set([...dismissed, id]); jobListeners.forEach((l) => l()); };
 

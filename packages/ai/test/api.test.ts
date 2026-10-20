@@ -6,7 +6,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createAiApi, needsPrep, readPrepMeta, stampQuiz } from "../src/api.ts";
+import { checkQuizFile, createAiApi, needsPrep, quizWriting, readPrepMeta, stampQuiz } from "../src/api.ts";
 import { setServerModels } from "../src/providers.ts";
 import { json, portOf, type Ev } from "./helpers.ts";
 import type { Server } from "node:http";
@@ -329,11 +329,34 @@ test("the Make a quiz pop-up: the quiz is made in the background, and the page c
   assert.equal((await fetch(`${base}/api/ai/quiz`, { method: "POST", body: "{}" })).status, 403);   // needs the app's token
   const { jobs: [job] } = await json(post({ sem: "S", course: "AAA", week: 1 }));
   assert.equal(job.running, true);
+  assert.equal(job.phase, "planning");   // reading the material first
   assert.equal(job.quiz, "semesters/S/quizzes/AAA/week-01-intro.json");
   let jobs: Ev[] = [];
   for (let i = 0; i < 100 && (!jobs.length || jobs[0].running); i++) { await new Promise((ok) => setTimeout(ok, 20)); jobs = (await json(fetch(`${base}/api/ai/quiz`))).jobs; }
-  assert.deepEqual([jobs[0].running, jobs[0].ok, jobs[0].week], [false, true, "1"]);
+  assert.deepEqual([jobs[0].running, jobs[0].ok, jobs[0].week, jobs[0].phase], [false, true, "1", "writing"]);
   assert.ok(existsSync(join(root, job.quiz)));
+  // background work stays out of the chat history; its log is still there for the AI background work page
+  assert.ok(!(await json(fetch(`${base}/api/ai/chats`))).chats.some((c: Ev) => c.id === jobs[0].chatId));
+  assert.equal((await json(fetch(`${base}/api/ai/chats/${jobs[0].chatId}`))).background, true);
+});
+
+test("a quiz run is writing once it saves a file, takes a Writing step or answers with the quiz JSON", () => {
+  assert.equal(quizWriting({ type: "tool", label: "Reading week-02.pdf.txt" }), false);
+  assert.equal(quizWriting({ type: "text", text: "Let me look at the slides." }), false);
+  assert.equal(quizWriting({ type: "tool", label: "Writing week-02-foundations.json" }), true);
+  assert.equal(quizWriting({ type: "file", path: "semesters/S/quizzes/AAA/x.json" }), true);
+  assert.equal(quizWriting({ type: "text", text: '{ "title": "Q", "questions": [' }), true);
+});
+
+test("a quiz the AI saved is checked: missing or broken files say why they won't show", () => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-quiz-"));
+  const rel = "semesters/S/quizzes/AAA/week-02.json";
+  assert.match(checkQuizFile(root, rel).error ?? "", /without saving a quiz/);
+  mkdirSync(join(root, "semesters/S/quizzes/AAA"), { recursive: true });
+  writeFileSync(join(root, rel), JSON.stringify({ title: "Q", course: "AAA", scope: "lecture", questions: [] }));
+  assert.match(checkQuizFile(root, rel).error ?? "", /can't open/);
+  writeFileSync(join(root, rel), JSON.stringify({ title: "Q", course: "AAA", scope: "lecture", section: 2, questions: [{ type: "true-false", question: "Q?", answer: true }] }));
+  assert.deepEqual(checkQuizFile(root, rel), {});
 });
 
 /** quizSemester with a second class that has a note, so "every class" has two to make. */

@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Course, SemesterData, Week } from "@ouc/content/types";
 import { useAiStatus } from "../lib/ai";
-import { dismissJob, makeQuiz, useQuizJobs } from "../lib/quiz";
-import { useAssistant } from "./Assistant";
+import { dismissJob, makeQuiz, useQuizJobs, type QuizJob } from "../lib/quiz";
+import { Link, enc } from "../lib/router";
 import { cx, isMaterial } from "./ui";
-import { Hourglass, TriangleAlert, Trophy, X } from "./icons";
+import { Hourglass, Settings, TriangleAlert, Trophy, X } from "./icons";
 
 /** The classes a quiz can be made for: weeks with files or a note. */
 export const quizWeeks = (data: SemesterData, c: Course): Week[] =>
@@ -91,27 +91,58 @@ export function MakeQuizButton({ data, course, week, children, className }: { da
   );
 }
 
-/** Quizzes the AI is making right now (and ones that failed), for one course or all. */
-export function QuizJobs({ data, course }: { data: SemesterData; course?: string }) {
-  const jobs = useQuizJobs(data.id, course);
-  const { setOpen, load } = useAssistant();
+/** What a running quiz job is doing, for its spinning-gears line. */
+export const quizPhase = (j: { queued?: boolean; phase?: string }) => j.queued ? "Waiting its turn…" : j.phase === "writing" ? "Creating the quiz…" : "Planning the quiz…";
+
+/**
+ * Quizzes the AI is making right now (and ones that failed), for one course or all.
+ * `week`: only that class's (shown in place, under the week's Practice), or null for whole-course quizzes only.
+ */
+export function QuizJobs({ data, course, week }: { data: SemesterData; course?: string; week?: string | null }) {
+  const all = useQuizJobs(data.id, course);
+  const jobs = week === undefined ? all : all.filter((j) => (week === null ? j.week === undefined : j.week === week));
   if (!jobs.length) return null;
-  const what = (code: string, week?: string) => {
-    const c = data.courses.find((x) => x.code === code);
-    const w = week !== undefined ? c?.weeks.find((x) => String(x.index) === week) : undefined;
-    return `${c?.short ?? code}${w ? ` · ${w.index === 0 ? "General" : w.label}` : " · whole course"}`;
-  };
+  if (week) return (
+    <div className="grid gap-1.5 px-2">
+      {jobs.map((j) => (
+        <div key={j.id} className={cx("flex flex-wrap items-center gap-2 rounded-lg px-2 py-1.5 text-sm", j.running || j.queued ? "text-muted" : "bg-bad-bg")} role="status">
+          {j.running ? <Settings aria-hidden className="size-4 shrink-0 animate-spin text-accent [animation-duration:2.5s]" />
+            : j.queued ? <Hourglass aria-hidden className="size-4 shrink-0" /> : <TriangleAlert aria-hidden className="size-4 shrink-0 text-bad" />}
+          <span className="min-w-0 flex-1">{j.running || j.queued ? quizPhase(j) : <>The quiz wasn't made: {j.error}</>}</span>
+          {j.chatId && <WorkLink sem={data.id} running={j.running} />}
+          {!j.running && !j.queued && <button type="button" aria-label="Dismiss" className="px-1 text-muted hover:text-ink" onClick={() => dismissJob(j.id)}><X aria-hidden className="size-4" /></button>}
+        </div>
+      ))}
+    </div>
+  );
+  return <QuizJobList data={data} jobs={jobs} />;
+}
+
+/** Quizzes run in the background, with no chat: their steps are on the AI background work page. */
+const WorkLink = ({ sem, running }: { sem: string; running: boolean }) => (
+  <Link to={`/${enc(sem)}/ai-work`} className="text-xs text-muted underline hover:text-ink">{running ? "Watch it work" : "See what happened"}</Link>
+);
+
+/** What a quiz job is for: "Artificial Intelligence · Foundations of AI" or "… · whole course". */
+export const quizJobLabel = (data: SemesterData, code: string, week?: string) => {
+  const c = data.courses.find((x) => x.code === code);
+  const w = week !== undefined ? c?.weeks.find((x) => String(x.index) === week) : undefined;
+  return `${c?.short ?? code}${w ? ` · ${w.index === 0 ? "General" : w.label}` : " · whole course"}`;
+};
+
+function QuizJobList({ data, jobs }: { data: SemesterData; jobs: QuizJob[] }) {
+  const what = (code: string, week?: string) => quizJobLabel(data, code, week);
   // classes waiting their turn share one line
   const waiting = jobs.filter((j) => j.queued);
   return (
     <div className="mb-4 grid gap-2">
       {jobs.filter((j) => !j.queued).map((j) => (
         <div key={j.id} className={cx("flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm", j.running ? "border-line bg-surface" : "border-bad/40 bg-bad-bg")} role="status">
-          {j.running ? <span className="size-2 shrink-0 animate-pulse rounded-full bg-accent" /> : <TriangleAlert aria-hidden className="size-4 shrink-0 text-bad" />}
+          {j.running ? <Settings aria-hidden className="size-4 shrink-0 animate-spin text-accent [animation-duration:2.5s]" /> : <TriangleAlert aria-hidden className="size-4 shrink-0 text-bad" />}
           <span className="min-w-0 flex-1">
-            {j.running ? <>Making a quiz: <b>{what(j.course, j.week)}</b>…</> : <>The quiz for <b>{what(j.course, j.week)}</b> wasn't made: {j.error}</>}
+            {j.running ? <><b>{what(j.course, j.week)}</b>: {quizPhase(j)}</> : <>The quiz for <b>{what(j.course, j.week)}</b> wasn't made: {j.error}</>}
           </span>
-          {j.chatId && <button type="button" data-ask-ai className="text-xs text-muted underline hover:text-ink" onClick={() => { setOpen(true); load(j.chatId!); }}>{j.running ? "Watch it work" : "See what happened"}</button>}
+          {j.chatId && <WorkLink sem={data.id} running={j.running} />}
           {!j.running && <button type="button" aria-label="Dismiss" className="px-1 text-muted hover:text-ink" onClick={() => dismissJob(j.id)}><X aria-hidden className="size-4" /></button>}
         </div>
       ))}

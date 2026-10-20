@@ -7,7 +7,7 @@
 //   POST /api/ai/defaults      { tool, model } the model an AI uses unless a chat picks another ("" = the tool's own), saved in .ouc/ai.json
 //   POST /api/ai/run           { sem, chatId?, action?, params?, message, tool?, model? } → Server-Sent Events (model: one of the tool's `models` in status)
 //   POST /api/ai/stop          { chatId }
-//   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
+//   GET  /api/ai/chats         saved chats (newest first; not the background work);  GET /api/ai/chats/<id>   one chat
 //   DELETE /api/ai/chats/<id>  deletes a saved chat (not while it runs: 409);  DELETE /api/ai/chats  all of them but the running ones → { deleted, kept }
 //   GET  /api/ai/view?path=…  a visual the AI saved (HTML, SVG or image), sandboxed, for the chat to show inline
 //   POST /api/ai/plan/task     { sem, week, line, done } ticks a task in semesters/<sem>/plans/<week>.md
@@ -65,9 +65,10 @@ export interface Chat {
   id: string; title: string; tool: string; action: string | null; params: Params; sem: string | null;
   createdAt: string; updatedAt?: string; sessionId?: string; messages: Message[]; running?: boolean;
   quiz?: string;                                       // make-quiz: the file it makes (repo-relative)
+  background?: boolean;                                // started by the app (Sync now, Make a quiz): not in the chat history
 }
 /** POST /api/ai/run (and the background work). */
-interface RunBody { sem?: string | null; chatId?: string; action?: string | null; params?: Params; message?: string; tool?: string; model?: string; auto?: boolean }
+interface RunBody { sem?: string | null; chatId?: string; action?: string | null; params?: Params; message?: string; tool?: string; model?: string; auto?: boolean; background?: boolean }
 /** null tells a listener the turn ended. */
 type Listener = (e: Record<string, unknown> | null) => void;
 interface Live { chat: Chat; stop(): void; listeners: Set<Listener> }
@@ -162,6 +163,7 @@ function listChats(root: string) {
   const dir = chatDir(root);
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => loadChat(root, f.slice(0, -5))).filter((c) => c !== null)
+    .filter((c) => !c.background)   // background work is followed on the AI background work page, not in the chat
     .map(({ id, title, tool, action, sem, updatedAt }) => ({ id, title, tool, action, sem, updatedAt }))
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, 50);
 }
@@ -214,6 +216,16 @@ export function stampQuiz(root: string, rel: string, by: string, at = new Date()
   const { title, course, scope, section, description, ...rest } = d;
   writeFileSync(join(root, rel), `${JSON.stringify({ title, course, scope, section, description, by: d.by ?? by, created: d.created ?? at.toISOString(), ...rest }, null, 2)}\n`);
   return true;
+}
+/** Whether an event of a quiz run shows the AI writing the quiz (a file saved, a "Writing …" step, or quiz JSON in a local model's answer). */
+export const quizWriting = (e: Record<string, unknown>): boolean =>
+  e.type === "file" || (e.type === "tool" && /^Writing\b/.test(String(e.label ?? ""))) || (e.type === "text" && /"questions"\s*:/.test(String(e.text ?? "")));
+/** Checks the quiz a run saved at `rel`: an error says why it won't show in the app (missing, or not a valid quiz). */
+export function checkQuizFile(root: string, rel: string): { error?: string } {
+  const m = QUIZ_FILE.exec(rel);
+  if (!m || !existsSync(join(root, rel))) return { error: "The AI finished without saving a quiz." };
+  const { quiz, errors } = parseQuiz(read(join(root, rel)), { code: m[1]!, name: m[2]! });
+  return quiz ? {} : { error: `The AI saved a quiz the app can't open: ${errors.slice(0, 2).join(" ")}` };
 }
 /**
  * A plain local model answers with the quiz JSON: check it and save it at `rel`.
@@ -334,7 +346,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     // a new quiz: the same path buildPrompt gave the agent (a local model's answer is saved there)
     let quiz: string | undefined;
     if (!chat && action === "make-quiz" && semId) { const q = quizScope(data, params); quiz = quizPath(root, semId, q.course, q.week); }
-    chat ??= { id: randomUUID(), title: shown.slice(0, 80), tool, action, params, sem: semId, createdAt: now, messages: [], quiz };
+    chat ??= { id: randomUUID(), title: shown.slice(0, 80), tool, action, params, sem: semId, createdAt: now, messages: [], quiz, ...(body.background && { background: true }) };
     chat.updatedAt = now;
     chat.messages.push({ role: "user", text: shown, prompt, at: now });
     // who answered, with the model picked for this turn
@@ -474,7 +486,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
             tried[job.id] = new Date().toISOString();
             mkdirSync(join(root, ".ouc"), { recursive: true });
             writeFileSync(prepState, JSON.stringify(tried, null, 1));
-            const t = startTurn({ sem: semId, ...job.body });
+            const t = startTurn({ sem: semId, ...job.body, background: true });
             if (t.error !== undefined) { prep.done++; continue; }   // e.g. that course has nothing left after all
             const slot = { id: job.id, chatId: t.chat.id };
             prep.running = [...prep.running, slot];
@@ -497,18 +509,21 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
 
   // ----- quizzes made in the background (the Make a quiz pop-up) -----
   // A job waits in the queue (queued) until a slot is free: "parallel" in .ouc/ai.json (default 3) run at once.
-  type QuizJob = { id: string; chatId?: string; sem: string; course: string; week?: string; quiz?: string; started: string; queued?: boolean; running: boolean; ok?: boolean; error?: string };
+  // phase: "planning" while the AI reads the material, "writing" once it starts writing the quiz
+  type QuizJob = { id: string; chatId?: string; sem: string; course: string; week?: string; quiz?: string; started: string; queued?: boolean; running: boolean; phase?: "planning" | "writing"; ok?: boolean; error?: string };
   let quizJobs: QuizJob[] = [];
   const quizSlots = () => Math.max(1, Math.min(8, Number(loadConfig(root)?.parallel) || 3));
   function startQuizJob(job: QuizJob) {
     const params: Params = { course: job.course, ...(job.week !== undefined ? { week: job.week } : {}) };
-    const t = startTurn({ sem: job.sem, action: "make-quiz", params });
+    const t = startTurn({ sem: job.sem, action: "make-quiz", params, background: true });
     if (t.error !== undefined) return Object.assign(job, { queued: false, running: false, ok: false, error: t.error, code: t.code });
-    Object.assign(job, { chatId: t.chat.id, quiz: t.chat.quiz, started: t.chat.createdAt, queued: false, running: true });
+    Object.assign(job, { chatId: t.chat.id, quiz: t.chat.quiz, started: t.chat.createdAt, queued: false, running: true, phase: "planning" });
+    t.live.listeners.add((e) => { if (e && job.phase === "planning" && quizWriting(e)) job.phase = "writing"; });
     t.done.then((r) => {
       job.running = false;
-      job.ok = !!r?.ok && !!job.quiz && existsSync(join(root, job.quiz));
-      if (!job.ok) job.error = t.chat.messages.at(-1)?.error ?? (r?.ok ? stripTicks(t.chat.messages.at(-1)?.text) || "The AI finished without saving a quiz." : "The AI stopped with an error.");
+      const check = r?.ok && job.quiz ? checkQuizFile(root, job.quiz) : null;
+      job.ok = !!check && !check.error;
+      if (!job.ok) job.error = check?.error ?? t.chat.messages.at(-1)?.error ?? (r?.ok ? stripTicks(t.chat.messages.at(-1)?.text) || "The AI finished without saving a quiz." : "The AI stopped with an error.");
       // the AI stopped (usage limit, sign-in): the rest would fail the same way
       if (!r?.ok) quizJobs = quizJobs.filter((j) => !j.queued);
       pumpQuizzes();

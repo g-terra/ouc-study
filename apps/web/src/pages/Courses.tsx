@@ -9,7 +9,7 @@ import { AskAiButton } from "../components/Assistant";
 import { ClassCard, ClassTimeEditor, JoinButton, upcomingClasses } from "../components/Classes";
 import { quizHref, quizScopeLabel } from "./Quizzes";
 import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
-import { pct, useAttempts } from "../lib/quiz";
+import { pct, useAttempts, useQuizJobs } from "../lib/quiz";
 import { DoneBox, DoneCount } from "../components/Progress";
 import { useProgress } from "../lib/progress";
 import { tracked, weekProgress } from "@ouc/content/progress";
@@ -201,6 +201,7 @@ export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes
   const counts = w.items.reduce<Record<string, number>>((m, i) => ((m[i.kind] = (m[i.kind] ?? 0) + 1), m), {});
   const progress = useProgress(data.id);
   const doneCount = weekProgress(code, w, progress.done);
+  const making = useQuizJobs(data.id, code).some((j) => j.week === String(w.index));
   return (
     <div id={`w${w.index}`} className={cx("scroll-mt-24 border-b border-line last:border-0", isNow && "bg-warn-bg/50")}>
       <button onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-2/60">
@@ -242,10 +243,11 @@ export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes
             const notesBtn = key === "notes" && !items.length && w.index > 0 && w.items.some(isMaterial);
             if (key === "practice") {
               const tools = w.index > 0 && w.items.some(isMaterial);
-              if (!quizzes.length && !tools) return null;
+              if (!quizzes.length && !tools && !making) return null;
               return (
                 <WeekGroup key={key} label={label}>
                   {quizzes.length > 0 && <QuizLinks sem={data.id} quizzes={quizzes} />}
+                  <QuizJobs data={data} course={code} week={String(w.index)} />
                   {tools && (
                     <div className="mt-1.5 flex flex-wrap gap-2 px-2">
                       <AskAiButton action="quiz-me" params={{ course: code, week: String(w.index) }}>Quiz me</AskAiButton>
