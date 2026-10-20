@@ -11,7 +11,7 @@ const PAGES: [path: string, name: string][] = [
 let errors: string[] = [];
 test.beforeEach(async ({ page }) => {
   // these tests cover the classic look (the new look, the default, is in v2.spec.ts)
-  await page.addInitScript(() => { try { localStorage.setItem("ouc-ui", "classic"); } catch {} });
+  await page.addInitScript(() => { try { localStorage.setItem("ouc-ui", "classic"); localStorage.setItem("ouc-tour-seen", "1"); } catch {} });
   errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });

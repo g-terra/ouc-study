@@ -9,6 +9,7 @@ import { v2Section } from "./paths";
 import { rememberLook } from "./look";
 import { NotificationsBell } from "./Notifications";
 import { PANEL, usePopover } from "./popover";
+import { Tour, startTour } from "./Tour";
 
 const NAV = [
   ["", "Today", "☀️"],
@@ -26,7 +27,7 @@ function ProfileMenu({ sem }: { sem: string }) {
   const name = eclassOk ? c.user : undefined;
   const item = "flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-surface-2";
   return (
-    <div ref={box} className="relative">
+    <div ref={box} className="relative" data-tour="profile">
       <button type="button" onClick={() => { setOpen(!open); if (!open) refreshAi(); }} aria-haspopup="menu" aria-expanded={open}
         aria-label={`Profile · ${word}`} title={`${name ?? "Profile"} · ${word}`}
         className="relative grid size-9 place-items-center rounded-full bg-ink text-xs font-semibold text-bg hover:opacity-90">
@@ -45,6 +46,7 @@ function ProfileMenu({ sem }: { sem: string }) {
           <Link role="menuitem" to={`${base}/settings`} onClick={() => setOpen(false)} className={item}><span aria-hidden>⚙️</span>Settings</Link>
           <Link role="menuitem" to={`${base}/ai-work`} onClick={() => setOpen(false)} className={item}><span aria-hidden>✨</span>AI background work</Link>
           <Link role="menuitem" to={`${base}/chat`} onClick={() => setOpen(false)} className={item}><span aria-hidden>💬</span>Ask AI chats</Link>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); startTour(); }} className={cx(item, "w-full text-left")}><span aria-hidden>🧭</span>Take the tour</button>
         </div>
       )}
     </div>
@@ -68,7 +70,7 @@ export function Shell({ sem, data, children }: { sem: string; data?: SemesterDat
           </Link>
           <nav aria-label="Main" className="hidden flex-1 gap-1 sm:flex">
             {NAV.map(([seg, text]) => (
-              <Link key={seg} to={seg ? `${base}/${seg}` : base} aria-current={section === seg ? "page" : undefined}
+              <Link key={seg} to={seg ? `${base}/${seg}` : base} data-tour={`nav-${seg || "today"}`} aria-current={section === seg ? "page" : undefined}
                 className={cx("flex items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition",
                   section === seg ? "bg-ink text-bg" : "text-muted hover:bg-surface-2 hover:text-ink")}>
                 {text}
@@ -90,9 +92,10 @@ export function Shell({ sem, data, children }: { sem: string; data?: SemesterDat
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-6 sm:pt-8">{children}</main>
       <AskAiFab />
+      <Tour data={data} />
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
         {NAV.map(([seg, text, icon]) => (
-          <Link key={seg} to={seg ? `${base}/${seg}` : base} aria-current={section === seg ? "page" : undefined}
+          <Link key={seg} to={seg ? `${base}/${seg}` : base} data-tour={`nav-${seg || "today"}`} aria-current={section === seg ? "page" : undefined}
             className={cx("relative flex flex-col items-center gap-0.5 py-2 text-[11px]", section === seg ? "font-semibold text-ink" : "text-muted")}>
             <span className="text-lg leading-none">{icon}</span>{text}
           </Link>
