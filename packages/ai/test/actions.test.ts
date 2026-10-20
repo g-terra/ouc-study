@@ -89,3 +89,20 @@ test("every chat is told to draw flows as Mermaid diagrams", () => {
   assert.doesNotMatch(buildPrompt({ root: ".", semId: "S", data, message: "and then?", first: false }), /mermaid/);   // said once per chat
   assert.match(chatSystem({ root: ".", semId: "S", data }), /```mermaid diagram/);   // local models too
 });
+
+test("a plain chat starts lean: ask how to help, read files only when needed", () => {
+  const hello = buildPrompt({ root: ".", semId: "S", data, message: "hi there" });
+  assert.match(hello, /ask how you can help/);
+  assert.match(hello, /only when the question needs them/);
+  assert.match(hello, /never write answers the student could submit/);
+  assert.doesNotMatch(buildPrompt({ root: ".", semId: "S", data, action: "plan-week" }), /ask how you can help/);   // an action is a task
+  assert.doesNotMatch(buildPrompt({ root: ".", semId: "S", data, message: "and?", first: false }), /ask how you can help/);   // said once
+  // a local model gets a short guide, not all of AGENTS.md
+  const root = mkdtempSync(join(tmpdir(), "ouc-chat-"));
+  writeFileSync(join(root, "AGENTS.md"), "# Repository map\nlots of detail");
+  writeFileSync(join(root, "STUDENT.md"), "Name: Sam");
+  const system = chatSystem({ root, semId: "", data });
+  assert.match(system, /Name: Sam/);
+  assert.match(system, /ask how you can help/);
+  assert.doesNotMatch(system, /Repository map/);
+});

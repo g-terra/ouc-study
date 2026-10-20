@@ -218,6 +218,15 @@ export const APP_PREAMBLE = "You are running from the OUC Study app, one turn at
   "Don't wait for confirmation in the middle of a task; make sensible choices and finish it. Keep the reply short, use Markdown, and name the repo-relative path of every file you write or point to in `backticks` (the app turns them into links). " +
   `${DIAGRAMS} Never read or print .eclass-token.`;
 
+// A plain chat (no action picked) starts lean: the agent reads files only when the question needs them.
+export const CHAT_START = "This is a chat. Be warm and helpful, and answer what the student asks. " +
+  "If they only say hello or don't ask anything specific yet, greet them and ask how you can help, with two or three short suggestions " +
+  "(explain a topic, quiz them, plan the week, help with an assignment); don't read files or give a status report for that. " +
+  "Read STUDENT.md, memory/, deadlines, eClass updates or course files only when the question needs them: the start-of-session reading in AGENTS.md is for study sessions in Terminal, not this chat. " +
+  "Where things are: STUDENT.md (the student, the current semester), memory/progress.md (what's been covered), semesters/<id>/DEADLINES.md, " +
+  "semesters/<id>/notes/<CODE>/ (their notes), semesters/<id>/text/ (text of every course file: grep these), semesters/<id>/assignments/, semesters/<id>/updates/<date>.json (what changed on eClass). " +
+  "Academic integrity: explain, hint, outline and review, but never write answers the student could submit.";
+
 /**
  * The text sent for one turn. action/params come from the app's action picker (first turn only);
  * message is what the student typed. Throws Error with a readable message when an input is missing.
@@ -280,7 +289,7 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       body = `Use the ${action} skill${msg ? `: ${msg}` : "."}`;
   }
   const visuals = semId ? ` When a picture would help (a diagram, a chart, a side-by-side), save it as one self-contained HTML or SVG file in semesters/${semId}/visuals/ and name its path in backticks: the app shows it right in the chat.` : "";
-  return first ? `${APP_PREAMBLE}${visuals}\n\n${body}` : body;
+  return first ? `${APP_PREAMBLE}${visuals}${action ? "" : ` ${CHAT_START}`}\n\n${body}` : body;
 }
 
 /** The text of a quiz's material for a model without file tools: the student's notes, then the files' text copies. */
@@ -294,8 +303,11 @@ export function quizMaterialText(root: string, semId: string, data: SemesterData
 
 /** System prompt for a plain local model chatting from the app (it has no tools). */
 export function chatSystem({ root, semId, data, action, params = {} }: Omit<PromptInput, "message" | "first">): string {
-  const parts = [read(join(root, "AGENTS.md")), "", "# About the student", read(join(root, "STUDENT.md")).trim()];
-  if (semId) parts.push("", "# Deadlines", read(join(root, "semesters", semId, "DEADLINES.md")));
+  // a short guide, not all of AGENTS.md: a local model's context window is small
+  const parts = ["You are the study assistant of a student at the Open University of Cyprus, chatting from their OUC Study app.",
+    "Academic integrity: explain, give hints, outline and review, but never write answers the student could submit.", "",
+    "# About the student", read(join(root, "STUDENT.md")).trim()];
+  if (semId) parts.push("", "# Deadlines (mention them only when asked or relevant)", read(join(root, "semesters", semId, "DEADLINES.md")));
   if (action === "quiz-me" && params.course) {
     const course = findCourse(data, params.course);
     const notes = data.notes.filter((n) => n.code === course?.code && (params.week === undefined || params.week === "" || String(n.weekIndex) === String(params.week)));
@@ -308,6 +320,7 @@ export function chatSystem({ root, semId, data, action, params = {} }: Omit<Prom
       "", "You can't save files or run commands. Reply with only the quiz JSON (no other text): the app checks it and saves it for the Quizzes page.");
     return parts.join("\n");
   }
-  parts.push("", DIAGRAMS, "", "You have no tools in this chat. If a task needs files or the web, say it needs Claude Code, Codex or opencode (`ouc ai setup`), or the `ouc notes` / `ouc plan` commands.");
+  parts.push("", "Be warm and helpful. If the student only says hello or doesn't ask anything specific, greet them and ask how you can help, with two or three short suggestions, instead of a status report.",
+    "", DIAGRAMS, "", "You have no tools in this chat. If a task needs files or the web, say it needs Claude Code, Codex or opencode (`ouc ai setup`), or the `ouc notes` / `ouc plan` commands.");
   return parts.join("\n");
 }
