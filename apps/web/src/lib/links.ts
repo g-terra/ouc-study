@@ -24,7 +24,8 @@ export function fileLink(path: string, sem?: string): { to: string; internal: bo
   if (asg) return { to: `/${encodeURIComponent(s)}/assignments/${encodeURIComponent(asg[1])}/${encodeURIComponent(asg[2])}`, internal: true };
   if (!/\.\w{1,6}$/.test(rest)) return null;   // a folder
   const href = `/files/${s}/${enc(rest)}`;
-  return slidesPage(href) ? { to: slidesPage(href)!, internal: true } : { to: href, internal: false };
+  const page = slidesPage(href) ?? videoPage(href);
+  return page ? { to: page, internal: true } : { to: href, internal: false };
 }
 
 /** PowerPoint files open in the app's slide viewer: /files/<sem>/<path>.pptx → /<sem>/slides/<path>. Null for other files. */
@@ -32,6 +33,24 @@ export function slidesPage(href?: string): string | null {
   const m = href?.match(/^\/files\/([^/]+)\/(.+\.(?:pptx|ppsx|ppt|pps|odp))$/i);
   if (!m) return null;
   try { return `/${m[1]}/slides/${encodeURIComponent(decodeURIComponent(m[2]))}`; } catch { return null; }
+}
+
+/** Class videos open on the app's video page, with the transcript beside them: /files/<sem>/<path>.mp4 → /<sem>/video/<path>. */
+export function videoPage(href?: string): string | null {
+  const m = href?.match(/^\/files\/([^/]+)\/(.+\.(?:mp4|m4v|mov|webm|mkv|avi|mp3|m4a|wav|aac|ogg|oga|opus|flac))$/i);
+  if (!m) return null;
+  try { return `/${m[1]}/video/${encodeURIComponent(decodeURIComponent(m[2]))}`; } catch { return null; }
+}
+
+/**
+ * Where a week item's transcript opens: the video page (the video beside its transcript), the slide
+ * viewer for narrated slides, and for a Panopto link the video page with the transcript alone.
+ */
+export function transcriptPage(it: { href?: string; transcript?: string; external?: boolean }): string {
+  const own = !it.external && (videoPage(it.href) ?? slidesPage(it.href));
+  if (own) return own;
+  const m = it.transcript?.match(/^\/files\/([^/]+)\/(.+)$/);
+  try { return m ? `/${m[1]}/video/${encodeURIComponent(decodeURIComponent(m[2]))}` : it.transcript ?? ""; } catch { return it.transcript ?? ""; }
 }
 
 /** What a link to a path shows: the file (or folder) name; a note's slug, an assignment's folder, "Week 42 plan". */
