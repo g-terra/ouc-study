@@ -42,7 +42,7 @@ export function CourseList({ data }: { data: SemesterData }) {
                 </div>
                 <div className="flex shrink-0 flex-col items-center" title={`${done} of ${as.length} assignments handed in`}>
                   <ProgressRing value={as.length ? done / as.length : 0} color={c.color} label={`${done}/${as.length}`} />
-                  <span className="mt-0.5 text-[11px] text-muted">handed in</span>
+                  <span className="mt-0.5 text-[11px] text-muted">assignments</span>
                 </div>
               </Card>
             </Link>
