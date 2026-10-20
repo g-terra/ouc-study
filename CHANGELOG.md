@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.4](https://github.com/g-terra/ouc-study/compare/v0.23.3...v0.23.4) (2026-10-20)
+
+
+### Bug Fixes
+
+* **ai:** start chats lean and give a picked opencode model a 32k context window ([#131](https://github.com/g-terra/ouc-study/issues/131)) ([152c87d](https://github.com/g-terra/ouc-study/commit/152c87dde1a6b9e40fbcd1308fcd4f5a40b5cab4))
+
 ## [0.23.3](https://github.com/g-terra/ouc-study/compare/v0.23.2...v0.23.3) (2026-10-20)
 
 
