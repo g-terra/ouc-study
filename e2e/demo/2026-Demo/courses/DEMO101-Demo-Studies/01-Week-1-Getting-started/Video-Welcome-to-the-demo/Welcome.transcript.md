@@ -11,3 +11,4 @@ _Made automatically from the recording's audio, so names and terms can be mishea
 
 [0:00] Welcome to the demo course. This week we get started.
 
+[0:30] Next, open the lecture slides and listen to the narration.

@@ -2,23 +2,28 @@ import { useEffect, useState } from "react";
 import type { SemesterData } from "@ouc/content/types";
 import { Link, enc, useRouter } from "../lib/router";
 import { currentWeek, stateOf } from "../lib/data";
-import { at, fmtFull, fmtShort, relative } from "../lib/dates";
+import { at, fmtFull, fmtShort, fmtWhen, plural, relative } from "../lib/dates";
 import { useAttempts } from "../lib/quiz";
 import { Card, Empty, PageHeader, ProgressRing, StatePill, cx } from "../components/ui";
 import { ClassCard, ClassTimeEditor, upcomingClasses } from "../components/Classes";
 import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
 import { QuizLinks, WeekRow } from "../pages/Courses";
 import { assignmentHref } from "./agenda";
+import { DoneCount } from "../components/Progress";
+import { useProgress } from "../lib/progress";
+import { courseProgress, weekProgress } from "@ouc/content/progress";
+import { Flame, GraduationCap, INLINE, NotebookPen, Trophy, Video } from "../components/icons";
 
 /** Courses: one row per course with where it's at. Notes and quizzes live inside each course. */
 export function CourseList({ data }: { data: SemesterData }) {
   const now = new Date();
   const { stats } = useAttempts(data.id);
+  const progress = useProgress(data.id);
   return (
     <>
       <PageHeader title="Courses" eyebrow={data.label}>
         Each course has its weeks, notes, quizzes and assignments in one place.
-        {stats.points > 0 && <> <span className="whitespace-nowrap">🏆 {stats.points} quiz points{stats.streak > 0 && ` · 🔥 ${stats.streak}-day streak`}</span></>}
+        {stats.points > 0 && <> <span className="whitespace-nowrap"><Trophy aria-hidden className={INLINE} /> {stats.points} quiz points{stats.streak > 0 && <> · <Flame aria-hidden className={INLINE} /> {stats.streak}-day streak</>}</span></>}
       </PageHeader>
       <div className="grid gap-3">
         {data.courses.map((c) => {
@@ -35,10 +40,10 @@ export function CourseList({ data }: { data: SemesterData }) {
                 <div className="absolute inset-y-0 left-0 w-1.5" style={{ background: c.color }} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2"><span className="font-serif text-xl font-semibold">{c.short}</span><span className="text-xs text-muted">{c.code}</span></div>
-                  <div className="mt-1 text-sm"><span className="text-muted">This week:</span> {wk?.label ?? "between weeks"}</div>
+                  <div className="mt-1 text-sm"><span className="text-muted">This week:</span> {wk?.label ?? "between weeks"}{wk && progress.state === "ok" && <DoneCount count={weekProgress(c.code, wk, progress.done)} long className="ml-2 text-xs" />}</div>
                   <div className="text-sm"><span className="text-muted">Next due:</span> {nd ? `${nd.title}, ${relative(at(nd.due!), now)}` : "nothing open"}</div>
                   <div className="text-sm"><span className="text-muted">Exam:</span> {exam ? `${exam.kind}, ${exam.noTime ? fmtShort(at(exam.at)) : fmtFull(at(exam.at))} (${relative(at(exam.at), now)})` : "no date yet"}</div>
-                  <div className="mt-1.5 text-xs text-muted">📒 {notes} notes · 🏆 {quizzes} quizzes</div>
+                  <div className="mt-1.5 text-xs text-muted"><NotebookPen aria-hidden className={INLINE} /> {plural(notes, "note")} · <Trophy aria-hidden className={INLINE} /> {plural(quizzes, "quiz", "quizzes")}{progress.state === "ok" && (() => { const p = courseProgress(c, progress.done); return p.total > 0 && <> · {p.done} of {p.total} watched or read</>; })()}</div>
                 </div>
                 <div className="flex shrink-0 flex-col items-center" title={`${done} of ${as.length} assignments handed in`}>
                   <ProgressRing value={as.length ? done / as.length : 0} color={c.color} label={`${done}/${as.length}`} />
@@ -65,7 +70,14 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
   const c = data.courses.find((x) => x.code === code);
   const now = new Date();
   const cur = c && currentWeek(c, now);
-  const [open, setOpen] = useState<Set<number>>(() => new Set([Number.isFinite(hashWeek) ? hashWeek : cur?.index ?? -1]));
+  // the weeks you had open come back when you return (Back from slides, a video or an assignment)
+  const key = `ouc-open-weeks:${data.id}:${code}`;
+  const [open, setOpen] = useState<Set<number>>(() => {
+    let saved: number[] | undefined;
+    try { saved = JSON.parse(sessionStorage.getItem(key) ?? "null") ?? undefined; } catch { /* private mode */ }
+    return new Set([...(saved ?? [cur?.index ?? -1]), ...(Number.isFinite(hashWeek) ? [hashWeek] : [])]);
+  });
+  useEffect(() => { try { sessionStorage.setItem(key, JSON.stringify([...open])); } catch { /* private mode */ } }, [key, open]);
   useEffect(() => {
     if (!Number.isFinite(hashWeek)) return;
     setOpen((o) => new Set([...o, hashWeek]));
@@ -89,11 +101,11 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
       <Link to={`/v2/${enc(data.id)}/courses`} className="text-sm text-muted hover:text-ink">← Courses</Link>
       <header className="mt-2 mb-4 flex flex-wrap items-end gap-x-4 gap-y-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-sm text-muted"><span className="size-2.5 rounded-full" style={{ background: c.color }} />{c.code}{exam && <> · 🎓 Final {fmtFull(at(exam.at))}</>}</div>
+          <div className="flex items-center gap-2 text-sm text-muted"><span className="size-2.5 rounded-full" style={{ background: c.color }} />{c.code}{exam && <> · <GraduationCap aria-hidden className={INLINE} /> Final {fmtWhen(at(exam.at), exam.noTime)}</>}</div>
           <h1 className="font-serif text-3xl font-semibold leading-tight tracking-tight">{c.title}</h1>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
-          {c.joinUrl && <a href={c.joinUrl} target="_blank" rel="noreferrer" className="rounded-full border border-line bg-surface px-3 py-1.5 hover:border-muted">🎥 Webconference ↗</a>}
+          {c.joinUrl && <a href={c.joinUrl} target="_blank" rel="noreferrer" className="rounded-full border border-line bg-surface px-3 py-1.5 hover:border-muted"><Video aria-hidden className={INLINE} /> Webconference ↗</a>}
           {c.eclassUrl && <a href={c.eclassUrl} target="_blank" rel="noreferrer" className="rounded-full border border-line bg-surface px-3 py-1.5 hover:border-muted">eClass ↗</a>}
         </div>
       </header>
@@ -128,9 +140,9 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
             <Link key={a.id} to={assignmentHref(data.id, a.id)} className="flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition hover:border-muted">
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-semibold">{a.title}</span>
-                <span className="text-xs text-muted">{a.due ? fmtFull(at(a.due)) : "No due date"}{!a.submitted && a.due && ` · ${relative(at(a.due), now)}`}{a.grade && <> · Grade <b className="text-ink">{a.grade}</b></>}</span>
+                <span className="text-xs text-muted">{a.due ? fmtFull(at(a.due)) : "No due date"}{!a.submitted && a.due && ` · ${relative(at(a.due), now)}`}</span>
               </span>
-              <StatePill state={stateOf(a, now)} />
+              <StatePill state={stateOf(a, now)} grade={a.grade} />
             </Link>
           ))}
           {c.grades && c.grades.length > 0 && (
@@ -150,7 +162,7 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
         <div className="grid gap-2 sm:grid-cols-2">
           {notes.map((n) => (
             <Link key={n.slug} to={`${base}/notes/${enc(code)}/${enc(n.slug)}`} className="rounded-xl border border-line bg-surface px-4 py-3 transition hover:border-muted">
-              <span className="block font-semibold">📒 {n.title}</span>
+              <span className="block font-semibold"><NotebookPen aria-hidden className={INLINE} /> {n.title}</span>
               {n.summary && <span className="mt-0.5 line-clamp-2 block text-sm text-muted">{n.summary}</span>}
             </Link>
           ))}

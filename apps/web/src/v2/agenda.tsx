@@ -4,6 +4,7 @@ import { courseMap, stateOf, type State } from "../lib/data";
 import { at, fmtTime, relative } from "../lib/dates";
 import { JoinButton } from "../components/Classes";
 import { CourseDot, StatePill, cx } from "../components/ui";
+import { GraduationCap, INLINE } from "../components/icons";
 
 /** One dated thing: a deadline, a live class or an exam. */
 export type Ev =
@@ -41,11 +42,11 @@ export function EvRow({ e, course, now = new Date() }: { e: Ev; course?: Course;
       <CourseDot color={course?.color ?? "#999"} />
       <span className="min-w-0 flex-1">
         <span className={cx("block truncate text-sm", e.kind !== "class" && "font-semibold", e.done && "text-muted line-through decoration-muted/50")}>
-          {e.kind === "exam" ? `🎓 ${course?.short ?? e.code} · ${e.title}` : e.title}
+          {e.kind === "exam" ? <><GraduationCap aria-hidden className={INLINE} /> {course?.short ?? e.code} · {e.title}</> : e.title}
         </span>
-        <span className="block text-xs text-muted">{course?.short} · {KIND[e.kind]}{!e.done && ` · ${relative(e.t, now)}`}{e.kind === "due" && e.grade && <> · Grade <b className="text-ink">{e.grade}</b></>}</span>
+        <span className="block text-xs text-muted">{course?.short} · {KIND[e.kind]}{!e.done && ` · ${relative(e.t, now)}`}</span>
       </span>
-      {e.kind === "due" && <StatePill state={e.state} />}
+      {e.kind === "due" && <StatePill state={e.state} grade={e.grade} />}
     </>
   );
   const cls = cx("flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-surface-2",

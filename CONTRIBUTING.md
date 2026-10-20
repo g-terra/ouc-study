@@ -70,7 +70,7 @@ The code is TypeScript. Node runs it through [tsx](https://tsx.is), so there is 
 2. Keep the change focused: one PR, one purpose. Match the style of the code around it.
 3. Add or update tests for behaviour you change (`node:test`, in `packages/<pkg>/test/*.test.ts`).
 4. It runs on **macOS and Windows** (and Linux). Start programs with Node, not a shell script: `packages/cli/src/ouc.ts` is the `ouc` command, `packages/cli/src/background.ts` the per-OS background service, and `spawnCli` in `packages/ai/src/providers.ts` starts the agent CLIs (npm installs them as `.cmd` files on Windows).
-5. **Skills and agents:** edit `ai/skills/<name>/SKILL.md` or `ai/agents/<name>.md`, then `ouc ai install` to try them. The copies in `.claude/`, `.agents/` and `.opencode/` are generated. A new skill appears as an action in the Ask AI panel automatically, so give it a clear `description`.
+5. **Skills and agents:** edit `ai/skills/<name>/SKILL.md` or `ai/agents/<name>.md`, then `ouc ai install` to try them. The copies in `.claude/`, `.agents/` and `.opencode/` are generated. A new skill appears as an action in the Ask AI panel automatically. Its `description` is written for the AI; the line the student sees on the action comes from `SUMMARY` in `packages/ai/src/actions.ts` (add one for a new skill, with no file paths).
 6. Update the docs people will read: README for students, AGENTS.md for AI tools, this file for contributors.
 7. Run `npm run check` and `npm run build` before pushing.
 
@@ -126,6 +126,6 @@ Prompt that works well with any agent:
 Releases are automated with [release-please](https://github.com/googleapis/release-please):
 
 1. Every merge to `main` first runs the **smoke test** on that code; only if it passes does release-please update the open **release PR** with the next version (from the commit types above) and the `CHANGELOG.md` entries. Its checks run like any PR's because release-please pushes with the maintainer's `RELEASE_PLEASE_TOKEN` secret (a fine-grained token for this repo with Contents and Pull requests read/write); without it GitHub runs no checks on the release PR.
-2. Merging the release PR tags the version (`v0.2.0`), publishes a GitHub release and bumps `version` in `package.json`.
+2. The release PR merges itself (squash) as soon as its required checks pass, which tags the version (`v0.2.0`), publishes a GitHub release and bumps `version` in `package.json`.
 
 While we are below 1.0, `feat` bumps the minor version and breaking changes bump the minor too. Installed copies see the new release within the hour (the app's **Update available** bar, or `ouc update --check`) and move to its tag with `ouc update`, so only released code reaches students; a release whose lockfile changed is reinstalled with `npm ci`.

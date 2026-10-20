@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Assignment, SemesterData } from "@ouc/content/types";
-import { Link, enc } from "../lib/router";
+import { Link, cameFrom, enc } from "../lib/router";
 import { courseMap, stateOf, type State } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { Card, CourseBadge, CourseDot, Empty, FileCard, PageHeader, SectionTitle, StatePill, cx } from "../components/ui";
@@ -45,18 +45,20 @@ export function AssignmentsPage({ data }: { data: SemesterData }) {
               <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
                 <span>{C[a.code]?.short}</span>
                 {a.due && <span>· {fmtFull(at(a.due))}{!a.submitted && ` (${relative(at(a.due), now)})`}</span>}
-                {a.grade && <span>· Grade: <b className="text-ink">{a.grade}</b></span>}
                 {a.resources && <span>· 📚 {a.resources.links.length} study links</span>}
                 {a.prep && <span>· 🧭 prep pack</span>}
               </span>
             </span>
-            <StatePill state={stateOf(a, now)} />
+            <StatePill state={stateOf(a, now)} grade={a.grade} />
           </Link>
         ))}
       </div>
     </>
   );
 }
+
+/** Opened from that course's page (a week's list): the way back is the course, not the assignments list. */
+export const fromCourse = (code: string) => new RegExp(`/courses/${enc(code)}(#|$)`).test(cameFrom() ?? "");
 
 export function AssignmentPage({ data, id }: { data: SemesterData; id: string }) {
   const base = `/${enc(data.id)}`;
@@ -72,17 +74,33 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
 
   return (
     <div className="max-w-4xl">
-      <Link to={`${base}/assignments`} className="text-sm text-muted hover:text-ink">← All assignments</Link>
-      <PageHeader title={a.title} eyebrow={<><CourseBadge course={course} size="md" /><StatePill state={st} /></>}>
+      {fromCourse(a.code) && course
+        ? <Link to={`${base}/courses/${enc(a.code)}${week ? `#w${week.index}` : ""}`} className="text-sm text-muted hover:text-ink">← {course.short}{week ? `, ${week.index === 0 ? "General" : week.label}` : ""}</Link>
+        : <Link to={`${base}/assignments`} className="text-sm text-muted hover:text-ink">← All assignments</Link>}
+      <PageHeader title={a.title} eyebrow={<><CourseBadge course={course} size="md" /><StatePill state={st} grade={a.grade} /></>}>
         <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
           {a.due && <span>Due <b className="text-ink">{fmtFull(at(a.due))}</b> ({relative(at(a.due))})</span>}
           {a.opened && <span>Opened {at(a.opened).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
-          {a.grade && <span>Grade <b className="text-ink">{a.grade}</b></span>}
           {week && <Link to={`${base}/courses/${enc(a.code)}#w${week.index}`} className="underline decoration-line underline-offset-2 hover:text-ink">{week.name}</Link>}
           {a.eclassUrl && <a href={a.eclassUrl} target="_blank" rel="noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">eClass ↗</a>}
         </div>
         <AskAiButton action="assignment-helper" params={{ assignment: a.id }} className="mt-4">Help me with this</AskAiButton>
       </PageHeader>
+
+      {(a.grade || a.feedback) && (
+        <section aria-label="Grade and feedback" data-testid="assignment-grade" className="mb-8 flex flex-wrap gap-x-6 gap-y-3 rounded-2xl border border-ok/40 bg-surface p-5">
+          {a.grade && (
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Grade</div>
+              <div className="font-serif text-3xl font-semibold text-ok">{a.grade}</div>
+            </div>
+          )}
+          <div className="min-w-[14rem] flex-1">
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Tutor feedback</div>
+            <div className="mt-1 whitespace-pre-line leading-6">{a.feedback || <span className="text-muted">No written feedback{a.eclassUrl ? " here. It may be in a file on eClass" : ""}.</span>}</div>
+          </div>
+        </section>
+      )}
 
       {/* no question text (it's in the brief, or on eClass): no section */}
       {a.question && <><SectionTitle>Question</SectionTitle><Card className="p-5"><div className="md whitespace-pre-line">{a.question}</div></Card></>}

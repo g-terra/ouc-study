@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Assignment, Course, SemesterData, SemesterIndex } from "@ouc/content/types";
 import { at, day } from "./dates";
+import { Logo } from "../components/icons";
 
 const IndexCtx = createContext<SemesterIndex | null>(null);
 const cache = new Map<string, Promise<SemesterData>>();
@@ -82,7 +83,7 @@ export function Loading() {
 function Welcome() {
   return (
     <div className="mx-auto max-w-lg p-8 pt-20 text-center">
-      <div className="mb-4 text-5xl">🎓</div>
+      <Logo className="mx-auto mb-4 size-14" />
       <h1 className="mb-2 text-2xl font-bold">Welcome to OUC Study</h1>
       <p className="mb-6 text-muted">No courses yet. Run the installer once: it connects to your eClass account, downloads your courses and sets everything up.</p>
       <div className="rounded-xl border border-line bg-surface p-4 text-left text-sm leading-7">

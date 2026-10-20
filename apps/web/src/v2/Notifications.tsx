@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import type { SemesterData, UpdateItem } from "@ouc/content/types";
-import { Link, enc } from "../lib/router";
+import { Link, enc, useRouter } from "../lib/router";
 import { Empty, PageHeader, cx } from "../components/ui";
 import { ORDER, SetupCard, SyncStatus, UpdateRow, UpdatesList, useSync } from "../pages/Updates";
 import { PANEL, usePopover } from "./popover";
+import { Bell } from "../components/icons";
 
 // The newest update day already seen, per semester (this browser only): newer days count as new.
 // (The key keeps its old name so what was read in the Inbox stays read.)
@@ -54,6 +55,8 @@ const id = (u: UpdateItem) => `${u.type}|${u.title}|${u.detail}`;
 /** The bell in the header: a count of what's new, and a drop-down of the latest updates. Opening it marks them read. */
 export function NotificationsBell({ data }: { data?: SemesterData | null }) {
   const { open, setOpen, box } = usePopover();
+  const { path } = useRouter();
+  useEffect(() => { setOpen(false); }, [path]);   // an update opened a page: close the drop-down
   const [fresh, setFresh] = useState<UpdateItem[]>([]);   // what was new when the drop-down opened
   useNotificationsVersion();
   const unread = data ? unreadCount(data) : 0;
@@ -72,7 +75,7 @@ export function NotificationsBell({ data }: { data?: SemesterData | null }) {
       <button type="button" onClick={toggle} aria-haspopup="dialog" aria-expanded={open}
         aria-label={unread ? `Notifications · ${unread} new` : "Notifications"} title="Notifications"
         className="relative grid size-9 place-items-center rounded-full border border-line bg-surface text-lg hover:border-muted">
-        <span aria-hidden>🔔</span>
+        <Bell aria-hidden className="size-[18px]" />
         {unread > 0 && (
           <span className="absolute -right-1.5 -top-1.5 min-w-5 rounded-full border-2 border-bg bg-accent px-1 text-center text-[10px] font-semibold leading-4 text-bg">
             {unread > 99 ? "99+" : unread}
@@ -80,7 +83,7 @@ export function NotificationsBell({ data }: { data?: SemesterData | null }) {
         )}
       </button>
       {open && data && (
-        <div role="dialog" aria-label="Notifications" className={cx(PANEL, "w-[min(26rem,calc(100vw-2rem))]")}>
+        <div role="dialog" aria-label="Notifications" className={cx(PANEL, "w-[min(26rem,calc(100vw-2rem))] max-sm:fixed max-sm:inset-x-4 max-sm:top-16 max-sm:w-auto")}>
           <div className="mb-1 flex items-baseline gap-2 px-1">
             <span className="flex-1 font-serif text-lg font-semibold">Notifications</span>
             {fresh.length > 0 && <span className="text-xs text-muted">{fresh.length} new</span>}

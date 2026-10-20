@@ -2,11 +2,15 @@
  * The guided tour of the new look: a few steps that each point at one part of the app. It opens by itself
  * the first time the app is opened (remembered in this browser) and again from the profile menu (Take the tour).
  */
+import { Bell, BookOpen, Bot, CalendarDays, Hand, Library, PartyPopper, Sun, User, type LucideIcon } from "../components/icons";
+
 export const TOUR_KEY = "ouc-tour-seen";
 
 export type TourStep = {
   id: string;
   title: string;
+  /** shown before the title */
+  icon?: LucideIcon;
   text: string;
   /** the page the step shows, relative to /v2/<sem> ("" = Today); left out = stay where we are */
   page?: (course?: string) => string;
@@ -15,15 +19,15 @@ export type TourStep = {
 };
 
 export const TOUR: TourStep[] = [
-  { id: "welcome", title: "Welcome to OUC Study 👋", text: "A quick look at the main parts of the app. It takes a minute, and you can skip it any time (Esc) or take it again from the profile circle, top right." },
-  { id: "today", page: () => "", target: '[data-tour="nav-today"]', title: "☀️ Today", text: "What to do next: the next deadline and class, this week's plan, the next 7 days, and what's new on eClass." },
-  { id: "courses", page: () => "/courses", target: '[data-tour="nav-courses"]', title: "📚 Courses", text: "One card per course: the current week, what's due next, the exam date and how many assignments you've handed in." },
-  { id: "course", page: (c) => (c ? `/courses/${encodeURIComponent(c)}` : "/courses"), target: '[data-tour="course-tabs"]', title: "Inside a course", text: "Weeks hold the eClass files: open a week for its slides (with the narration), class videos and transcripts. Notes are the visual notes your AI makes, Quizzes test you on the topics, and Assignments has each brief with its prep pack." },
-  { id: "calendar", page: () => "/calendar", target: '[data-tour="nav-calendar"]', title: "🗓️ Calendar", text: "Every deadline, class and exam in one list, filtered by course. Overdue work shows at the top." },
-  { id: "bell", target: '[data-tour="bell"]', title: "🔔 Notifications", text: "New grades, feedback, files, deadlines and announcements from eClass. The app checks every morning; Sync now checks right away and downloads new files." },
-  { id: "ask-ai", target: "[data-ask-ai]", title: "🤖 Ask AI", text: "Your study assistant (Claude Code, Codex or a local model) on any page: explain a topic, plan your week, quiz you or review a draft. It gives hints and feedback, never answers to hand in." },
-  { id: "profile", target: '[data-tour="profile"]', title: "👤 Profile and Settings", text: "Your eClass connection, Settings (AI tools, video transcripts, colour theme, updates), AI background work and past chats. Take the tour again from here." },
-  { id: "done", title: "You're all set 🎉", text: "Start with Today. Questions about a topic? Ask AI is always bottom right." },
+  { id: "welcome", title: "Welcome to OUC Study", icon: Hand, text: "A quick look at the main parts of the app. It takes a minute, and you can skip it any time (Esc) or take it again from the profile circle, top right." },
+  { id: "today", page: () => "", target: '[data-tour="nav-today"]', title: "Today", icon: Sun, text: "What to do next: the next deadline and class, this week's plan, the next 7 days, and what's new on eClass." },
+  { id: "courses", page: () => "/courses", target: '[data-tour="nav-courses"]', title: "Courses", icon: Library, text: "One card per course: the current week, what's due next, the exam date and how many assignments you've handed in." },
+  { id: "course", page: (c) => (c ? `/courses/${encodeURIComponent(c)}` : "/courses"), target: '[data-tour="course-tabs"]', title: "Inside a course", icon: BookOpen, text: "Weeks hold the eClass files: open a week for its slides (with the narration), class videos and transcripts. Notes are the visual notes your AI makes, Quizzes test you on the topics, and Assignments has each brief with its prep pack." },
+  { id: "calendar", page: () => "/calendar", target: '[data-tour="nav-calendar"]', title: "Calendar", icon: CalendarDays, text: "Every deadline, class and exam in one list, filtered by course. Overdue work shows at the top." },
+  { id: "bell", target: '[data-tour="bell"]', title: "Notifications", icon: Bell, text: "New grades, feedback, files, deadlines and announcements from eClass. The app checks every morning; Sync now checks right away and downloads new files." },
+  { id: "ask-ai", target: "[data-ask-ai]", title: "Ask AI", icon: Bot, text: "Your study assistant (Claude Code, Codex or a local model) on any page: explain a topic, plan your week, quiz you or review a draft. It gives hints and feedback, never answers to hand in." },
+  { id: "profile", target: '[data-tour="profile"]', title: "Profile and Settings", icon: User, text: "Your eClass connection, Settings (AI tools, video transcripts, colour theme, updates), AI background work and past chats. Take the tour again from here." },
+  { id: "done", title: "You're all set", icon: PartyPopper, text: "Start with Today. Questions about a topic? Ask AI is always bottom right." },
 ];
 
 /** The step to show after a move, kept inside the tour. */

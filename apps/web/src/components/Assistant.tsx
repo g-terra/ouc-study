@@ -15,6 +15,7 @@ import { refreshData } from "../lib/data";
 import { cx } from "./ui";
 import { renderMermaid } from "../notes/Mermaid";
 import { useTheme } from "../lib/theme";
+import { CalendarDays, FileImage, FileText, INLINE, Sparkles, Trash2, X } from "./icons";
 
 interface Draft { action: string; params: Record<string, string> }
 /** One tab in the panel: a chat (or a draft action), with its own run. */
@@ -227,7 +228,7 @@ export function AskAiButton({ action, params, children, className }: { action: s
   return (
     <button type="button" onClick={() => start(action, params)}
       className={cx("inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink transition hover:border-muted", className)}>
-      <span aria-hidden>✨</span>{children}
+      <Sparkles aria-hidden className="size-4 text-accent" />{children}
     </button>
   );
 }
@@ -390,7 +391,7 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
         ) : (
           <button type="button" aria-label="Open as a full page" title="Open as a full page (for longer chats)" className="hidden size-8 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-ink sm:grid" onClick={expand}>⤢</button>
         )}
-        {!page && <button type="button" aria-label="Close" className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-ink" onClick={() => a.setOpen(false)}>✕</button>}
+        {!page && <button type="button" aria-label="Close" className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-ink" onClick={() => a.setOpen(false)}><X aria-hidden className="size-4" /></button>}
       </header>
       <RunningTasks sem={data.id} />
       {a.sessions.length > 1 && <Tabs actions={actions} onPick={() => setHistory(null)} />}
@@ -623,7 +624,7 @@ function Visual({ path }: { path: string }) {
       {img ? <img src={src} alt={name} className="w-full" />
         : <iframe title={name} src={src} sandbox="allow-scripts allow-popups" className={cx("block w-full bg-white", big ? "h-[75vh]" : "h-80")} />}
       <figcaption className="flex items-center gap-3 border-t border-line bg-surface px-3 py-1.5 text-xs text-muted">
-        <span className="min-w-0 flex-1 truncate" title={path}>🖼️ {name}</span>
+        <span className="min-w-0 flex-1 truncate" title={path}><FileImage aria-hidden className={INLINE} /> {name}</span>
         {!img && <button type="button" className="hover:text-ink" onClick={() => setBig(!big)}>{big ? "Smaller" : "Bigger"}</button>}
         <a href={src} target="_blank" rel="noreferrer" className="hover:text-ink">Open ↗</a>
       </figcaption>
@@ -636,7 +637,7 @@ function FileLinks({ files, className }: { files: string[]; className?: string }
     <div className={cx("flex flex-col gap-1", className)}>
       {files.map((f) => {
         const l = fileLink(f)!;
-        const label = <><span aria-hidden>{/\/plans\//.test(f) ? "🗓️" : "📄"}</span> <span className="truncate">{linkLabel(f, l)}</span></>;
+        const label = <>{/\/plans\//.test(f) ? <CalendarDays aria-hidden className="size-3.5 shrink-0 text-muted" /> : <FileText aria-hidden className="size-3.5 shrink-0 text-muted" />} <span className="truncate">{linkLabel(f, l)}</span></>;
         return l.internal ? <Link key={f} to={l.to} className={cls}>{label}</Link>
           : <a key={f} href={l.to} target="_blank" rel="noreferrer" className={cls}>{label}</a>;
       })}
@@ -683,7 +684,7 @@ function Message({ msg, live, sem }: { msg: ChatMessage; live: boolean; sem?: st
       )}
       {!live && files.length > 0 && (files.length <= SHOW_FILES ? <FileLinks files={files} /> : (
         <details className="text-xs">
-          <summary className="cursor-pointer select-none font-semibold text-ink">📄 {plural(files.length, "file")} written</summary>
+          <summary className="cursor-pointer select-none font-semibold text-ink"><FileText aria-hidden className={INLINE} /> {plural(files.length, "file")} written</summary>
           <FileLinks files={files} className="mt-1.5" />
         </details>
       ))}
@@ -705,7 +706,7 @@ function HistoryList({ chats, active, onPick, onDelete }: { chats: ChatSummary[]
               <div className="text-xs text-muted">{new Date(c.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}{c.tool ? ` · ${c.tool}` : ""}</div>
             </button>
             <button type="button" aria-label={`Delete ${c.title}`} title="Delete this chat" onClick={() => onDelete(c.id)}
-              className="mr-1 grid size-8 shrink-0 place-items-center rounded-full text-muted hover:bg-bad-bg hover:text-bad sm:opacity-0 sm:focus:opacity-100 sm:group-hover:opacity-100">🗑</button>
+              className="mr-1 grid size-8 shrink-0 place-items-center rounded-full text-muted hover:bg-bad-bg hover:text-bad sm:opacity-0 sm:focus:opacity-100 sm:group-hover:opacity-100"><Trash2 aria-hidden className="size-4" /></button>
           </li>
         ))}
       </ul>

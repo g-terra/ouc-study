@@ -1,31 +1,40 @@
 import { useState, type ReactNode } from "react";
 import type { SemesterData, UpdateItem, UpdateType } from "@ouc/content/types";
 import { courseMap, refreshData } from "../lib/data";
+import { Link } from "../lib/router";
+import { assignmentFor } from "../lib/updateLink";
+import { assignmentHref } from "../v2/agenda";
 import { refreshPrep } from "../lib/ai";
 import { day, fmtFull, relative } from "../lib/dates";
 import { Card, CourseBadge, Empty, PageHeader, cx } from "../components/ui";
+import { AlarmClock, Award, Bell, CalendarDays, Check, CircleAlert, ClipboardList, FileText, Hourglass, INLINE, KeyRound, Megaphone, MessageSquareText, MessagesSquare, Sparkles, TriangleAlert, Upload, Wifi, WifiOff, type LucideIcon } from "../components/icons";
 import { CONN_LABEL, refreshConnection, syncNow, useConnection } from "../lib/connection";
 
-export const UPDATE_META: Record<UpdateType, { icon: string; label: string; tone: string }> = {
-  grade: { icon: "🏅", label: "Grades", tone: "bg-ok-bg text-ok" },
-  feedback: { icon: "💬", label: "Feedback", tone: "bg-ok-bg text-ok" },
-  submission: { icon: "📤", label: "Submissions", tone: "bg-surface-2 text-muted" },
-  assignment: { icon: "📝", label: "New assignments", tone: "bg-info-bg text-info" },
-  deadline: { icon: "⏰", label: "Deadline changes", tone: "bg-warn-bg text-warn" },
-  material: { icon: "📄", label: "Materials", tone: "bg-info-bg text-info" },
-  announcement: { icon: "📣", label: "Announcements", tone: "bg-warn-bg text-warn" },
-  forum: { icon: "🗨️", label: "Forum", tone: "bg-surface-2 text-muted" },
-  notification: { icon: "🔔", label: "Notifications", tone: "bg-surface-2 text-muted" },
-  event: { icon: "📅", label: "Events", tone: "bg-info-bg text-info" },
-  baseline: { icon: "✨", label: "Setup", tone: "bg-surface-2 text-muted" },
+export const UPDATE_META: Record<UpdateType, { icon: LucideIcon; label: string; tone: string }> = {
+  grade: { icon: Award, label: "Grades", tone: "bg-ok-bg text-ok" },
+  feedback: { icon: MessageSquareText, label: "Feedback", tone: "bg-ok-bg text-ok" },
+  submission: { icon: Upload, label: "Submissions", tone: "bg-surface-2 text-muted" },
+  assignment: { icon: ClipboardList, label: "New assignments", tone: "bg-info-bg text-info" },
+  deadline: { icon: AlarmClock, label: "Deadline changes", tone: "bg-warn-bg text-warn" },
+  material: { icon: FileText, label: "Materials", tone: "bg-info-bg text-info" },
+  announcement: { icon: Megaphone, label: "Announcements", tone: "bg-warn-bg text-warn" },
+  forum: { icon: MessagesSquare, label: "Forum", tone: "bg-surface-2 text-muted" },
+  notification: { icon: Bell, label: "Notifications", tone: "bg-surface-2 text-muted" },
+  event: { icon: CalendarDays, label: "Events", tone: "bg-info-bg text-info" },
+  baseline: { icon: Sparkles, label: "Setup", tone: "bg-surface-2 text-muted" },
 };
+/** The icon of an update type, tinted by the surrounding text colour. */
+function TypeIcon({ type, className }: { type: UpdateType; className?: string }) {
+  const Icon = (UPDATE_META[type] ?? UPDATE_META.notification).icon;
+  return <Icon aria-hidden className={className} />;
+}
 export const ORDER: UpdateType[] = ["grade", "feedback", "announcement", "deadline", "assignment", "material", "event", "submission", "forum", "notification", "baseline"];
 
 export function SyncStatus({ data }: { data: SemesterData }) {
   const s = data.updates.status;
   if (!s) return <span>Daily sync not set up yet</span>;
-  if (!s.ok) return <span className="text-bad">⚠️ Last sync failed: {s.error}</span>;
-  return <span>✓ Checked eClass {relative(new Date(s.lastRun))}</span>;
+  if (!s.ok) return <span className="text-bad"><TriangleAlert aria-hidden className={INLINE} /> Last sync failed: {s.error}</span>;
+  return <span><Check aria-hidden className={INLINE} /> Checked eClass {relative(new Date(s.lastRun))}</span>;
 }
 
 /** Longer than this (or more than a few lines), a message folds with "Show more". */
@@ -42,12 +51,15 @@ export function UpdateRow({ u, data, compact }: { u: UpdateItem; data: SemesterD
   const [more, setMore] = useState(false);
   const long = !compact && isLong(u.detail);
   const title = <span className="font-semibold leading-snug">{u.title}</span>;
+  // a grade, feedback or deadline opens its assignment here (grade and feedback at the top); eClass stays one tap away (↗)
+  const own = assignmentFor(data.assignments, u);
   return (
-    <div className={cx("flex gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition", u.url && "hover:border-muted", (u.type === "grade" || u.type === "feedback") && "border-ok/40")}>
-      <span className={cx("grid size-9 shrink-0 place-items-center rounded-lg text-lg", m.tone)}>{m.icon}</span>
+    <div className={cx("flex gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition", (u.url || own) && "hover:border-muted", (u.type === "grade" || u.type === "feedback") && "border-ok/40")}>
+      <span className={cx("grid size-9 shrink-0 place-items-center rounded-lg text-lg", m.tone)}><TypeIcon type={u.type} className="size-[18px]" /></span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          {u.url ? <a href={u.url} target="_blank" rel="noreferrer" className="hover:underline">{title}</a> : title}
+          {own ? <Link to={assignmentHref(data.id, own.id)} className="hover:underline">{title}</Link>
+            : u.url ? <a href={u.url} target="_blank" rel="noreferrer" className="hover:underline">{title}</a> : title}
           {C[u.code] && <CourseBadge course={C[u.code]} />}
         </div>
         {u.detail && (
@@ -77,7 +89,7 @@ export function UpdatesList({ data }: { data: SemesterData }) {
         <div className="mb-6 flex flex-wrap gap-2">
           <Chip on={type === "all"} onClick={() => setType("all")}>All</Chip>
           {ORDER.filter((t) => counts[t]).map((t) => (
-            <Chip key={t} on={type === t} onClick={() => setType(t)}>{UPDATE_META[t].icon} {UPDATE_META[t].label} <span className="opacity-60">{counts[t]}</span></Chip>
+            <Chip key={t} on={type === t} onClick={() => setType(t)}><TypeIcon type={t} className={INLINE} /> {UPDATE_META[t].label} <span className="opacity-60">{counts[t]}</span></Chip>
           ))}
         </div>
       )}
@@ -127,7 +139,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 export function SetupCard({ error }: { error?: string }) {
   return (
     <Card className="mb-8 p-5">
-      <div className="mb-2 font-semibold">🔑 Set up daily updates</div>
+      <div className="mb-2 font-semibold"><KeyRound aria-hidden className={INLINE} /> Set up daily updates</div>
       {error && <p className="mb-3 rounded-lg bg-bad-bg px-3 py-2 text-sm text-bad">{error}</p>}
       <p className="text-sm leading-6">Open Terminal in this folder and run <code>ouc setup</code> (or double-click <b>Install OUC Study.command</b> on a Mac, <b>Install OUC Study.cmd</b> on Windows). It walks you through creating your personal eClass key, tests it, and saves it safely.</p>
       <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm leading-6 text-muted">
@@ -164,7 +176,9 @@ export function ConnectionCard({ className = "mb-6" }: { className?: string }) {
   return (
     <Card className={cx(className, "flex flex-wrap items-center gap-4 p-4")}>
       <span className={cx("grid size-10 place-items-center rounded-xl text-lg", c.state === "connected" ? "bg-ok-bg" : c.state === "offline" ? "bg-warn-bg" : c.state === "checking" || c.state === "nokey" || c.state === "unavailable" ? "bg-surface-2" : "bg-bad-bg")}>
-        {c.state === "connected" ? "🟢" : c.state === "offline" ? "🟠" : c.state === "checking" ? "⏳" : c.state === "nokey" || c.state === "unavailable" ? "⚪" : "🔴"}
+        {c.state === "connected" ? <Wifi aria-hidden className="size-5 text-ok" /> : c.state === "offline" ? <WifiOff aria-hidden className="size-5 text-warn" />
+          : c.state === "checking" ? <Hourglass aria-hidden className="size-5 text-muted" /> : c.state === "nokey" || c.state === "unavailable" ? <KeyRound aria-hidden className="size-5 text-muted" />
+          : <CircleAlert aria-hidden className="size-5 text-bad" />}
       </span>
       <div className="min-w-0 flex-1">
         <div className={cx("font-semibold", l.tone)}>{c.syncing ? "Syncing with eClass…" : l.text}</div>

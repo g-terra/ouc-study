@@ -73,6 +73,16 @@ test("make a quiz is an action every AI can do, local models included", () => {
   assert.deepEqual(a?.fields.map((f) => f.key), ["course"]);
 });
 
+test("every action shows the student a plain summary: no file paths, no fixed number of courses", () => {
+  const actions = listActions(join(dirname(fileURLToPath(import.meta.url)), "../../.."));
+  assert.ok(actions.length >= 10);
+  for (const a of actions) {
+    assert.ok(a.description.length > 20, a.id);
+    assert.doesNotMatch(a.description, /<sem>|<course>|\.md\b|memory\/|\b(two|three|four) courses\b/, a.id);
+  }
+  assert.equal(actions.find((a) => a.id === "plan-week")?.description, "Plans your week across your courses from your deadlines and what you've done so far.");
+});
+
 test("every chat is told to draw flows as Mermaid diagrams", () => {
   const first = buildPrompt({ root: ".", semId: "S", data, message: "how does a neuron fire?" });
   assert.match(first, /```mermaid diagram/);

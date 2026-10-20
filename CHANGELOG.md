@@ -1,5 +1,95 @@
 # Changelog
 
+## [0.21.0](https://github.com/g-terra/ouc-study/compare/v0.20.0...v0.21.0) (2026-10-20)
+
+
+### Features
+
+* **web:** search notes, slides, transcripts, assignments and eclass posts ([#117](https://github.com/g-terra/ouc-study/issues/117)) ([038f090](https://github.com/g-terra/ouc-study/commit/038f09036e242c01f43611cc810bfd8396041759))
+
+
+### Bug Fixes
+
+* **web:** going back from slides, a video or an assignment keeps the course week open ([#115](https://github.com/g-terra/ouc-study/issues/115)) ([83ec4e7](https://github.com/g-terra/ouc-study/commit/83ec4e700bbf736c12fcf22a0773f4eea671cabe))
+
+## [0.20.0](https://github.com/g-terra/ouc-study/compare/v0.19.0...v0.20.0) (2026-10-20)
+
+
+### Features
+
+* **web:** tick off what you've watched and read each week ([#111](https://github.com/g-terra/ouc-study/issues/111)) ([1cbdd99](https://github.com/g-terra/ouc-study/commit/1cbdd99e2fd563f10b4900c756d64ce7845376c0))
+
+
+### Bug Fixes
+
+* **web:** show overdue assignments first on Today ([#113](https://github.com/g-terra/ouc-study/issues/113)) ([f9adf83](https://github.com/g-terra/ouc-study/commit/f9adf83ab456642e662bbc115aa6cac0a9dd6c0c))
+
+## [0.19.0](https://github.com/g-terra/ouc-study/compare/v0.18.3...v0.19.0) (2026-10-20)
+
+
+### Features
+
+* **web:** a grade update opens its assignment, with the grade and feedback at the top ([#112](https://github.com/g-terra/ouc-study/issues/112)) ([f421738](https://github.com/g-terra/ouc-study/commit/f42173852a887c9bd5fb492226e28f69ae070ef7))
+
+
+### Bug Fixes
+
+* **ai:** show students a plain summary on each Ask AI action ([#110](https://github.com/g-terra/ouc-study/issues/110)) ([d6c16c4](https://github.com/g-terra/ouc-study/commit/d6c16c4dabe939a1b2bdaefd287fa85e78e1934e))
+
+## [0.18.3](https://github.com/g-terra/ouc-study/compare/v0.18.2...v0.18.3) (2026-10-20)
+
+
+### Bug Fixes
+
+* **web:** a callout keeps a next line written without "&gt;" ([#109](https://github.com/g-terra/ouc-study/issues/109)) ([989fd9f](https://github.com/g-terra/ouc-study/commit/989fd9fdca30953dfceca5189ebbcf7ca095232b))
+
+## [0.18.2](https://github.com/g-terra/ouc-study/compare/v0.18.1...v0.18.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* **web:** exam dates without a time, singular counts, bell drop-down on phones ([#108](https://github.com/g-terra/ouc-study/issues/108)) ([9475393](https://github.com/g-terra/ouc-study/commit/94753935c27398b5ff578f78adedbbcb7e9337d7))
+
+## [0.18.1](https://github.com/g-terra/ouc-study/compare/v0.18.0...v0.18.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **ci:** find the release pr right after release-please opens it ([#95](https://github.com/g-terra/ouc-study/issues/95)) ([662e114](https://github.com/g-terra/ouc-study/commit/662e114e599492ef46fc9e8e00d518debebec575))
+
+## [0.18.0](https://github.com/g-terra/ouc-study/compare/v0.17.0...v0.18.0) (2026-10-20)
+
+
+### Features
+
+* **web:** draw the app's icons with one line-icon set and add a logo ([#91](https://github.com/g-terra/ouc-study/issues/91)) ([ea97184](https://github.com/g-terra/ouc-study/commit/ea971843f1e59db6944f707b153da0b9ba21ff72))
+
+## [0.17.0](https://github.com/g-terra/ouc-study/compare/v0.16.0...v0.17.0) (2026-10-20)
+
+
+### Features
+
+* **web:** open class videos on a page with the transcript beside them ([#90](https://github.com/g-terra/ouc-study/issues/90)) ([1d6cb6f](https://github.com/g-terra/ouc-study/commit/1d6cb6f5ca303494e97b5914331aada4c62b5054))
+
+## [0.16.0](https://github.com/g-terra/ouc-study/compare/v0.15.0...v0.16.0) (2026-10-20)
+
+
+### Features
+
+* **ai:** stop estimating how long study tasks take ([#83](https://github.com/g-terra/ouc-study/issues/83)) ([64afc9d](https://github.com/g-terra/ouc-study/commit/64afc9dd966efd86c3be390e939dfdf76adc6c63))
+* **web:** add a guided tour of the app, opened once and from the profile menu ([#85](https://github.com/g-terra/ouc-study/issues/85)) ([f2b058b](https://github.com/g-terra/ouc-study/commit/f2b058b76ae2799bff5659241669293a36c97aa9))
+* **web:** group a course week's items under Watch, Read, My notes, Practice and To hand in ([#88](https://github.com/g-terra/ouc-study/issues/88)) ([d157437](https://github.com/g-terra/ouc-study/commit/d1574379e5bdec810301fcfcd8b7da4e9538cc34))
+
+
+### Bug Fixes
+
+* **sync:** fill in updates that were saved cut short ([#87](https://github.com/g-terra/ouc-study/issues/87)) ([fd33dcf](https://github.com/g-terra/ouc-study/commit/fd33dcf7d81f820364231f63b8c7d69a82a8e515))
+
+
+### Documentation
+
+* retake the readme screenshots in the new look ([#84](https://github.com/g-terra/ouc-study/issues/84)) ([0b1dca7](https://github.com/g-terra/ouc-study/commit/0b1dca73faa40497c12d7ecc650a2acef94d3f0d))
+
 ## [0.15.0](https://github.com/g-terra/ouc-study/compare/v0.14.0...v0.15.0) (2026-10-20)
 
 

@@ -1,14 +1,19 @@
-import { useEffect, useState } from "react";
-import type { ClassSession, Quiz, SemesterData, Week } from "@ouc/content/types";
+import { useEffect, useState, type ReactNode } from "react";
+import type { ClassSession, Quiz, SemesterData, Week, WeekItem } from "@ouc/content/types";
 import { Link, enc, useRouter } from "../lib/router";
+import { transcriptPage } from "../lib/links";
 import { currentWeek, stateOf } from "../lib/data";
-import { at, day, fmtDay, fmtFull, fmtShort, fmtTime, relative } from "../lib/dates";
+import { at, day, fmtDay, fmtFull, fmtShort, fmtTime, fmtWhen, plural, relative } from "../lib/dates";
 import { Card, Empty, FileLink, PageHeader, ProgressRing, SectionTitle, StatePill, cx, isMaterial, kindIcon } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
 import { ClassCard, ClassTimeEditor, JoinButton, upcomingClasses } from "../components/Classes";
 import { quizHref, quizScopeLabel } from "./Quizzes";
 import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
 import { pct, useAttempts } from "../lib/quiz";
+import { DoneBox, DoneCount } from "../components/Progress";
+import { useProgress } from "../lib/progress";
+import { tracked, weekProgress } from "@ouc/content/progress";
+import { Clapperboard, ClipboardList, FileText, GraduationCap, INLINE, NotebookPen, Star, Trophy, Video } from "../components/icons";
 
 export function Courses({ data }: { data: SemesterData }) {
   const base = `/${enc(data.id)}`;
@@ -72,9 +77,9 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
         <h1 className="font-serif text-3xl font-semibold sm:text-4xl">{c.title}</h1>
         <div className="mt-4 flex flex-wrap gap-2 text-sm">
           <span className="rounded-full bg-white/20 px-3 py-1">{as.filter((a) => a.submitted).length}/{as.length} assignments submitted</span>
-          <span className="rounded-full bg-white/20 px-3 py-1">📒 {notes.length} notes</span>
-          {exams.filter((e) => e.kind === "Final exam").map((e) => <span key={e.at} className="rounded-full bg-white/20 px-3 py-1">🎓 Final {fmtFull(at(e.at))}</span>)}
-          {c.joinUrl && <a href={c.joinUrl} target="_blank" rel="noreferrer" className="rounded-full bg-white/20 px-3 py-1 hover:bg-white/30">🎥 Webconference ↗</a>}
+          <span className="rounded-full bg-white/20 px-3 py-1"><NotebookPen aria-hidden className={INLINE} /> {plural(notes.length, "note")}</span>
+          {exams.filter((e) => e.kind === "Final exam").map((e) => <span key={e.at} className="rounded-full bg-white/20 px-3 py-1"><GraduationCap aria-hidden className={INLINE} /> Final {fmtWhen(at(e.at), e.noTime)}</span>)}
+          {c.joinUrl && <a href={c.joinUrl} target="_blank" rel="noreferrer" className="rounded-full bg-white/20 px-3 py-1 hover:bg-white/30"><Video aria-hidden className={INLINE} /> Webconference ↗</a>}
           {c.eclassUrl && <a href={c.eclassUrl} target="_blank" rel="noreferrer" className="rounded-full bg-white px-3 py-1 font-semibold" style={{ color: c.color }}>Open on eClass ↗</a>}
         </div>
       </div>
@@ -130,7 +135,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
               <div className="grid gap-1.5">
                 {notes.map((n) => (
                   <Link key={n.slug} to={`${base}/notes/${enc(code)}/${enc(n.slug)}`} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
-                    <span>📒</span><span className="leading-snug">{n.title}</span>
+                    <NotebookPen aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" /><span className="leading-snug">{n.title}</span>
                   </Link>
                 ))}
               </div>
@@ -151,7 +156,7 @@ export function QuizLinks({ sem, quizzes, withScope = false }: { sem: string; qu
         const b = stats.best[q.id];
         return (
           <Link key={q.id} to={quizHref(sem, q)} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
-            <span aria-hidden>🏆</span>
+            <Trophy aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
             <span className="min-w-0 flex-1 leading-snug">{withScope && q.scope === "course" ? `${quizScopeLabel(q)}: ` : ""}{q.title}</span>
             <span className={cx("shrink-0 text-xs", b?.pct === 1 ? "font-semibold text-ok" : "text-muted")}>{b ? `best ${pct(b.pct)}` : `${q.questions.length} questions`}</span>
           </Link>
@@ -161,30 +166,63 @@ export function QuizLinks({ sem, quizzes, withScope = false }: { sem: string; qu
   );
 }
 
+/** The sections of an open week, in order. Each item on eClass lands in one of them. */
+const WEEK_GROUPS = [["watch", "Watch"], ["read", "Read"], ["notes", "My notes"], ["practice", "Practice"], ["work", "To hand in"], ["more", "More"]] as const;
+type WeekGroupKey = (typeof WEEK_GROUPS)[number][0];
+const groupOf = (it: WeekItem): WeekGroupKey =>
+  it.kind === "video" ? "watch" : it.kind === "note" ? "notes" : it.kind === "assignment" ? "work"
+    : it.kind === "file" || it.kind === "link" ? "read" : "more";
+
+function WeekGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section className="mt-3 first:mt-0">
+      <h4 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</h4>
+      {children}
+    </section>
+  );
+}
+
+function WeekItemRow({ it, base, code, sem, w }: { it: WeekItem; base: string; code: string; sem: string; w: Week }) {
+  const href = it.kind === "note" ? `${base}/notes/${enc(code)}/${enc(it.noteSlug!)}`
+    : it.kind === "assignment" && it.assignmentId ? `${base}/assignments/${it.assignmentId.split("/").map(enc).join("/")}` : it.href;
+  const internal = it.kind === "note" || it.kind === "assignment";
+  const cls = cx("flex min-w-0 flex-1 items-start gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2", it.kind === "note" && "font-semibold");
+  const inner = <><span aria-hidden>{kindIcon(it.kind, it.ext)}</span><span className="leading-snug">{it.title}{it.external && <span className="text-muted"> ↗</span>}</span></>;
+  const link = !href ? <span className={cls}>{inner}</span> : internal ? <Link to={href} className={cls}>{inner}</Link> : <FileLink href={href} className={cls}>{inner}</FileLink>;
+  // a video or narrated slides open with their transcript beside them; a Panopto link's transcript has its own page
+  const transcript = it.transcript && (it.external
+    ? <Link to={transcriptPage(it)} className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-muted underline hover:text-ink">Transcript</Link>
+    : <span className="shrink-0 px-2 py-1.5 text-xs text-muted" title="Opens with its transcript"><FileText aria-hidden className={INLINE} /> transcript</span>);
+  return <li className="flex items-start gap-2">{tracked(it) && <DoneBox sem={sem} code={code} w={w} it={it} />}{link}{transcript}</li>;
+}
+
 export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes, quizzes, data }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string; classes: ClassSession[]; quizzes: Quiz[]; data: SemesterData }) {
   const dates = w.start ? `${fmtShort(day(w.start))} – ${fmtShort(day(w.end!))}${w.estimated ? " (est.)" : ""}` : "";
   const counts = w.items.reduce<Record<string, number>>((m, i) => ((m[i.kind] = (m[i.kind] ?? 0) + 1), m), {});
+  const progress = useProgress(data.id);
+  const doneCount = weekProgress(code, w, progress.done);
   return (
     <div id={`w${w.index}`} className={cx("scroll-mt-24 border-b border-line last:border-0", isNow && "bg-warn-bg/50")}>
       <button onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-2/60">
         <span className="grid size-8 shrink-0 place-items-center rounded-lg text-xs font-bold" style={isNow ? { background: color, color: "white" } : { background: "var(--surface-2)" }}>
-          {w.index === 0 ? "★" : w.index}
+          {w.index === 0 ? <Star aria-hidden className="size-3.5" /> : w.index}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate font-semibold">{w.label}</span>
           <span className="block text-xs text-muted">
             {dates}
-            {classes.map((x) => <span key={x.at} className={cx("ml-2", x.status === "cancelled" && "line-through")}>🎥 {fmtDay(at(x.at))} {fmtTime(at(x.at))}</span>)}
+            {classes.map((x) => <span key={x.at} className={cx("ml-2", x.status === "cancelled" && "line-through")}><Video aria-hidden className={INLINE} /> {fmtDay(at(x.at))} {fmtTime(at(x.at))}</span>)}
             {isNow && <b className="ml-2 uppercase tracking-wider text-accent">This week</b>}
           </span>
         </span>
         <span className="hidden gap-2 text-xs text-muted sm:flex">
-          {counts.note && <span>📒{counts.note}</span>}
-          {counts.file && <span>📄{counts.file}</span>}
-          {counts.video && <span>🎬{counts.video}</span>}
-          {counts.assignment && <span>📝{counts.assignment}</span>}
-          {quizzes.length > 0 && <span>🏆{quizzes.length}</span>}
+          {counts.note && <span className="flex items-center gap-0.5"><NotebookPen aria-hidden className="size-3.5" />{counts.note}</span>}
+          {counts.file && <span className="flex items-center gap-0.5"><FileText aria-hidden className="size-3.5" />{counts.file}</span>}
+          {counts.video && <span className="flex items-center gap-0.5"><Clapperboard aria-hidden className="size-3.5" />{counts.video}</span>}
+          {counts.assignment && <span className="flex items-center gap-0.5"><ClipboardList aria-hidden className="size-3.5" />{counts.assignment}</span>}
+          {quizzes.length > 0 && <span className="flex items-center gap-0.5"><Trophy aria-hidden className="size-3.5" />{quizzes.length}</span>}
         </span>
+        {progress.state === "ok" && <DoneCount count={doneCount} className="text-xs" />}
         <span className={cx("text-muted transition", isOpen && "rotate-90")}>›</span>
       </button>
       {isOpen && (
@@ -192,32 +230,39 @@ export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes
           {w.summary && <p className="mb-3 text-sm text-muted">{w.summary}</p>}
           {classes.map((x) => (
             <div key={x.at} className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
-              <span className={cx(x.status === "cancelled" && "line-through")}>🎥 Live class {fmtDay(at(x.at))}, {fmtTime(at(x.at))}</span>
+              <span className={cx(x.status === "cancelled" && "line-through")}><Video aria-hidden className={INLINE} /> Live class {fmtDay(at(x.at))}, {fmtTime(at(x.at))}</span>
               {x.status !== "scheduled" && <span className="text-xs text-warn">{x.status}{x.note ? ` · ${x.note}` : ""}</span>}
               {x.extras.map((f) => <FileLink key={f.href} href={f.href} className="text-xs underline">{f.title}</FileLink>)}
               <JoinButton c={x} className="ml-auto" />
             </div>
           ))}
-          <ul className="grid gap-1">
-            {w.items.map((it, i) => {
-              const href = it.kind === "note" ? `${base}/notes/${enc(code)}/${enc(it.noteSlug!)}`
-                : it.kind === "assignment" && it.assignmentId ? `${base}/assignments/${it.assignmentId.split("/").map(enc).join("/")}` : it.href;
-              const internal = it.kind === "note" || it.kind === "assignment";
-              const cls = cx("flex items-start gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2", it.kind === "note" && "font-semibold");
-              const inner = <><span>{kindIcon(it.kind, it.ext)}</span><span className="leading-snug">{it.kind === "note" ? `My notes: ${it.title}` : it.title}{it.external && <span className="text-muted"> ↗</span>}</span></>;
-              const link = !href ? <span className={cls}>{inner}</span> : internal ? <Link to={href} className={cls}>{inner}</Link> : <FileLink href={href} className={cls}>{inner}</FileLink>;
-              return <li key={i} className={cx(it.transcript && "flex items-start gap-2")}>{link}{it.transcript && <a href={it.transcript} target="_blank" rel="noreferrer" className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-muted underline hover:text-ink">Transcript</a>}</li>;
-            })}
-          </ul>
-          {w.items.length === 0 && <p className="text-sm text-muted">Nothing posted for this week.</p>}
-          {quizzes.length > 0 && <div className="mt-2"><QuizLinks sem={data.id} quizzes={quizzes} /></div>}
-          {w.index > 0 && w.items.some(isMaterial) && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {!w.items.some((i) => i.kind === "note") && <AskAiButton action="make-notes" params={{ course: code, week: String(w.index) }}>Make notes</AskAiButton>}
-              <AskAiButton action="quiz-me" params={{ course: code, week: String(w.index) }}>Quiz me</AskAiButton>
-              <MakeQuizButton data={data} course={code} week={String(w.index)}>{quizzes.length ? "Make another quiz" : "Make a quiz"}</MakeQuizButton>
-            </div>
-          )}
+          {w.items.length === 0 && !quizzes.length && <p className="text-sm text-muted">Nothing posted for this week.</p>}
+          {WEEK_GROUPS.map(([key, label]) => {
+            const items = w.items.filter((it) => groupOf(it) === key);
+            const notesBtn = key === "notes" && !items.length && w.index > 0 && w.items.some(isMaterial);
+            if (key === "practice") {
+              const tools = w.index > 0 && w.items.some(isMaterial);
+              if (!quizzes.length && !tools) return null;
+              return (
+                <WeekGroup key={key} label={label}>
+                  {quizzes.length > 0 && <QuizLinks sem={data.id} quizzes={quizzes} />}
+                  {tools && (
+                    <div className="mt-1.5 flex flex-wrap gap-2 px-2">
+                      <AskAiButton action="quiz-me" params={{ course: code, week: String(w.index) }}>Quiz me</AskAiButton>
+                      <MakeQuizButton data={data} course={code} week={String(w.index)}>{quizzes.length ? "Make another quiz" : "Make a quiz"}</MakeQuizButton>
+                    </div>
+                  )}
+                </WeekGroup>
+              );
+            }
+            if (!items.length && !notesBtn) return null;
+            return (
+              <WeekGroup key={key} label={label}>
+                {items.length > 0 && <ul className="grid gap-0.5">{items.map((it, i) => <WeekItemRow key={i} it={it} base={base} code={code} sem={data.id} w={w} />)}</ul>}
+                {notesBtn && <div className="px-2"><AskAiButton action="make-notes" params={{ course: code, week: String(w.index) }}>Make notes</AskAiButton></div>}
+              </WeekGroup>
+            );
+          })}
         </div>
       )}
     </div>

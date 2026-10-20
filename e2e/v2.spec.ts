@@ -20,6 +20,18 @@ for (const [path, name, heading] of [["", "Today", /Good (morning|afternoon|even
   });
 }
 
+test("v2 header: the logo links home, and icons are drawn (SVG), not emoji", async ({ page }) => {
+  await page.goto(`/v2${SEM}/calendar`);
+  const header = page.locator("header").first();
+  await header.getByRole("link", { name: "OUC Study, Today" }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo$/);
+  await expect(header.getByRole("button", { name: /Notifications/ }).locator("svg")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 800 });
+  const tabs = page.getByRole("navigation", { name: "Main" }).last();
+  await expect(tabs.locator("svg")).toHaveCount(3);
+  expect(await page.locator("header, nav").evaluateAll((els) => els.map((e) => e.textContent).join(""))).not.toMatch(/\p{Extended_Pictographic}/u);
+});
+
 test("v2 calendar lists the overdue assignment; a course keeps its notes and quizzes in tabs", async ({ page }) => {
   await page.goto(`/v2${SEM}/calendar`);
   await expect(page.getByRole("heading", { name: "Overdue" })).toBeVisible();
@@ -36,6 +48,8 @@ test("v2 calendar lists the overdue assignment; a course keeps its notes and qui
   // the shared note page opens inside v2
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/notes\/DEMO101\/week-01-getting-started$/);
   await expect(page.getByText("Smoke tests open every page")).toBeVisible();
+  // the demo note leaves out the ">" on the Big idea's second line; it still goes in the box
+  await expect(page.getByRole("complementary").filter({ hasText: "Big idea" })).toContainText("Smoke tests open every page");
   await expect(page.getByRole("navigation", { name: "Main" }).first().getByRole("link", { name: "Courses", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
@@ -142,6 +156,81 @@ test("v2: the profile menu opens Settings, with eClass, AI tools, transcripts, a
   await expect(page.getByTestId("app-version")).toContainText(`v${version}`);
   await expect(page.getByRole("radiogroup", { name: "Colour theme" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sync now" })).toBeVisible();
+});
+
+test("v2: an open week groups its items under Watch, Read, My notes and Practice", async ({ page }) => {
+  await page.goto(`/v2${SEM}/courses/DEMO101`);
+  await page.getByRole("button", { name: /Getting started/ }).first().click();
+  const week = page.locator("#w1");
+  for (const name of ["Watch", "Read", "My notes", "Practice"]) await expect(week.getByRole("heading", { name, exact: true })).toBeVisible();
+  await expect(week.getByRole("heading", { name: "Watch" }).locator("..")).toContainText("transcript");
+  await expect(week.getByRole("heading", { name: "Practice" }).locator("..").getByRole("button", { name: /Quiz me/ })).toBeVisible();
+});
+
+test("v2: Today lists overdue work first, the same as the Calendar", async ({ page }) => {
+  await page.goto(`/v2${SEM}`);
+  const overdue = page.getByRole("region", { name: "Overdue" });
+  await expect(overdue.getByRole("heading", { name: /Overdue · 1/ })).toBeVisible();
+  await expect(overdue.getByText("Assignment 1")).toBeVisible();
+  await expect(page.getByText("Next deadline")).toBeHidden();
+});
+
+test("v2: a grade update opens its assignment, with the grade and the tutor's feedback at the top", async ({ page }) => {
+  // made-up: the demo assignment graded, with written feedback
+  await page.route("**/data/2026-Demo.json", async (route) => {
+    const data = await (await route.fetch()).json();
+    const a = data.assignments.find((x: { title: string }) => x.title === "Assignment 1");
+    Object.assign(a, { submitted: true, grade: "8.00", feedback: "Clear argument.\nCite the reading next time." });
+    await route.fulfill({ json: data });
+  });
+  await page.goto(`/v2${SEM}`);
+  await page.getByRole("button", { name: /^Notifications/ }).click();
+  await page.getByRole("dialog", { name: "Notifications" }).getByRole("link", { name: "New grade: Assignment 1" }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/assignments\/DEMO101\//);
+  await expect(page.getByRole("dialog", { name: "Notifications" })).toBeHidden();
+  const box = page.getByTestId("assignment-grade");
+  await expect(box).toContainText("8.00");
+  await expect(box).toContainText("Cite the reading next time.");
+  await expect(page.getByText("Graded 8.00").first()).toBeVisible();
+  // the course's assignment list says Graded too
+  await page.goto(`/v2${SEM}/courses/DEMO101`);
+  await page.getByRole("tab", { name: /Assignments/ }).click();
+  await expect(page.getByText("Graded 8.00")).toBeVisible();
+});
+
+test("v2: course cards count in the singular, and the bell's drop-down fits on a phone", async ({ page }) => {
+  await page.goto(`/v2${SEM}/courses`);
+  await expect(page.getByText(/1 note · .*1 quiz$/)).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: /^Notifications/ }).click();
+  const box = await page.getByRole("dialog", { name: "Notifications" }).boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+});
+
+test("v2: going back from a video or an assignment keeps the course week open and Courses highlighted", async ({ page }) => {
+  const nav = () => page.getByRole("navigation", { name: "Main" }).first();
+  await page.goto(`/v2${SEM}/courses/DEMO101`);
+  await page.getByRole("button", { name: /Getting started/ }).first().click();
+  const week = page.locator("#w1");
+  await expect(week.getByRole("heading", { name: "Watch" })).toBeVisible();
+  // a class video, then the browser's Back
+  await week.getByRole("heading", { name: "Watch" }).locator("..").getByRole("link").first().click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/video\//);
+  await page.goBack();
+  await expect(week.getByRole("heading", { name: "Watch" })).toBeVisible();
+  // the video page's course chip goes back to the week
+  await week.getByRole("heading", { name: "Watch" }).locator("..").getByRole("link").first().click();
+  await page.getByRole("link", { name: /^Back to Demo Studies/ }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses\/DEMO101#w1$/);
+  await expect(week.getByRole("heading", { name: "Watch" })).toBeVisible();
+  // an assignment opened from the course: Courses stays highlighted, and its back link is the course week
+  await page.getByRole("tab", { name: /Assignments/ }).click();
+  await page.getByText("Assignment 1").first().click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/assignments\//);
+  await expect(nav().getByRole("link", { name: "Courses", exact: true })).toHaveAttribute("aria-current", "page");
+  await page.getByRole("link", { name: /^← Demo Studies/ }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses\/DEMO101(#w\d+)?$/);
 });
 
 test("v2 settings: each AI's default model is picked and saved", async ({ page }) => {

@@ -1,0 +1,8 @@
+--- slide 1 ---
+Welcome to Demo Studies
+
+--- slide 2 ---
+Spaced repetition beats cramming
+
+[speaker notes]
+Made up for the smoke tests.

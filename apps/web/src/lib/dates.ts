@@ -17,6 +17,10 @@ export const fmtDay = (d: Date) => d.toLocaleDateString("en-GB", { weekday: "sho
 export const fmtShort = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 export const fmtTime = (d: Date) => d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 export const fmtFull = (d: Date) => `${fmtDay(d)}, ${fmtTime(d)}`;
+/** An exam or event that may have a date but no time yet: "Fri, 15 Jan" instead of a made-up "00:00". */
+export const fmtWhen = (d: Date, noTime?: boolean) => (noTime ? fmtDay(d) : fmtFull(d));
+/** "1 note", "2 notes", "1 quiz", "3 quizzes" */
+export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** "in 4 days", "tomorrow", "in 6 h", "2 days ago" */
 export function relative(target: Date, now = new Date()): string {

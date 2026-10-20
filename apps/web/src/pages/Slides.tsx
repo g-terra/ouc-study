@@ -1,13 +1,18 @@
 /**
  * The slide viewer: a course PowerPoint, shown slide by slide in the app (no download), with the
  * narration recorded into each slide. The server turns the .pptx into a PDF with LibreOffice on first
- * view (packages/ai/src/slides.ts); pdf.js draws its pages here.
+ * view (packages/ai/src/slides.ts); pdf.js draws its pages here. When the deck has a transcript, what's
+ * said on each slide shows under it.
  */
 import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import type { SemesterData } from "@ouc/content/types";
 import { Link, enc } from "../lib/router";
 import { Card, CourseBadge, cx } from "../components/ui";
+import { parseTranscript, type Transcript } from "../lib/transcript";
+import { FileText, INLINE, Maximize, Presentation, Volume2 } from "../components/icons";
+import { markDone } from "../lib/progress";
+import { findItem } from "@ouc/content/progress";
 
 type Info =
   | { ok: true; pdf: string; download: string; slides: { n: number; audio: string[] }[] }
@@ -29,6 +34,8 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
   const name = parts.at(-1)!.replace(/\.\w+$/, "").replace(/_/g, " ");
   const course = parts[0] === "courses" ? data.courses.find((c) => parts[1]?.startsWith(c.code)) : undefined;
   const week = course && parts.length > 3 ? parts[2].replace(/^\d+-/, "").replace(/[-.]+/g, " ").trim() : undefined;
+  // the course week these slides are in, for the way back
+  const weekIndex = course?.weeks.find((w) => w.items.some((i) => { try { return !!i.href && decodeURIComponent(i.href).endsWith(`/${file}`); } catch { return false; } }))?.index;
 
   const [info, setInfo] = useState<Info>();
   const [doc, setDoc] = useState<PDFDocumentProxy>();
@@ -69,6 +76,24 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // the deck's transcript (made from its narration), if it has one
+  const href = `/files/${encodeURIComponent(data.id)}/${file.split("/").map(encodeURIComponent).join("/")}`;
+  // reaching the last slide ticks the deck off as read
+  useEffect(() => {
+    if (!pages || page < pages) return;
+    const f = findItem(data.courses, href);
+    if (f) void markDone(data.id, f.course.code, f.week, f.item, true, "viewed");
+  }, [page, pages, href, data.id, data.courses]);
+  const transcriptHref = data.courses.flatMap((c) => c.weeks.flatMap((w) => w.items)).find((it) => it.href === href)?.transcript;
+  const [transcript, setTranscript] = useState<Transcript | null>(null);
+  useEffect(() => {
+    let live = true;
+    setTranscript(null);
+    if (transcriptHref) fetch(transcriptHref).then((r) => (r.ok ? r.text() : null)).then((md) => live && md && setTranscript(parseTranscript(md))).catch(() => {});
+    return () => { live = false; };
+  }, [transcriptHref]);
+  const said = transcript?.sections.find((s) => s.slide === page)?.lines ?? [];
+
   const stage = useRef<HTMLDivElement>(null);
   const audio = info?.ok ? info.slides[page - 1]?.audio ?? [] : [];
   const withAudio = info?.ok ? info.slides.filter((s) => s.audio.length).length : 0;
@@ -76,7 +101,7 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted">
-        {course && <Link to={`${base}/courses/${enc(course.code)}`}><CourseBadge course={course} size="md" /></Link>}
+        {course && <Link to={`${base}/courses/${enc(course.code)}${weekIndex !== undefined ? `#w${weekIndex}` : ""}`} aria-label={`Back to ${course.short}${week ? `, ${week}` : ""}`}><CourseBadge course={course} size="md" /></Link>}
         {week && <span>{week}</span>}
         {info?.download && <a href={info.download} download className="ml-auto hover:text-ink">⬇ Download the .{file.split(".").pop()}</a>}
       </div>
@@ -84,7 +109,7 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
 
       {!info ? (
         <Card className="p-10 text-center text-muted" >
-          <div className="mb-2 text-3xl">📊</div>
+          <Presentation aria-hidden className="mx-auto mb-2 size-8 text-muted" />
           <p className="font-semibold text-ink">Getting the slides ready…</p>
           <p className="mt-1 text-sm">The first time can take a minute for big presentations. After that they open straight away.</p>
         </Card>
@@ -109,17 +134,25 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
                 <input type="checkbox" checked={lecture} onChange={(e) => setLecture(e.target.checked)} /> Play as a lecture
               </label>
             )}
-            <button onClick={() => (document.fullscreenElement ? document.exitFullscreen() : stage.current?.requestFullscreen())} className="ml-auto rounded-full border border-line px-3 py-1 text-sm">⛶ Full screen</button>
+            <button onClick={() => (document.fullscreenElement ? document.exitFullscreen() : stage.current?.requestFullscreen())} className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-sm"><Maximize aria-hidden className="size-3.5" />Full screen</button>
           </div>
 
           <Narration key={page} clips={audio} lecture={lecture} onEnded={() => page < pages && go(page + 1)} />
+          {said.length > 0 && (
+            <div className="mt-3 rounded-xl border border-line bg-surface p-3" data-testid="slide-transcript">
+              <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <FileText aria-hidden className={INLINE} /> What's said on this slide
+              </div>
+              {said.map((l, i) => <p key={i} className="text-sm leading-relaxed">{l.text}</p>)}
+            </div>
+          )}
 
           {pages > 1 && (
             <nav className="mt-4 flex flex-wrap gap-1" aria-label="Slides">
               {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
                 <button key={n} onClick={() => go(n)} title={info.slides[n - 1]?.audio.length ? "Has narration" : undefined}
                   className={cx("min-w-9 rounded-lg px-2 py-1 text-xs tabular-nums", n === page ? "bg-ink font-semibold text-surface" : "bg-surface-2 text-muted hover:text-ink")}>
-                  {n}{info.slides[n - 1]?.audio.length ? " 🔊" : ""}
+                  {n}{info.slides[n - 1]?.audio.length ? <> <Volume2 aria-hidden className={INLINE} /></> : ""}
                 </button>
               ))}
             </nav>
@@ -179,7 +212,7 @@ function Narration({ clips, lecture, onEnded }: { clips: string[]; lecture: bool
   if (!clips.length) return null;
   return (
     <div className="mt-3 grid gap-2 rounded-xl bg-surface-2 p-3">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">🔊 Narration for this slide</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted"><Volume2 aria-hidden className={INLINE} /> Narration for this slide</div>
       {clips.map((src, i) => (
         <audio key={src} ref={(el) => { refs.current[i] = el; }} src={src} controls preload="metadata" className="w-full"
           onEnded={() => (i + 1 < clips.length ? refs.current[i + 1]?.play() : lecture && onEnded())} />

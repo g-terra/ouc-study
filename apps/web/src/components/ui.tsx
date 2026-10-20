@@ -1,8 +1,9 @@
 import type { ReactNode, CSSProperties } from "react";
 import { Link } from "../lib/router";
-import { slidesPage } from "../lib/links";
+import { slidesPage, videoPage } from "../lib/links";
 import type { Course, FileRef, ItemKind, WeekItem } from "@ouc/content/types";
 import { STATE_LABEL, type State } from "../lib/data";
+import { KindIcon } from "./icons";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -28,8 +29,9 @@ const STATE_STYLE: Record<State, string> = {
   soon: "bg-warn-bg text-warn ring-1 ring-warn/40",
   todo: "bg-surface-2 text-muted",
 };
-export function StatePill({ state }: { state: State }) {
-  return <span className={cx("rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap", STATE_STYLE[state])}>{STATE_LABEL[state]}</span>;
+/** An assignment's state; once it has a grade, "Graded 7.5" instead. */
+export function StatePill({ state, grade }: { state: State; grade?: string }) {
+  return <span className={cx("rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap", STATE_STYLE[grade ? "done" : state])}>{grade ? `Graded ${grade}` : STATE_LABEL[state]}</span>;
 }
 
 export function Card({ children, className, style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
@@ -67,23 +69,21 @@ export function ProgressRing({ value, color, size = 56, label }: { value: number
   );
 }
 
-const KIND_ICON: Record<ItemKind, string> = { file: "📄", video: "🎬", link: "🔗", assignment: "📝", forum: "💬", tool: "🖥️", note: "📒" };
-const EXT_ICON: Record<string, string> = { pdf: "📕", pptx: "📊", docx: "📘", ipynb: "📓", png: "🖼️", jpg: "🖼️", jpeg: "🖼️", md: "🗒️" };
 /** Course material that is on this computer: files and downloaded videos (what notes and quizzes are made from). */
 export const isMaterial = (i: WeekItem) => i.kind === "file" || (i.kind === "video" && !i.external);
-export const kindIcon = (k: ItemKind, ext?: string) => (k === "file" && ext && EXT_ICON[ext]) || KIND_ICON[k];
+export const kindIcon = (k: ItemKind, ext?: string) => <KindIcon kind={k} ext={ext} />;
 
 /** A link to a course file: slides open in the app's slide viewer, anything else in a new tab. */
 export function FileLink({ href, className, title, children }: { href?: string; className?: string; title?: string; children: ReactNode }) {
-  const slides = slidesPage(href);
-  return slides ? <Link to={slides} className={className} title={title}>{children}</Link>
+  const page = slidesPage(href) ?? videoPage(href);
+  return page ? <Link to={page} className={className} title={title}>{children}</Link>
     : <a href={href} target="_blank" rel="noreferrer" className={className} title={title}>{children}</a>;
 }
 
 export function FileCard({ file, label }: { file: FileRef; label: string }) {
   return (
     <FileLink href={file.href} className="flex items-center gap-3 rounded-xl border border-line bg-surface p-3 transition hover:border-muted">
-      <span className="text-2xl">{EXT_ICON[file.ext] ?? "📄"}</span>
+      <KindIcon kind="file" ext={file.ext} className="size-7" />
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold">{file.name}</span>
         <span className="text-xs text-muted">{label} · {file.ext.toUpperCase()} · {slidesPage(file.href) ? "opens in the slide viewer" : "opens in a new tab"}</span>

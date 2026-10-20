@@ -17,6 +17,7 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MEDIA_FILE, transcriptPath } from "../../eclass-sync/src/media.ts";
 import { buildClasses, detectClasses, type ClassesConfig } from "./classes.ts";
+import { gradeFor } from "./grades.ts";
 import { parsePlan } from "./plan.ts";
 import { parseQuiz } from "./quiz.ts";
 import type {
@@ -241,12 +242,14 @@ function buildSemester(id: string): SemesterData | undefined {
         const aid = `${cc.code}/${folderName}`;
         const cmid = String(a.url ?? "").match(/[?&]id=(\d+)/)?.[1];
         const lv = cmid ? live.assignments?.[cmid] : undefined;
+        // a grade only the gradebook has (the assignment's own record may not carry it yet)
+        const gb = gradeFor(live.grades ?? [], cc.code, cmid, a.name);
         assignments.push({
           id: aid, code: cc.code, title: short, fullTitle: a.name,
           due: lv?.due ?? (due ? isoLocal(due) : undefined), opened: lv?.opened ?? (opened ? isoLocal(opened) : undefined),
           status: lv?.status ? ({ submitted: "Submitted for grading", draft: "Draft (not submitted)", new: "No submissions have been made yet" } as Record<string, string>)[lv.status] ?? lv.status : status,
           submitted: lv?.status ? lv.status === "submitted" : /Submitted/i.test(status),
-          grade: lv?.grade || rows["Grade"] || undefined, feedback: lv?.feedback || fb || undefined,
+          grade: lv?.grade || rows["Grade"] || gb?.grade || undefined, feedback: lv?.feedback || fb || gb?.feedback || undefined,
           question, weekIndex: s.i, eclassUrl: a.url, briefs, submissions, resources: res,
           workingNotes: existsSync(join(folderAbs, "README.md")) ? fileHref(id, `${folderRel}/README.md`) : undefined,
           prep: readPrep(join(folderAbs, "PREP.md")),
