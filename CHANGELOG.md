@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/g-terra/ouc-study/compare/v0.9.0...v0.9.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **web:** label the v2 course progress ring and show each course's exam ([#61](https://github.com/g-terra/ouc-study/issues/61)) ([d93969e](https://github.com/g-terra/ouc-study/commit/d93969e93e84d404e7ad81f44aff90e59e659d0b))
+
 ## [0.9.0](https://github.com/g-terra/ouc-study/compare/v0.8.0...v0.9.0) (2026-10-19)
 
 
