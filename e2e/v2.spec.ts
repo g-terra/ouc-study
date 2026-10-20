@@ -43,7 +43,8 @@ test("v2 calendar lists the overdue assignment; a course keeps its notes and qui
   await page.getByRole("navigation", { name: "Main" }).first().getByRole("link", { name: "Courses", exact: true }).click();
   // the ring says what it counts
   await expect(page.getByTitle("0 of 1 assignments handed in")).toContainText("assignments");
-  await expect(page.getByText("Exam: no date yet")).toBeVisible();
+  // the demo timetable has a final on 5 Dec 2026 and a repeat on 11 Jan 2027; after those, no date
+  await expect(page.getByText(/^Exam: (Final exam, |Repeat exam, |no date yet)/)).toBeVisible();
   await page.getByText("Demo Studies").click();
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses\/DEMO101$/);
   await page.getByRole("tab", { name: /Notes/ }).click();
@@ -272,4 +273,13 @@ test("a formula's symbol list is one aligned row per symbol", async ({ page }) =
   expect(ys[0]).toBeLessThan(ys[1]);           // and each symbol has its own row
   expect(ys[1]).toBeLessThan(ys[2]);
   await expect(page.locator(".katex-error")).toHaveCount(0);
+});
+
+test("v2 calendar lists the exams read from the exam timetable in the course files", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-10-20T10:00:00"));
+  await page.goto(`/v2${SEM}/calendar`);
+  await page.getByRole("group", { name: "Show" }).getByRole("button", { name: "Exams" }).click();
+  await expect(page.getByText("Demo Studies · Final exam")).toBeVisible();
+  await expect(page.getByText("Demo Studies · Repeat exam")).toBeVisible();
+  await expect(page.getByText("Nothing coming up.")).toHaveCount(0);
 });

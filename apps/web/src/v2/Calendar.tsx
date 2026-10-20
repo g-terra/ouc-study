@@ -85,7 +85,7 @@ export function Calendar({ data }: { data: SemesterData }) {
               </Card>
             </section>
           ))}
-          {!weeks.length && !overdue.length && <Empty>Nothing coming up.</Empty>}
+          {!weeks.length && !overdue.length && <Empty>{show === "exam" && !data.exams.length ? "No exam dates yet. They show up here once the exam timetable is in your course files." : "Nothing coming up."}</Empty>}
         </div>
       ) : (
         <Card className="grid grid-cols-1 gap-0.5 p-2">

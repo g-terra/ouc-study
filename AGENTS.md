@@ -27,7 +27,7 @@ packages/cli/src/     the `ouc` command (ouc.ts, ai.ts), setup.ts (installer), s
 bin/                  small .mjs launchers (ouc.mjs, setup.mjs, server.mjs, ai.mjs) that start the TypeScript in packages/cli with tsx
 semesters/<id>/       ← personal, git-ignored
   semester.json       course registry
-  _meta/              eclass-meta.json (course structure), submissions.json, live.json, exams.json, resources.json (study links)
+  _meta/              eclass-meta.json (course structure), submissions.json, live.json, exams.json (when empty, read from the exam timetable in the course files), resources.json (study links)
   courses/<course>/NN-<week>/   original eClass files, class videos included; *.transcript.md next to a video or narrated .pptx = its transcript (base for notes)
   text/               plain-text copies of every PDF/PPTX/DOCX/notebook. **grep these**
   assignments/<CODE>/<MM-DD>_<name>/   brief files, my-submission/, README.md (working notes), PREP.md (AI prep pack), review/ (drafts uploaded for review: vN.docx, vN.md text, REVIEW-vN.md, approved PDF)
