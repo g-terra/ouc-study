@@ -70,7 +70,8 @@ export async function removeQuiz(sem: string, quiz: string): Promise<void> {
 }
 
 // ---------- quizzes being made ----------
-export interface QuizJob { chatId: string; sem: string; course: string; week?: string; quiz?: string; started: string; running: boolean; ok?: boolean; error?: string }
+/** queued: waiting for a free slot (the AI makes a few at a time); chatId is set once it starts. */
+export interface QuizJob { id: string; chatId?: string; sem: string; course: string; week?: string; quiz?: string; started: string; queued?: boolean; running: boolean; ok?: boolean; error?: string }
 let jobs: QuizJob[] = [];
 let dismissed = new Set<string>();
 const jobListeners = new Set<() => void>();
@@ -79,11 +80,11 @@ async function pollJobs() {
   const j = await fetch("/api/ai/quiz", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const next: QuizJob[] = j?.jobs ?? [];
   // a quiz just finished: show it
-  if (next.some((n) => n.ok && jobs.find((o) => o.chatId === n.chatId)?.running)) refreshData();
+  if (next.some((n) => n.ok && jobs.find((o) => o.id === n.id)?.running)) refreshData();
   jobs = next;
   jobListeners.forEach((l) => l());
   window.clearTimeout(jobTimer);
-  jobTimer = jobs.some((x) => x.running) ? window.setTimeout(pollJobs, 3000) : undefined;
+  jobTimer = jobs.some((x) => x.running || x.queued) ? window.setTimeout(pollJobs, 3000) : undefined;
 }
 
 /** The quizzes being made (and ones that just failed) for a semester, optionally one course. */
@@ -95,17 +96,20 @@ export function useQuizJobs(sem: string, course?: string): QuizJob[] {
     if (jobListeners.size === 1) pollJobs();
     return () => { jobListeners.delete(l); };
   }, []);
-  return jobs.filter((j) => j.sem === sem && (!course || j.course === course) && (j.running || (!j.ok && !dismissed.has(j.chatId))));
+  return jobs.filter((j) => j.sem === sem && (!course || j.course === course) && (j.running || j.queued || (!j.ok && !dismissed.has(j.id))));
 }
-export const dismissJob = (chatId: string) => { dismissed = new Set([...dismissed, chatId]); jobListeners.forEach((l) => l()); };
+export const dismissJob = (id: string) => { dismissed = new Set([...dismissed, id]); jobListeners.forEach((l) => l()); };
 
-/** Asks the AI for a quiz in the background (the chat isn't opened). Throws Error(message) if it can't start. */
-export async function makeQuiz(sem: string, course: string, week?: string): Promise<QuizJob> {
-  const res = await fetch("/api/ai/quiz", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ sem, course, week }) }).catch(() => null);
+/**
+ * Asks the AI for a quiz in the background (the chat isn't opened): one class (`week`), the whole course,
+ * or `"every"` class without a quiz yet (one quiz each). Throws Error(message) if it can't start.
+ */
+export async function makeQuiz(sem: string, course: string, week?: string): Promise<QuizJob[]> {
+  const res = await fetch("/api/ai/quiz", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify(week === "every" ? { sem, course, every: true } : { sem, course, week }) }).catch(() => null);
   if (res?.status === 403) refreshAi(true);   // the app server restarted: get a new token
   if (!res?.ok) throw new Error(await failed(res, "Couldn't start the AI. Is the app running on your computer?"));
-  const { job } = await res.json();
-  jobs = [...jobs.filter((j) => j.chatId !== job.chatId), job];
+  const { jobs: added } = (await res.json()) as { jobs: QuizJob[] };
+  jobs = [...jobs.filter((j) => !added.some((a) => a.id === j.id)), ...added];
   pollJobs();
-  return job;
+  return added;
 }

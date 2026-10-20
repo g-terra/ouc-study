@@ -256,11 +256,56 @@ test("the Make a quiz pop-up: the quiz is made in the background, and the page c
   const post = (body: object) => fetch(`${base}/api/ai/quiz`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
   assert.equal((await post({ sem: "S", course: "ZZZ" })).status, 400);
   assert.equal((await fetch(`${base}/api/ai/quiz`, { method: "POST", body: "{}" })).status, 403);   // needs the app's token
-  const { job } = await json(post({ sem: "S", course: "AAA", week: 1 }));
+  const { jobs: [job] } = await json(post({ sem: "S", course: "AAA", week: 1 }));
   assert.equal(job.running, true);
   assert.equal(job.quiz, "semesters/S/quizzes/AAA/week-01-intro.json");
   let jobs: Ev[] = [];
   for (let i = 0; i < 100 && (!jobs.length || jobs[0].running); i++) { await new Promise((ok) => setTimeout(ok, 20)); jobs = (await json(fetch(`${base}/api/ai/quiz`))).jobs; }
   assert.deepEqual([jobs[0].running, jobs[0].ok, jobs[0].week], [false, true, "1"]);
   assert.ok(existsSync(join(root, job.quiz)));
+});
+
+/** quizSemester with a second class that has a note, so "every class" has two to make. */
+function twoClasses(root: string) {
+  quizSemester(root);
+  writeFileSync(join(root, "semesters/S/notes/AAA/week-02-more.md"), "---\ntitle: More\n---\nGrass is green.\n");
+  writeFileSync(join(root, "apps/web/public/data/S.json"), JSON.stringify({
+    courses: [{ code: "AAA", short: "AAA", title: "AAA course", weeks: [{ index: 1, name: "Week 1", label: "Intro", items: [] }, { index: 2, name: "Week 2", label: "More", items: [] }, { index: 3, name: "Week 3", label: "Empty", items: [] }] }],
+    notes: [{ code: "AAA", weekIndex: 1, slug: "week-01-intro", title: "Intro", body: "The sky is blue." }, { code: "AAA", weekIndex: 2, slug: "week-02-more", title: "More", body: "Grass is green." }], assignments: [],
+  }));
+}
+
+test("Every class: one quiz per class with material, a few at a time, then nothing left to make", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  twoClasses(root);
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude", parallel: 1 }));
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const post = (body: object) => fetch(`${base}/api/ai/quiz`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
+  const { jobs: made } = await json(post({ sem: "S", course: "AAA", every: true }));
+  assert.deepEqual(made.map((j: Ev) => j.week), ["1", "2"]);   // week 3 has no material
+  assert.deepEqual(made.map((j: Ev) => [j.running, !!j.queued]), [[true, false], [false, true]]);   // parallel: 1
+  let jobs: Ev[] = made;
+  for (let i = 0; i < 200 && jobs.some((j) => j.running || j.queued); i++) { await new Promise((ok) => setTimeout(ok, 20)); jobs = (await json(fetch(`${base}/api/ai/quiz`))).jobs; }
+  assert.deepEqual(jobs.map((j) => j.ok), [true, true]);
+  assert.ok(existsSync(join(root, "semesters/S/quizzes/AAA/week-01-intro.json")) && existsSync(join(root, "semesters/S/quizzes/AAA/week-02-more.json")));
+  const again = await post({ sem: "S", course: "AAA", every: true });
+  assert.equal(again.status, 400);
+  assert.match(((await again.json()) as Ev).error, /already has a quiz/);
+});
+
+test("Sync now also makes a quiz for every class without one, unless autoQuiz is off", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-ai-"));
+  cpSync(join(REPO, "ai/skills"), join(root, "ai/skills"), { recursive: true });
+  mkdirSync(join(root, ".ouc"), { recursive: true });
+  twoClasses(root);
+  const mw = createAiApi(root, { bin: join(HERE, "fixtures/fake-agent.mjs"), status: async () => ({ ready: true }), noAutoPrep: true });
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude", autoQuiz: false }));
+  assert.equal(mw.catchUp().quizzes, 0);
+  while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
+  assert.ok(!existsSync(join(root, "semesters/S/quizzes")));
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude" }));
+  assert.equal(mw.catchUp().quizzes, 2);
+  while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
+  assert.ok(existsSync(join(root, "semesters/S/quizzes/AAA/week-01-intro.json")) && existsSync(join(root, "semesters/S/quizzes/AAA/week-02-more.json")));
 });

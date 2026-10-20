@@ -25,6 +25,7 @@ export interface AiConfig {
   local?: LocalModel;
   opencode?: LocalModel;
   autoPrep?: boolean;   // prepare assignment prep packs in the background (default on)
+  autoQuiz?: boolean;   // Sync now also makes a quiz for every class without one (default on)
   parallel?: number;    // background AI runs at once (default 3)
 }
 export interface ChatMessage { role: "system" | "user" | "assistant"; content: string }

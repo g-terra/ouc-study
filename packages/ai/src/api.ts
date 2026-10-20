@@ -8,8 +8,9 @@
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
 //   GET  /api/ai/view?path=…  a visual the AI saved (HTML, SVG or image), sandboxed, for the chat to show inline
 //   POST /api/ai/plan/task     { sem, week, line, done } ticks a task in semesters/<sem>/plans/<week>.md
-//   POST /api/ai/quiz          { sem, course, week? } makes a quiz in the background (no chat on screen) → { job }
-//   GET  /api/ai/quiz          the quizzes being made, and the ones just finished: { jobs: [{ chatId, quiz, course, week, running, ok?, error? }] }
+//   POST /api/ai/quiz          { sem, course, week? } makes a quiz in the background (no chat on screen) → { jobs: [job] }
+//                              { sem, course, every: true } one quiz per class without one, "parallel" at a time → { jobs }
+//   GET  /api/ai/quiz          the quizzes being made or waiting, and the ones just finished: { jobs: [{ id, chatId?, quiz, course, week, queued?, running, ok?, error? }] }
 //   GET  /api/ai/prep          background notes/prep work: { enabled, busy, running/finished: [{ id, chatId, ok? }], queue, total, done, error }
 //   GET  /api/ai/review?sem=…&assignment=…          pre-submission review rounds of an assignment (see review.mjs)
 //   POST /api/ai/review/upload?sem=…&assignment=…&name=…   the student's .docx as the body → the next version
@@ -21,14 +22,15 @@
 // Background work: when the app data is rebuilt (a sync found something) or the app starts, every
 // assignment not submitted yet without a PREP.md gets one, one at a time, from the AI chosen with
 // `ouc ai setup` ("autoPrep": false in .ouc/ai.json turns that off). Sync now also makes the
-// missing notes, for every week with files. Up to "parallel" (default 3) runs at once.
+// missing notes, for every week with files, and a quiz for every class with material and no quiz
+// ("autoQuiz": false turns the quizzes off). Up to "parallel" (default 3) runs at once.
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
 import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, loginStatusAsync, serverUp, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
-import { buildPrompt, chatSystem, listActions, prepPath, quizPath, quizScope, weeksWithoutNotes, type Params } from "./actions.ts";
+import { buildPrompt, chatSystem, listActions, prepPath, quizPath, quizScope, weeksWithoutNotes, weeksWithoutQuiz, type Params } from "./actions.ts";
 import { parseQuiz } from "../../content/src/quiz.ts";
 import { currentSemesterId, loadData, read } from "./context.ts";
 import { runAgentTurn, runChatTurn, type AgentEvent, type RunHandle } from "./stream.ts";
@@ -68,7 +70,7 @@ export interface AiApiOptions {
   noAutoPrep?: boolean;
 }
 export type AiApi = ((req: IncomingMessage, res: ServerResponse, next: () => void) => Promise<void>) & {
-  autoPrep(): void; catchUp(): { notes: number; prep: number }; prepIdle(): boolean;
+  autoPrep(): void; catchUp(): { notes: number; prep: number; quizzes: number }; prepIdle(): boolean;
 };
 
 // The background app starts with a minimal PATH; add the usual install places of the agent CLIs
@@ -366,7 +368,8 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
   /**
    * Background work, one AI run at a time: prep packs for assignments without one (on its own when the
    * app starts and after each rebuild) and, when asked (Sync now), notes for every week that has files
-   * and no note (one run per course). An explicit request ignores "autoPrep": false and recent attempts.
+   * and no note (one run per course) and quizzes for every class with material and no quiz (one run
+   * per class, unless "autoQuiz": false). An explicit request ignores "autoPrep": false and recent attempts.
    */
   async function catchUp({ notes = false, force = false } = {}) {
     if (prep.busy) { prep.again = true; prep.notes ||= notes; prep.force ||= force; return; }
@@ -388,6 +391,8 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         const jobs: { id: string; body: RunBody }[] = [
           ...(wantNotes ? data.courses.filter((c) => weeksWithoutNotes(data, [c]).length)
             .map((c) => ({ id: `notes:${c.code}`, body: { action: "make-notes", params: { course: c.code } } })) : []),
+          ...(wantNotes && cfg.autoQuiz !== false ? quizzesToMake(semId, data)
+            .map(({ course, week }) => ({ id: `quiz:${course}/${week}`, body: { action: "make-quiz", params: { course, week } } })) : []),
           ...needsPrep(root, semId, data, forced ? {} : tried)
             .map((a) => ({ id: a.id, body: { action: "assignment-prep", params: { assignment: a.id, mode: "new" }, auto: true } })),
         ];
@@ -425,22 +430,59 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
   }
 
   // ----- quizzes made in the background (the Make a quiz pop-up) -----
-  type QuizJob = { chatId: string; sem: string; course: string; week?: string; quiz?: string; started: string; running: boolean; ok?: boolean; error?: string };
+  // A job waits in the queue (queued) until a slot is free: "parallel" in .ouc/ai.json (default 3) run at once.
+  type QuizJob = { id: string; chatId?: string; sem: string; course: string; week?: string; quiz?: string; started: string; queued?: boolean; running: boolean; ok?: boolean; error?: string };
   let quizJobs: QuizJob[] = [];
-  function makeQuiz(b: Json): QuizJob {
-    const params: Params = { course: String(b.course ?? "") };
-    if (b.week !== undefined && b.week !== null && b.week !== "") params.week = String(b.week);
-    const t = startTurn({ sem: b.sem, action: "make-quiz", params });
-    if (t.error !== undefined) throw Object.assign(new Error(t.error), { code: t.code });
-    const job: QuizJob = { chatId: t.chat.id, sem: t.chat.sem ?? "", course: params.course!, week: params.week as string | undefined, quiz: t.chat.quiz, started: t.chat.createdAt, running: true };
-    // keep the last few finished ones, so the page can say how it went
-    quizJobs = [...quizJobs.filter((j) => j.running || Date.now() - new Date(j.started).getTime() < 3600_000).slice(-9), job];
+  const quizSlots = () => Math.max(1, Math.min(8, Number(loadConfig(root)?.parallel) || 3));
+  function startQuizJob(job: QuizJob) {
+    const params: Params = { course: job.course, ...(job.week !== undefined ? { week: job.week } : {}) };
+    const t = startTurn({ sem: job.sem, action: "make-quiz", params });
+    if (t.error !== undefined) return Object.assign(job, { queued: false, running: false, ok: false, error: t.error, code: t.code });
+    Object.assign(job, { chatId: t.chat.id, quiz: t.chat.quiz, started: t.chat.createdAt, queued: false, running: true });
     t.done.then((r) => {
       job.running = false;
       job.ok = !!r?.ok && !!job.quiz && existsSync(join(root, job.quiz));
       if (!job.ok) job.error = t.chat.messages.at(-1)?.error ?? (r?.ok ? stripTicks(t.chat.messages.at(-1)?.text) || "The AI finished without saving a quiz." : "The AI stopped with an error.");
+      // the AI stopped (usage limit, sign-in): the rest would fail the same way
+      if (!r?.ok) quizJobs = quizJobs.filter((j) => !j.queued);
+      pumpQuizzes();
     });
     return job;
+  }
+  function pumpQuizzes() {
+    for (const job of quizJobs) {
+      if (quizJobs.filter((j) => j.running).length >= quizSlots()) break;
+      if (job.queued) startQuizJob(job);
+    }
+  }
+  /** The classes still without a quiz, leaving out the ones being made from the pop-up. */
+  const quizzesToMake = (semId: string, data: SemesterData) => {
+    const busy = new Set(quizJobs.filter((j) => j.queued || j.running).map((j) => `${j.course}/${j.week}`));
+    return data.courses.flatMap((c) => weeksWithoutQuiz(root, semId, data, c).map((w) => ({ course: c.code, week: String(w.index) })))
+      .filter((x) => !busy.has(`${x.course}/${x.week}`));
+  };
+  function makeQuiz(b: Json): QuizJob[] {
+    const semId = /^[\w-]+$/.test(String(b.sem ?? "")) ? String(b.sem) : currentSemesterId(root);
+    const course = String(b.course ?? "");
+    const job = (week?: string): QuizJob => ({ id: randomUUID(), sem: semId ?? "", course, week, started: new Date().toISOString(), queued: true, running: false });
+    let added: QuizJob[];
+    if (b.every) {
+      const data = semId ? loadData(root, semId) : null;
+      const c = data?.courses.find((x) => x.code === course);
+      if (!c || !data) throw Object.assign(new Error("Choose a course first."), { code: 400 });
+      added = quizzesToMake(semId!, { ...data, courses: [c] }).map((x) => job(x.week));
+      if (!added.length) throw Object.assign(new Error(`Every class of ${c.short} with material already has a quiz.`), { code: 400 });
+    } else {
+      added = [job(b.week !== undefined && b.week !== null && b.week !== "" ? String(b.week) : undefined)];
+    }
+    // keep the last few finished ones, so the page can say how it went
+    const recent = quizJobs.filter((j) => !j.queued && !j.running && Date.now() - new Date(j.started).getTime() < 3600_000).slice(-20);
+    quizJobs = [...quizJobs.filter((j) => j.queued || j.running || recent.includes(j)), ...added];
+    pumpQuizzes();
+    // a single quiz that couldn't start (no material, no AI) is an error for the pop-up to show
+    const failed = added.length === 1 && added[0]!.ok === false ? added[0] as QuizJob & { code?: number } : null;
+    if (failed) { quizJobs = quizJobs.filter((j) => j !== failed); throw Object.assign(new Error(failed.error), { code: failed.code }); }
+    return added;
   }
 
   // ----- pre-submission review -----
@@ -492,7 +534,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         }
       }
       if (p === "/api/ai/quiz") {
-        if (req.method === "POST") return json(res, { job: makeQuiz(await readBody(req)) });
+        if (req.method === "POST") return json(res, { jobs: makeQuiz(await readBody(req)) });
         return json(res, { jobs: quizJobs });
       }
       if (p === "/api/ai/actions") return json(res, { actions: listActions(root) });
@@ -541,11 +583,12 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
   /** Sync now: make the missing notes and prep packs (returns how many it will make). */
   handler.catchUp = () => {
     const semId = currentSemesterId(root);
-    let todo = { notes: 0, prep: 0 };
+    let todo = { notes: 0, prep: 0, quizzes: 0 };
     try {
       if (!semId) throw new Error("no semester");
       const data = loadData(root, semId);
-      todo = { notes: weeksWithoutNotes(data, data.courses).length, prep: needsPrep(root, semId, data).length };
+      const cfg = loadConfig(root);
+      todo = { notes: weeksWithoutNotes(data, data.courses).length, prep: needsPrep(root, semId, data).length, quizzes: cfg?.autoQuiz === false ? 0 : quizzesToMake(semId, data).length };
     } catch { /* no data yet */ }
     catchUp({ notes: true, force: true });
     return todo;

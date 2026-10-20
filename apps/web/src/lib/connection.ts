@@ -19,7 +19,7 @@ export function refreshConnection(fresh = false) {
   return inflight;
 }
 
-export async function syncNow(): Promise<{ ok: boolean; found?: number; error?: string; ai?: { notes: number; prep: number } }> {
+export async function syncNow(): Promise<{ ok: boolean; found?: number; error?: string; ai?: { notes: number; prep: number; quizzes?: number } }> {
   set({ ...current, syncing: true });
   try {
     const r = await fetch("/api/eclass/sync", { method: "POST" }).then((x) => x.json());
