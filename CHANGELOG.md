@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.3](https://github.com/g-terra/ouc-study/compare/v0.23.2...v0.23.3) (2026-10-20)
+
+
+### Bug Fixes
+
+* **web:** the update bar uses a line icon, not an emoji ([#132](https://github.com/g-terra/ouc-study/issues/132)) ([3901b2e](https://github.com/g-terra/ouc-study/commit/3901b2eeb7c275947e63c70ee95193757f5dd5ec))
+
 ## [0.23.2](https://github.com/g-terra/ouc-study/compare/v0.23.1...v0.23.2) (2026-10-20)
 
 
