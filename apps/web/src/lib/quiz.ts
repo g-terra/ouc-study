@@ -69,9 +69,17 @@ export async function removeQuiz(sem: string, quiz: string): Promise<void> {
   window.setTimeout(refreshData, 800);   // in case the file watcher missed it
 }
 
+/** Deletes every quiz of a course and their scores. */
+export async function removeCourseQuizzes(sem: string, code: string): Promise<void> {
+  const res = await fetch(`/api/quiz?sem=${encodeURIComponent(sem)}&course=${encodeURIComponent(code)}`, { method: "DELETE" }).catch(() => null);
+  if (!res?.ok) throw new Error(await failed(res));
+  set(sem, (await res.json()).attempts ?? []);
+  window.setTimeout(refreshData, 800);   // in case the file watcher missed it
+}
+
 // ---------- quizzes being made ----------
 /** queued: waiting for a free slot (the AI makes a few at a time); chatId is set once it starts; phase: reading the material, then writing the quiz. */
-export interface QuizJob { id: string; chatId?: string; sem: string; course: string; week?: string; quiz?: string; started: string; queued?: boolean; running: boolean; phase?: "planning" | "writing"; ok?: boolean; error?: string }
+export interface QuizJob { id: string; chatId?: string; sem: string; course: string; week?: string; title?: string; quiz?: string; started: string; queued?: boolean; running: boolean; phase?: "planning" | "writing"; ok?: boolean; error?: string }
 let jobs: QuizJob[] = [];
 let dismissed = new Set<string>();
 const jobListeners = new Set<() => void>();
@@ -102,10 +110,10 @@ export const dismissJob = (id: string) => { dismissed = new Set([...dismissed, i
 
 /**
  * Asks the AI for a quiz in the background (the chat isn't opened): one class (`week`), the whole course,
- * or `"every"` class without a quiz yet (one quiz each). Throws Error(message) if it can't start.
+ * or `"every"` class without a quiz yet (one quiz each), under the name the student gave (`title`). Throws Error(message) if it can't start.
  */
-export async function makeQuiz(sem: string, course: string, week?: string): Promise<QuizJob[]> {
-  const res = await fetch("/api/ai/quiz", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify(week === "every" ? { sem, course, every: true } : { sem, course, week }) }).catch(() => null);
+export async function makeQuiz(sem: string, course: string, week?: string, title?: string): Promise<QuizJob[]> {
+  const res = await fetch("/api/ai/quiz", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify(week === "every" ? { sem, course, every: true } : { sem, course, week, title }) }).catch(() => null);
   if (res?.status === 403) refreshAi(true);   // the app server restarted: get a new token
   if (!res?.ok) throw new Error(await failed(res, "Couldn't start the AI. Is the app running on your computer?"));
   const { jobs: added } = (await res.json()) as { jobs: QuizJob[] };

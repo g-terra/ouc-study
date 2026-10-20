@@ -116,9 +116,13 @@ export function quizScope(data: Pick<SemesterData, "courses">, params: Params): 
   const week = params.week !== undefined && params.week !== "" ? course.weeks.find((w) => String(w.index) === String(params.week)) ?? null : null;
   return { course, week };
 }
-/** Where a new quiz goes (repo-relative): named like the week's note, or course-<short>; never an existing file. */
-export function quizPath(root: string, semId: string, course: Course, week: Week | null): string {
-  const base = week ? noteFileName(course, week).replace(/\.md$/, "") : `course-${slug(course.short, 30)}`;
+/** The name the student gave the quiz in the pop-up, if any (one line, at most 120 characters). */
+export const quizTitle = (params: Params): string | undefined => String(params.title ?? "").replace(/\s+/g, " ").trim().slice(0, 120) || undefined;
+/** Where a new quiz goes (repo-relative): after the name the student gave, else like the week's note or course-<short>; never an existing file. */
+export function quizPath(root: string, semId: string, course: Course, week: Week | null, title?: string): string {
+  // ASCII only: quiz ids are [\w.-]
+  const named = title ? slug(title.normalize("NFKD"), 50).replace(/[^\w-]/g, "").replace(/-{2,}/g, "-").replace(/^-|-$/g, "") : "";
+  const base = named || (week ? noteFileName(course, week).replace(/\.md$/, "") : `course-${slug(course.short, 30)}`);
   const dir = `semesters/${semId}/quizzes/${course.code}`;
   let rel = `${dir}/${base}.json`;
   for (let n = 2; existsSync(join(root, rel)); n++) rel = `${dir}/${base}-${n}.json`;
@@ -142,8 +146,8 @@ export function weeksWithoutQuiz(root: string, semId: string, data: Pick<Semeste
   });
 }
 /** The prompt for an agent tool that makes a quiz and saves it at `rel`. */
-export function quizPrompt(root: string, semId: string, data: SemesterData, course: Course, week: Week | null): { rel: string; prompt: string } {
-  const rel = quizPath(root, semId, course, week);
+export function quizPrompt(root: string, semId: string, data: SemesterData, course: Course, week: Week | null, title?: string): { rel: string; prompt: string } {
+  const rel = quizPath(root, semId, course, week, title);
   const { files, notes } = quizMaterial(data, course, week);
   const what = week ? `eClass section ${week.index} "${week.name}"` : "the whole course so far";
   if (!files.length && !notes.length) throw new Error(`No material for ${course.short}${week ? `, ${week.label}` : ""} yet. Download the course files first (ouc pull).`);
@@ -155,7 +159,7 @@ export function quizPrompt(root: string, semId: string, data: SemesterData, cour
       "Use this material to decide the topics and the level; the questions can go wider (examples, scenarios, related ideas from the field) and every explanation must be full and self-contained, never a pointer to the material:" +
       (shown.length ? `\n- files (text copies in \`${sem}/text/\`): ${shown.join(", ")}${files.length > shown.length ? ` and ${files.length - shown.length} more in \`${sem}/courses/\`` : ""}` : "") +
       (notes.length ? `\n- the student's notes: ${notes.map((n) => `\`${sem}/${n}\``).join(", ")}` : "") +
-      `\n\nSave it as ${rel} ("course": "${course.code}", "scope": "${week ? "lecture" : "course"}"${week ? `, "section": ${week.index}` : ""}). ` +
+      `\n\nSave it as ${rel} (${title ? `"title": ${JSON.stringify(title)}, ` : ""}"course": "${course.code}", "scope": "${week ? "lecture" : "course"}"${week ? `, "section": ${week.index}` : ""}). ` +
       `When done, run: node packages/ai/validate.mjs ${rel} and fix every error it reports.`,
   };
 }
@@ -260,7 +264,7 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       body = `Use the quiz-me skill: quiz me on ${course.short}${week ? `, ${week.label}` : ""} (${course.code}${week ? `, eClass section ${week.index}` : ""}). Ask one question, then stop and wait for my answer in the next message.${extra}`; break;
     case "make-quiz": {
       const { course: c, week: w } = quizScope(data, params);
-      body = quizPrompt(root, semId, data, c, w).prompt + extra; break;
+      body = quizPrompt(root, semId, data, c, w, quizTitle(params)).prompt + extra; break;
     }
     case "plan-week":
       body = `Use the plan-week skill: plan my study week.${extra}`; break;

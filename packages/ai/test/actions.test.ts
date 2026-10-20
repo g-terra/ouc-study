@@ -57,6 +57,9 @@ test("make a quiz: a lecture quiz from a week's files, or a course quiz; never o
   assert.match(lecture, /`semesters\/S\/notes\/AAA\/week-01-intro\.md`/);
   assert.match(lecture, /Save it as semesters\/S\/quizzes\/AAA\/week-01-note\.json \("course": "AAA", "scope": "lecture", "section": 1\)/);
   assert.match(buildPrompt({ root, semId: "S", data: quizData, action: "make-quiz", params: { course: "AAA" }, first: false }), /course quiz .* covering the whole course so far[\s\S]*Save it as semesters\/S\/quizzes\/AAA\/course-aaa\.json \("course": "AAA", "scope": "course"\)/);
+  // a name given in the pop-up: the file is named after it and the AI is told to use it as the title
+  const named = buildPrompt({ root, semId: "S", data: quizData, action: "make-quiz", params: { course: "AAA", week: "1", title: "Lecture 1 · Ψ and more!" }, first: false });
+  assert.match(named, /Save it as semesters\/S\/quizzes\/AAA\/lecture-1-and-more\.json \("title": "Lecture 1 · Ψ and more!", "course": "AAA", "scope": "lecture", "section": 1\)/);
   // a second quiz for the same week gets its own file
   mkdirSync(join(root, "semesters/S/quizzes/AAA"), { recursive: true });
   writeFileSync(join(root, "semesters/S/quizzes/AAA/week-01-note.json"), "{}");

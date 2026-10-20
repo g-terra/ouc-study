@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isCorrect, makeAttempt, parseQuiz, pointsFor, quizStats, seededRandom, shuffledOptions } from "../src/quiz.ts";
-import { addAttempt, attemptsFile, readAttempts, removeQuiz, resetAttempts } from "../src/quiz-store.ts";
+import { isCorrect, makeAttempt, parseQuiz, pointsFor, proposedQuizName, quizStats, seededRandom, shuffledOptions } from "../src/quiz.ts";
+import { addAttempt, attemptsFile, readAttempts, removeCourseQuizzes, removeQuiz, resetAttempts } from "../src/quiz-store.ts";
 import type { QuizAttempt, QuizQuestion } from "../src/types.ts";
 
 const where = { code: "AAA", name: "lecture-01-intro" };
@@ -139,4 +139,26 @@ test("reset one quiz's progress or all of it, and remove a quiz with its scores"
 
   assert.equal(resetAttempts(dir), 1);
   assert.deepEqual(readAttempts(dir), []);
+});
+
+test("remove every quiz of a course with its scores, leaving other courses alone", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ouc-quiz-"));
+  mkdirSync(join(dir, "quizzes/AAA"), { recursive: true });
+  mkdirSync(join(dir, "quizzes/BBB"), { recursive: true });
+  for (const f of ["AAA/one", "AAA/two", "BBB/three"]) { writeFileSync(join(dir, `quizzes/${f}.json`), "{}"); addAttempt(dir, { quiz: f, results: [true] }); }
+  writeFileSync(join(dir, "quizzes/AAA/notes.txt"), "not a quiz");
+  assert.equal(removeCourseQuizzes(dir, "AAA"), 2);
+  assert.deepEqual(["one", "two"].map((n) => existsSync(join(dir, `quizzes/AAA/${n}.json`))), [false, false]);
+  assert.ok(existsSync(join(dir, "quizzes/AAA/notes.txt")) && existsSync(join(dir, "quizzes/BBB/three.json")));
+  assert.deepEqual(readAttempts(dir).map((a) => a.quiz), ["BBB/three"]);
+  assert.equal(removeCourseQuizzes(dir, "CCC"), 0);   // nothing there
+  assert.throws(() => removeCourseQuizzes(dir, "../x"), /Bad course/);
+});
+
+test("the name the Make a quiz pop-up proposes: the lecture and its topic, or the whole course", () => {
+  const c = { short: "CogPsy" };
+  assert.equal(proposedQuizName(c, { index: 10, name: "Week 9. October 26", label: "How do we see in 3D?" }), "Lecture 9 · How do we see in 3D?");
+  assert.equal(proposedQuizName(c, { index: 3, name: "Topic three", label: "Attention" }), "Lecture 3 · Attention");   // no number in the name: the section
+  assert.equal(proposedQuizName(c, { index: 0, name: "General", label: "General" }), "CogPsy · General");
+  assert.equal(proposedQuizName(c, null), "CogPsy · Whole course");
 });
