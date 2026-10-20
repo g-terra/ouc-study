@@ -184,3 +184,31 @@ test("a flow in a chat reply shows as a Mermaid diagram; code that isn't a diagr
   await expect(diagram).toContainText("Spike");
   await expect(page.getByText("this is not mermaid -->")).toBeVisible();
 });
+
+test("the AI and its model are picked next to Send; the model is remembered and sent", async ({ page }) => {
+  // a made-up status: Claude Code and Codex signed in
+  const tool = (id: string, label: string, models: string[], chosen = false) => ({ id, label, state: "connected", chosen, models });
+  await page.route("**/api/ai/status**", (route) => route.fulfill({ json: {
+    chosen: "claude", label: "Claude Code", agentic: true, ready: true, reason: "", token: "t",
+    tools: [tool("claude", "Claude Code", ["sonnet", "opus", "haiku"], true), tool("codex", "Codex", ["gpt-5-codex", "gpt-5"])],
+  } }));
+  let sent: Record<string, unknown> | undefined;
+  await page.route("**/api/ai/run", (route) => {
+    sent = route.request().postDataJSON();
+    return route.fulfill({ contentType: "text/event-stream", body: 'data: {"type":"text","text":"Hi!"}\n\ndata: {"type":"done","ok":true}\n\n' });
+  });
+  await page.goto(`${SEM}/chat`);
+  const model = page.getByRole("combobox", { name: "Model" });
+  await expect(model.locator("option")).toHaveText(["Default model", "sonnet", "opus", "haiku"]);
+  await model.selectOption("opus");
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Model" })).toHaveValue("opus");
+  // another AI has its own models (and its own remembered pick)
+  await page.getByRole("combobox", { name: "Which AI answers" }).selectOption("codex");
+  await expect(page.getByRole("combobox", { name: "Model" })).toHaveValue("");
+  await page.getByRole("combobox", { name: "Which AI answers" }).selectOption("claude");
+  await page.getByRole("textbox", { name: "Message" }).fill("Hello");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Hi!")).toBeVisible();
+  expect(sent).toMatchObject({ message: "Hello", model: "opus" });
+});

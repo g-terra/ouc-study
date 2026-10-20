@@ -3,7 +3,7 @@
 //
 //   GET  /api/ai/status        which coding tools are installed and signed in (cached 5 min, ?fresh=1)
 //   GET  /api/ai/actions       the study actions (one per skill in ai/skills/)
-//   POST /api/ai/run           { sem, chatId?, action?, params?, message } → Server-Sent Events
+//   POST /api/ai/run           { sem, chatId?, action?, params?, message, tool?, model? } → Server-Sent Events (model: one of the tool's `models` in status)
 //   POST /api/ai/stop          { chatId }
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
 //   DELETE /api/ai/chats/<id>  deletes a saved chat (not while it runs: 409);  DELETE /api/ai/chats  all of them but the running ones → { deleted, kept }
@@ -30,7 +30,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
-import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, loginStatusAsync, serverUp, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
+import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, loginStatusAsync, serverUp, toolModels, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
 import { buildPrompt, chatSystem, listActions, prepPath, quizPath, quizScope, weeksWithoutNotes, weeksWithoutQuiz, type Params } from "./actions.ts";
 import { parseQuiz } from "../../content/src/quiz.ts";
 import { currentSemesterId, loadData, read } from "./context.ts";
@@ -41,7 +41,7 @@ import { setTask } from "../../content/src/plan.ts";
 import { setClassTime } from "../../content/src/classes.ts";
 
 type ToolState = { state: "connected" | "signedout" | "apikey" | "missing" | "noserver" | "unknown"; detail?: string; fix?: string };
-export interface ToolStatus extends ToolState { id: string; label: string; chosen?: boolean }
+export interface ToolStatus extends ToolState { id: string; label: string; chosen?: boolean; /** models the panel offers, and the default (none: the tool's own) */ models?: string[]; model?: string }
 /** GET /api/ai/status */
 export interface AiStatus {
   chosen: string | null; label: string; agentic: boolean; ready: boolean; reason: string;
@@ -59,7 +59,7 @@ export interface Chat {
   quiz?: string;                                       // make-quiz: the file it makes (repo-relative)
 }
 /** POST /api/ai/run (and the background work). */
-interface RunBody { sem?: string | null; chatId?: string; action?: string | null; params?: Params; message?: string; tool?: string; auto?: boolean }
+interface RunBody { sem?: string | null; chatId?: string; action?: string | null; params?: Params; message?: string; tool?: string; model?: string; auto?: boolean }
 /** null tells a listener the turn ended. */
 type Listener = (e: Record<string, unknown> | null) => void;
 interface Live { chat: Chat; stop(): void; listeners: Set<Listener> }
@@ -118,7 +118,7 @@ export async function aiStatus(root: string): Promise<AiStatus> {
     { id: "opencode", label: "opencode", ...(d.opencode ? await server(ocServer) : { state: "missing", fix: INSTALL_HINT.opencode }) },
   ];
   if (cfg?.local) tools.push({ id: "local", label: TOOL_LABEL.local, ...(await server(cfg.local)) });
-  for (const t of tools) t.chosen = t.id === chosen;
+  for (const t of tools) Object.assign(t, { chosen: t.id === chosen, ...toolModels(cfg, t.id) });
   const pick = tools.find((t) => t.chosen);
   return {
     chosen, label: describe(cfg), agentic: isAgentic(chosen),
@@ -265,6 +265,9 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     if (!isAgentic(tool) && !(tool === "local" && cfg.local)) return fail(`Unknown AI "${tool}".`);
     if (tool === "opencode" && !cfg.opencode && !existsSync(join(root, ".opencode/opencode.json"))) return fail("opencode has no local model set up yet. In Terminal, run: ouc ai setup");
     cfg.tool = tool as AiConfig["tool"];
+    // only a model the panel offers: it never reaches the command line as anything else
+    const model = body.model || undefined;
+    if (model && !toolModels(cfg, tool).models.includes(model)) return fail(`${TOOL_LABEL[tool as keyof typeof TOOL_LABEL]} can't use the model "${model}" here.`);
     const semId = body.sem && existsSync(join(root, "semesters", body.sem)) ? body.sem : currentSemesterId(root);
     let data: SemesterData;
     try { data = semId ? loadData(root, semId) : ({ courses: [], notes: [], assignments: [] } as unknown as SemesterData); } catch (e) { return fail((e as Error).message, 500); }
@@ -295,7 +298,9 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     chat ??= { id: randomUUID(), title: shown.slice(0, 80), tool, action, params, sem: semId, createdAt: now, messages: [], quiz };
     chat.updatedAt = now;
     chat.messages.push({ role: "user", text: shown, prompt, at: now });
-    const by = tool === "opencode" && !cfg.opencode ? "opencode" : describe(cfg);
+    // who answered, with the model picked for this turn
+    const named = !model ? cfg : tool === "local" ? { ...cfg, local: { ...cfg.local!, model } } : tool === "opencode" && cfg.opencode ? { ...cfg, opencode: { ...cfg.opencode, model } } : cfg;
+    const by = tool === "opencode" && !cfg.opencode ? "opencode" : `${describe(named)}${model && (tool === "claude" || tool === "codex") ? ` (${model})` : ""}`;
     const reply = { role: "assistant" as const, text: "", updates: [] as string[], steps: [] as string[], files: [] as string[], at: now, by, error: undefined as string | undefined };
     chat.messages.push(reply);
     // a prep pack's history survives even if the AI rewrites the file without it
@@ -328,8 +333,8 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     };
     const onStart = ({ stop }: RunHandle) => { live.stop = stop; };
     const done = (isAgentic(tool)
-      ? runAgentTurn(root, cfg, prompt, { resume: sameTool ? chat.sessionId : undefined, onEvent, onStart, bin: opts.bin })
-      : runChatTurn(cfg.local!, [{ role: "system", content: chatSystem({ root, semId: semId ?? "", data, action, params }) },
+      ? runAgentTurn(root, cfg, prompt, { resume: sameTool ? chat.sessionId : undefined, model, onEvent, onStart, bin: opts.bin })
+      : runChatTurn(model ? { ...cfg.local!, model } : cfg.local!, [{ role: "system", content: chatSystem({ root, semId: semId ?? "", data, action, params }) },
         ...chat.messages.slice(0, -1).map((m) => ({ role: m.role, content: m.role === "user" ? m.prompt ?? m.text : m.text }))], { onEvent, onStart }))
       .then((r) => {
         if (r?.ok && prepAbs && assignment) stampPrep(prepAbs, { assignment: assignment.id, by, mode: prepMode, log: prepLog });
