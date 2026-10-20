@@ -1,6 +1,6 @@
 ---
 name: plan-week
-description: Create or update this week's study and delivery plan across all three courses from <sem>/DEADLINES.md, memory/progress.md and the course week maps. Use for "plan my week", "what's next", "what should I work on today", "am I on track".
+description: Create or update this week's study and delivery plan across all the semester's courses from <sem>/DEADLINES.md, memory/progress.md and the course week maps. Use for "plan my week", "what's next", "what should I work on today", "am I on track".
 ---
 
 _Paths: `<sem>` = the current semester folder (named in STUDENT.md; otherwise the newest folder under `semesters/`)._

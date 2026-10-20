@@ -129,9 +129,9 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
             <Link key={a.id} to={assignmentHref(data.id, a.id)} className="flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition hover:border-muted">
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-semibold">{a.title}</span>
-                <span className="text-xs text-muted">{a.due ? fmtFull(at(a.due)) : "No due date"}{!a.submitted && a.due && ` · ${relative(at(a.due), now)}`}{a.grade && <> · Grade <b className="text-ink">{a.grade}</b></>}</span>
+                <span className="text-xs text-muted">{a.due ? fmtFull(at(a.due)) : "No due date"}{!a.submitted && a.due && ` · ${relative(at(a.due), now)}`}</span>
               </span>
-              <StatePill state={stateOf(a, now)} />
+              <StatePill state={stateOf(a, now)} grade={a.grade} />
             </Link>
           ))}
           {c.grades && c.grades.length > 0 && (

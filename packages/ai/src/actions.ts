@@ -34,6 +34,19 @@ const TITLE: Record<string, string> = {
   "find-material": "Find material", "assignment-helper": "Assignment help", "assignment-prep": "Prep an assignment",
   "assignment-review": "Review my draft", "sync-eclass": "Sync eClass",
 };
+// What the app shows the student about each action (the skill's description is written for the AI: paths, trigger phrases)
+const SUMMARY: Record<string, string> = {
+  "make-notes": "Makes visual study notes for a week or a whole course from its material, and saves them with your notes.",
+  "quiz-me": "Asks you questions on a course in the chat, going back over what you got wrong before.",
+  "make-quiz": "Makes a scored quiz on a lecture or a whole course for the Quizzes page.",
+  "plan-week": "Plans your week across your courses from your deadlines and what you've done so far.",
+  "research-topic": "Looks up a topic in good sources beyond the course material and sums up what they say, with links.",
+  "find-material": "Finds which file, slide or week covers what you're looking for.",
+  "assignment-helper": "Helps you understand, plan and check an assignment with hints and feedback, never the answers.",
+  "assignment-prep": "Makes a prep pack for an assignment: what it asks, hints, the material to read and a plan.",
+  "assignment-review": "Reviews the draft you uploaded against the brief and says what to fix, without rewriting it.",
+  "sync-eclass": "Checks eClass for new files, grades, feedback and deadlines.",
+};
 const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄" };
 // What a plain local model (no file or web tools) can do from the app (it gets the material in its
 // prompt; a quiz it answers with is saved by the app server).
@@ -54,7 +67,7 @@ export function listActions(root: string): Action[] {
     const fm = frontMatter(read(join(dir, id, "SKILL.md")));
     return {
       id, title: TITLE[id] ?? titleCase(id), icon: ICON[id] ?? "✨",
-      description: (fm.description ?? "").replace(/\s*Use (for|when)\b[\s\S]*$/, ""),
+      description: SUMMARY[id] ?? (fm.description ?? "").replace(/\s*Use (for|when)\b[\s\S]*$/, ""),
       fields: FIELDS[id] ?? [], agentOnly: !CHAT_OK.has(id),
     };
   });
