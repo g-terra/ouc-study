@@ -98,7 +98,7 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
         </div>
       </header>
 
-      <nav role="tablist" aria-label="Course" className="-mx-4 mb-5 flex gap-1 overflow-x-auto border-b border-line px-4">
+      <nav role="tablist" aria-label="Course" data-tour="course-tabs" className="-mx-4 mb-5 flex gap-1 overflow-x-auto border-b border-line px-4">
         {TABS.map(([k, label]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => navigate(k === "weeks" ? self : `${self}#${k}`)}
             className={cx("-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm", tab === k ? "border-ink font-semibold text-ink" : "border-transparent text-muted hover:text-ink")}>

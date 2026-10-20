@@ -165,6 +165,8 @@ Every morning at 07:30 (and every 4 hours while the app runs) it asks eClass wha
 
 New files are downloaded into the right week folder. Existing files are never overwritten: a newer version is saved next to the old one as `name (updated YYYY-MM-DD).ext`.
 
+The first time you open the app, a short guided tour walks you through Today, Courses (weeks, slides, notes, quizzes), Calendar, notifications, Ask AI and Settings. Skip it any time; **Take the tour** in the profile circle (top right) shows it again.
+
 The dot on the profile circle (top right) shows the connection: 🟢 connected, 🔴 key expired or wrong (run `ouc setup`), 🟠 offline, ⚪ not set up. Its **Settings** page shows eClass and your AI tools (Claude Code, Codex, opencode): installed or not, signed in or not, and the command that fixes each one.
 
 ## Using it with an AI assistant

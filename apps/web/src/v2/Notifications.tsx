@@ -68,7 +68,7 @@ export function NotificationsBell({ data }: { data?: SemesterData | null }) {
   const items = [...[...fresh].sort(byType), ...rest].slice(0, MAX);
   const all = data ? `/v2/${enc(data.id)}/notifications` : "";
   return (
-    <div ref={box} className="relative">
+    <div ref={box} className="relative" data-tour="bell">
       <button type="button" onClick={toggle} aria-haspopup="dialog" aria-expanded={open}
         aria-label={unread ? `Notifications · ${unread} new` : "Notifications"} title="Notifications"
         className="relative grid size-9 place-items-center rounded-full border border-line bg-surface text-lg hover:border-muted">

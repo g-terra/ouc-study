@@ -4,6 +4,8 @@ import { expect, test } from "@playwright/test";
 const SEM = "/2026-Demo";
 let errors: string[] = [];
 test.beforeEach(async ({ page }) => {
+  // the guided tour opens on a first visit; it has its own tests in tour.spec.ts
+  await page.addInitScript(() => { try { localStorage.setItem("ouc-tour-seen", "1"); } catch {} });
   errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
