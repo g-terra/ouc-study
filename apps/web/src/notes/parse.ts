@@ -17,6 +17,9 @@ export type Block =
 
 export const DATA_BLOCKS = new Set(["cards", "formula", "compare", "steps", "flashcards", "terms", "links"]);
 
+/** A line that carries on the paragraph above it, rather than starting a new block. */
+const lazy = (line: string) => line.trim() !== "" && !/^(#{1,6}\s|```|---\s*$|\s*([-*+]|\d+[.)])\s)/.test(line);
+
 const idOf = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-");
 
 export function parseNote(src: string): Block[] {
@@ -55,7 +58,8 @@ export function parseNote(src: string): Block[] {
     if (call) {
       flush();
       const body: string[] = [];
-      for (i++; i < lines.length && /^>/.test(lines[i]); i++) body.push(lines[i].replace(/^>\s?/, ""));
+      // CommonMark "lazy continuation": a line right after the callout without its ">" still belongs to it (until a blank line)
+      for (i++; i < lines.length && (/^>/.test(lines[i]) || lazy(lines[i])) && !/^>\s*\[!\w+\]/.test(lines[i]); i++) body.push(lines[i].replace(/^>\s?/, ""));
       i--;
       out.push({ type: "callout", kind: call[1].toUpperCase(), title: call[2], text: body.join("\n") });
       continue;
