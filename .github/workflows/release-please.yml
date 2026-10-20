@@ -32,7 +32,8 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
         run: |
           [ -n "$GH_TOKEN" ] || { echo "No RELEASE_PLEASE_TOKEN: merge the release PR by hand"; exit 0; }
-          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --label "autorelease: pending" --state open --json number --jq '.[0].number // empty')
+          # the REST list, not gh pr list --label: search lags behind a PR that was opened a second ago
+          pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=100" --jq '[.[] | select(any(.labels[]; .name == "autorelease: pending"))][0].number // empty')
           [ -n "$pr" ] || { echo "No release PR open"; exit 0; }
           behind=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)" --jq .behind_by)
           if [ "$behind" != "0" ]; then gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$pr/update-branch" > /dev/null; fi
