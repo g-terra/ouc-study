@@ -26,17 +26,11 @@ export function useConnectionSummary() {
   return { c, ai, l, eclassOk, aiKnown, dot, word };
 }
 
-export function ConnectionDetails({ to, onNavigate }: { to: string; onNavigate: () => void }) {
-  const { c, ai, l, eclassOk, aiKnown } = useConnectionSummary();
-  const when = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "");
+/** Claude Code, Codex and opencode: installed, signed in, which one is in use. */
+export function AiTools() {
+  const { ai, aiKnown } = useConnectionSummary();
   return (
     <>
-      <div className="mb-1 px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">eClass</div>
-      <Link to={to} onClick={onNavigate} className="mb-3 flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2">
-        <span className={cx("size-2 shrink-0 rounded-full", l.dot)} />
-        <span className="min-w-0 flex-1 truncate">{eclassOk ? `Connected as ${c.user ?? "you"}` : l.text}</span>
-        <span className="text-xs text-muted">{when(c.checkedAt)}</span>
-      </Link>
       <div className="mb-1 flex items-center px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
         <span className="flex-1">AI coding tools</span>
         {aiKnown && <button type="button" className="normal-case tracking-normal text-muted underline hover:text-ink" onClick={() => refreshAi(true)}>Check again</button>}
@@ -59,6 +53,22 @@ export function ConnectionDetails({ to, onNavigate }: { to: string; onNavigate: 
         </ul>
       )}
       {aiKnown && !ai.chosen && <p className="mt-2 px-2 text-xs text-muted">Choose one in Terminal: <code>ouc ai setup</code></p>}
+    </>
+  );
+}
+
+export function ConnectionDetails({ to, onNavigate }: { to: string; onNavigate: () => void }) {
+  const { c, l, eclassOk } = useConnectionSummary();
+  const when = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "");
+  return (
+    <>
+      <div className="mb-1 px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">eClass</div>
+      <Link to={to} onClick={onNavigate} className="mb-3 flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2">
+        <span className={cx("size-2 shrink-0 rounded-full", l.dot)} />
+        <span className="min-w-0 flex-1 truncate">{eclassOk ? `Connected as ${c.user ?? "you"}` : l.text}</span>
+        <span className="text-xs text-muted">{when(c.checkedAt)}</span>
+      </Link>
+      <AiTools />
     </>
   );
 }
@@ -139,7 +149,7 @@ function SettingsFab({ to }: { to: string }) {
  * Transcripts of class videos and narrated slides (optional): set Whisper up, or turn them on and off.
  * Hidden when the app runs without its server (nothing to set up then).
  */
-export function VideoTranscripts({ head }: { head: string }) {
+export function VideoTranscripts({ head, fallback = null }: { head: string; fallback?: ReactNode }) {
   const [w, setW] = useState<WhisperStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { getWhisper().then(setW); }, []);
@@ -149,7 +159,7 @@ export function VideoTranscripts({ head }: { head: string }) {
     const t = window.setInterval(() => getWhisper().then(setW), 3000);
     return () => window.clearInterval(t);
   }, [w?.installing]);
-  if (!w) return null;
+  if (!w) return <>{fallback}</>;
   const post = async (body: { enabled: boolean } | { setup: true }) => {
     setError(null);
     if ("enabled" in body) setW({ ...w, enabled: body.enabled });   // the switch moves at once
@@ -398,7 +408,7 @@ export function Layout({ sem, children }: { sem: string; children: ReactNode }) 
             ))}
           </nav>
           <span className="flex-1 sm:hidden" />
-          <button type="button" onClick={() => { rememberLook("v2"); navigate(toV2(path)); }} title="A simpler layout with four places: Today, Courses, Calendar, Inbox"
+          <button type="button" onClick={() => { rememberLook("v2"); navigate(toV2(path)); }} title="A simpler layout with three places (Today, Courses, Calendar), notifications and settings"
             className="whitespace-nowrap rounded-full border border-accent/50 px-3 py-1.5 text-sm font-semibold text-accent hover:bg-surface-2">✨ <span className="hidden md:inline">Try the </span>new look</button>
           <select aria-label="Semester" value={sem} onChange={(e) => navigate(`/${enc(e.target.value)}`)}
             className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm">

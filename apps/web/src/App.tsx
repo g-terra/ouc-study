@@ -18,7 +18,8 @@ import { preferredLook } from "./v2/look";
 import { Today } from "./v2/Today";
 import { CourseList, CourseView } from "./v2/Courses";
 import { Calendar } from "./v2/Calendar";
-import { Inbox } from "./v2/Inbox";
+import { NotificationsPage } from "./v2/Notifications";
+import { SettingsPage } from "./v2/Settings";
 import { isV2, toV2 } from "./v2/paths";
 import type { SemesterData } from "@ouc/content/types";
 
@@ -75,7 +76,9 @@ export default function App() {
               ["/v2/:sem/courses", (p) => <V2Semester sem={p.sem} page={(d) => <CourseList data={d} />} />],
               ["/v2/:sem/courses/:code", (p) => <V2Semester sem={p.sem} page={(d) => <CourseView key={p.code} data={d} code={p.code} />} />],
               ["/v2/:sem/calendar", (p) => <V2Semester sem={p.sem} page={(d) => <Calendar data={d} />} />],
-              ["/v2/:sem/inbox", (p) => <V2Semester sem={p.sem} page={(d) => <Inbox data={d} />} />],
+              ["/v2/:sem/notifications", (p) => <V2Semester sem={p.sem} page={(d) => <NotificationsPage data={d} />} />],
+              ["/v2/:sem/inbox", (p) => <V2Semester sem={p.sem} page={(d) => <NotificationsPage data={d} />} />], // the old name, for bookmarks
+              ["/v2/:sem/settings", (p) => <V2Semester sem={p.sem} page={(d) => <SettingsPage data={d} />} />],
               // detail pages are shared with the classic look
               ["/v2/:sem/plan", (p) => <V2Semester sem={p.sem} page={(d) => <PlanPage data={d} />} />],
               ["/v2/:sem/plan/:week", (p) => <V2Semester sem={p.sem} page={(d) => <PlanPage key={p.week} data={d} week={p.week} />} />],

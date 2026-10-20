@@ -42,6 +42,7 @@ interface DailyApi extends MoodleApi {
   core_group_get_course_user_groups: { groups?: { name: string }[] };
   mod_forum_get_forums_by_courses: Forum[];
   mod_forum_get_forum_discussions: { discussions?: Discussion[] };
+  mod_forum_get_discussion_posts: { posts?: { message?: string; author?: { fullname?: string }; timecreated?: number }[] };
   message_popup_get_popup_notifications: { notifications?: PopupNotification[] };
   core_calendar_get_action_events_by_timesort: { events?: ActionEvent[] };
 }
@@ -56,7 +57,8 @@ export interface AssignRec {
 }
 export interface ModuleRec { code: string; name: string; type: string; section: string; url: string }
 export interface FileRec { code: string; module: string; file: string; modified: number; url?: string }
-export interface DiscussionRec { code?: string; forum: string; subject: string; by?: string; text: string; modified?: number; url: string; announcement: boolean }
+/** text: the whole first post, paragraphs kept; last: the newest reply, fetched only when the thread has new replies. */
+export interface DiscussionRec { code?: string; forum: string; subject: string; by?: string; text: string; modified?: number; url: string; announcement: boolean; last?: { by?: string; text: string } }
 export interface NotificationRec { subject: string; text: string; at?: string; url?: string }
 export interface EventRec { code: string; name: string; at?: string; url?: string; module?: string }
 /** Per course in live.json: the Webconference link, your teaching groups, recent forum first posts. */
@@ -141,6 +143,10 @@ async function call<F extends keyof DailyApi>(fn: F, params: Params = {}): Promi
   return data as DailyApi[F];
 }
 const strip = (h = "") => h.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
+/** HTML → plain text that keeps its paragraphs and line breaks (forum posts are shown in full). */
+export const paragraphs = (h = "") => strip(h.replace(/<br\s*\/?>/gi, "\u0001").replace(/<\/(p|div|li|h\d|blockquote|tr)>/gi, "\u0002").replace(/<li[^>]*>/gi, "• "))
+  .replace(/ ?\u0001 ?/g, "\n").replace(/( ?\u0002 ?)+/g, "\n\n").replace(/\n{3,}/g, "\n\n").trim();
+const FULL = 20_000; // a forum post longer than this is surely not text worth keeping whole
 const short = (s: string, n = 220) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const iso = (sec?: number | null) => (sec ? new Date(sec * 1000).toISOString() : undefined);
 const localIso = (sec?: number) => {
@@ -150,7 +156,7 @@ const localIso = (sec?: number) => {
 };
 
 // ---------- gather a snapshot ----------
-async function gather(sem: SemesterConfig): Promise<{ snap: Snapshot; warnings: string[] }> {
+async function gather(sem: SemesterConfig, prev: Partial<Snapshot> | null): Promise<{ snap: Snapshot; warnings: string[] }> {
   const info = await call("core_webservice_get_site_info");
   available = new Set((info.functions ?? []).map((f) => f.name));
   if (available.size === 0) available = null; // older sites don't list functions
@@ -236,11 +242,21 @@ async function gather(sem: SemesterConfig): Promise<{ snap: Snapshot; warnings: 
           const code = byId[f.course];
           if (code) ((snap.courses[code] ??= {}).posts ??= []).push({ at: localIso(x.created ?? x.timemodified), text: strip(x.message ?? "").slice(0, 3000) });
           if (n >= 15) continue; // the change feed watches the newest 15, as before
-          snap.discussions[x.discussion ?? x.id] = {
+          const id = x.discussion ?? x.id;
+          const rec: DiscussionRec = snap.discussions[id] = {
             code: byId[f.course], forum: strip(f.name), subject: strip(x.subject ?? x.name), by: x.userfullname,
-            text: short(strip(x.message ?? "")), modified: x.timemodified ?? x.modified, url: `${SITE}/mod/forum/discuss.php?d=${x.discussion ?? x.id}`,
+            text: paragraphs(x.message ?? "").slice(0, FULL), modified: x.timemodified ?? x.modified, url: `${SITE}/mod/forum/discuss.php?d=${id}`,
             announcement: f.type === "news",
           };
+          // new replies: keep the newest one's text, so the update shows it whole (older eClass versions may not offer this)
+          const p = prev?.discussions?.[id];
+          if (p && Number(rec.modified) > Number(p.modified)) {
+            try {
+              const r = await call("mod_forum_get_discussion_posts", { discussionid: id, sortby: "created", sortdirection: "DESC" });
+              const last = r.posts?.[0];
+              if (last?.message) rec.last = { by: last.author?.fullname, text: paragraphs(last.message).slice(0, FULL) };
+            } catch {}
+          }
         }
       });
     }
@@ -289,7 +305,8 @@ export function diff(prev: Partial<Snapshot>, cur: Snapshot): UpdateItem[] {
   for (const [k, d] of Object.entries(cur.discussions)) {
     const p = prev.discussions?.[k];
     if (!p) add(d.announcement ? "announcement" : "forum", d.code, `${d.announcement ? "Announcement" : "New post"}: ${d.subject}`, `${d.by ? `${d.by}: ` : ""}${d.text}`, d.url);
-    else if (Number(d.modified) > Number(p.modified)) add("forum", d.code, `New replies: ${d.subject}`, d.forum, d.url); // NaN (no time) compares false, as undefined did
+    // NaN (no time) compares false, as undefined did
+    else if (Number(d.modified) > Number(p.modified)) add("forum", d.code, `New replies: ${d.subject}`, d.last ? `${d.last.by ? `${d.last.by}: ` : ""}${d.last.text}` : d.forum, d.url);
   }
   for (const [k, n] of Object.entries(cur.notifications)) if (!prev.notifications?.[k]) add("notification", "", n.subject || "eClass notification", n.text, n.url);
   for (const [k, e] of Object.entries(cur.events)) {
@@ -328,7 +345,7 @@ export async function main(args: string[]): Promise<void> {
     }
     const statePath = join(SEMDIR, "_meta/sync-state.json");
     const prev: Partial<Snapshot> | null = existsSync(statePath) ? JSON.parse(readFileSync(statePath, "utf8")) : null;
-    const { snap, warnings } = await gather(SEM);
+    const { snap, warnings } = await gather(SEM, prev);
     let items = prev ? diff(prev, snap) : [];
     if (!prev) {
       items = [{

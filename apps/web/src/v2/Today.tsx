@@ -8,11 +8,11 @@ import { ClassCard, upcomingClasses } from "../components/Classes";
 import { PlanCard, currentPlan } from "../pages/Plan";
 import { ORDER, UpdateRow } from "../pages/Updates";
 import { DayGroups, agenda, assignmentHref } from "./agenda";
-import { unreadItems } from "./Inbox";
+import { unreadItems } from "./Notifications";
 
 /**
  * Today: what to do next and nothing else. The next deadline and class, this week's plan, the next 7 days,
- * and what's new on eClass only when something is. Everything else is one tap away (Courses, Calendar, Inbox).
+ * and what's new on eClass only when something is. Everything else is one tap away (Courses, Calendar, the bell).
  */
 export function Today({ data }: { data: SemesterData }) {
   const now = new Date();
@@ -73,7 +73,7 @@ export function Today({ data }: { data: SemesterData }) {
 
       {fresh.length > 0 && (
         <>
-          <SectionTitle right={<Link to={`${base}/inbox`} className="text-sm text-muted hover:text-ink">Inbox →</Link>}>New on eClass · {fresh.length}</SectionTitle>
+          <SectionTitle right={<Link to={`${base}/notifications`} className="text-sm text-muted hover:text-ink">All notifications →</Link>}>New on eClass · {fresh.length}</SectionTitle>
           <div className="grid gap-2">
             {fresh.slice(0, 3).map((u, i) => <UpdateRow key={i} u={u} data={data} compact />)}
           </div>

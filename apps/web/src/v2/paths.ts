@@ -6,7 +6,7 @@
 export const V2 = "/v2";
 
 /** v2 sections: classic pages that v2 folds into another one map to it. */
-export const V2_SECTIONS = ["", "courses", "calendar", "inbox"] as const;
+export const V2_SECTIONS = ["", "courses", "calendar"] as const;
 
 export const isV2 = (path: string) => path === V2 || path.startsWith(`${V2}/`) || path.startsWith(`${V2}#`);
 
@@ -24,7 +24,7 @@ export function toV2(to: string): string {
   const base = `${V2}/${sem}`;
   if (!rest.length) {
     if (section === "timeline" || section === "assignments") return `${base}/calendar${h}`;
-    if (section === "updates") return `${base}/inbox${h}`;
+    if (section === "updates") return `${base}/notifications${h}`;
     if (section === "notes" || section === "quizzes") return `${base}/courses${h}`;
   }
   return [base, section, ...rest].filter(Boolean).join("/") + h;
@@ -36,11 +36,13 @@ export function toClassic(path: string): string {
   const { p, h } = split(path);
   const [, sem, section, ...rest] = p.split("/").filter(Boolean);
   if (!sem) return "/";
-  const mapped = !rest.length && section === "calendar" ? "timeline" : !rest.length && section === "inbox" ? "updates" : section;
+  // the classic look has no Settings page (its settings are the ⚙️ button), so that one opens the dashboard
+  const top: Record<string, string | undefined> = { calendar: "timeline", notifications: "updates", inbox: "updates", settings: undefined };
+  const mapped = !rest.length && section !== undefined && section in top ? top[section] : section;
   return `/${[sem, mapped, ...rest].filter(Boolean).join("/")}${h}`;
 }
 
-/** The v2 section a path is in ("" for Today), for the nav. */
+/** The v2 section a path is in ("" for Today), for the nav; pages from the header (notifications, settings) are in none. */
 export function v2Section(path: string): string {
   const [, , section] = split(path).p.split("/").filter(Boolean);
   const parent: Record<string, string> = { notes: "courses", quizzes: "courses", slides: "courses", assignments: "calendar", plan: "", "ai-work": "" };

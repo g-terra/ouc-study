@@ -1,0 +1,29 @@
+{
+ "date": "2026-10-19",
+ "items": [
+  {
+   "type": "announcement",
+   "code": "DEMO101",
+   "title": "Announcement: Final exam arrangements",
+   "detail": "Demo Tutor: Dear all,\n\nThe final exam for Demo Studies is on 12 January at 10:00 in Room 2. Please bring your student ID and two pens. Revision sessions run every Thursday in December; the slides from each session will be posted the same evening. Revision sessions run every Thursday in December; the slides from each session will be posted the same evening. Revision sessions run every Thursday in December; the slides from each session will be posted the same evening. \n\nIf you have a question about the exam, post it in the Q&A forum so everyone can see the answer.\n\nBest wishes,\nThe demo tutor",
+   "url": "https://eclass.ouc.ac.cy/mod/forum/discuss.php?d=1",
+   "at": "2026-10-19T07:00:00.000Z"
+  },
+  {
+   "type": "forum",
+   "code": "DEMO101",
+   "title": "New replies: When is the exam?",
+   "detail": "Demo Tutor: On 12 January.",
+   "url": "https://eclass.ouc.ac.cy/mod/forum/discuss.php?d=2",
+   "at": "2026-10-19T07:00:00.000Z"
+  },
+  {
+   "type": "grade",
+   "code": "DEMO101",
+   "title": "New grade: Assignment 1",
+   "detail": "8.00",
+   "url": "",
+   "at": "2026-10-19T07:00:00.000Z"
+  }
+ ]
+}
