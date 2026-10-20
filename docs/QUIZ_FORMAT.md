@@ -5,6 +5,7 @@ An AI makes them with the `make-quiz` skill. The course material (the downloaded
 
 - A **lecture quiz** covers one eClass section (one week or lecture): `"scope": "lecture"` and its `"section"` index. Name it like the note for that week, e.g. `lecture-03-attention.json`.
 - A **course quiz** covers the whole course so far: `"scope": "course"`, no section. Name it `course-<short-name>.json`.
+- A **custom quiz** is on topics the student wrote in the app (from the course material only, or the web too): `"scope": "course"`, with the topics in `"description"`. The app names the file after the quiz's name.
 
 ```json
 {

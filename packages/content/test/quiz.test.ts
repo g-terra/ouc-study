@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isCorrect, makeAttempt, parseQuiz, pointsFor, proposedQuizName, quizStats, seededRandom, shuffledOptions } from "../src/quiz.ts";
+import { isCorrect, makeAttempt, parseQuiz, pointsFor, proposedCustomQuizName, proposedQuizName, quizStats, seededRandom, shuffledOptions } from "../src/quiz.ts";
 import { addAttempt, attemptsFile, readAttempts, removeCourseQuizzes, removeQuiz, resetAttempts } from "../src/quiz-store.ts";
 import type { QuizAttempt, QuizQuestion } from "../src/types.ts";
 
@@ -161,4 +161,10 @@ test("the name the Make a quiz pop-up proposes: the lecture and its topic, or th
   assert.equal(proposedQuizName(c, { index: 3, name: "Topic three", label: "Attention" }), "Lecture 3 · Attention");   // no number in the name: the section
   assert.equal(proposedQuizName(c, { index: 0, name: "General", label: "General" }), "CogPsy · General");
   assert.equal(proposedQuizName(c, null), "CogPsy · Whole course");
+});
+
+test("a custom quiz's proposed name: the course and the start of the topics", () => {
+  assert.equal(proposedCustomQuizName({ short: "CogPsy" }, ""), "CogPsy · Custom quiz");
+  assert.equal(proposedCustomQuizName({ short: "CogPsy" }, "  Signal detection\nand d-prime "), "CogPsy · Signal detection and d-prime");
+  assert.equal(proposedCustomQuizName({ short: "CogPsy" }, "word ".repeat(30)), `CogPsy · ${"word ".repeat(30).slice(0, 40).trim()}…`);
 });

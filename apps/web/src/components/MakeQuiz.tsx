@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { Course, SemesterData, Week } from "@ouc/content/types";
 import { useAiStatus } from "../lib/ai";
 import { dismissJob, makeQuiz, useQuizJobs, type QuizJob } from "../lib/quiz";
-import { proposedQuizName } from "@ouc/content/quiz";
+import { proposedCustomQuizName, proposedQuizName } from "@ouc/content/quiz";
 import { Link, enc } from "../lib/router";
 import { cx, isMaterial } from "./ui";
 import { Hourglass, Settings, TriangleAlert, Trophy, X } from "./icons";
@@ -11,24 +11,21 @@ import { Hourglass, Settings, TriangleAlert, Trophy, X } from "./icons";
 export const quizWeeks = (data: SemesterData, c: Course): Week[] =>
   c.weeks.filter((w) => w.items.some(isMaterial) || data.notes.some((n) => n.code === c.code && n.weekIndex === w.index));
 
-/** The classes that have material and no lecture quiz yet ("Every class" makes one quiz for each). */
-export const weeksWithoutQuiz = (data: SemesterData, c: Course): Week[] =>
-  quizWeeks(data, c).filter((w) => !(data.quizzes ?? []).some((q) => q.code === c.code && q.scope === "lecture" && q.section === w.index));
-
-/** Pop-up: pick one class, every class or the whole course; the AI makes the quiz in the background (no chat opens). */
+/** Pop-up: pick one class, the whole course or a custom quiz on your topics; the AI makes it in the background (no chat opens). */
 function MakeQuizDialog({ data, course, week, onClose }: { data: SemesterData; course?: string; week?: string; onClose: () => void }) {
   const [code, setCode] = useState(course ?? data.courses[0]?.code ?? "");
   const c = data.courses.find((x) => x.code === code);
   const weeks = c ? quizWeeks(data, c) : [];
-  const missing = c ? weeksWithoutQuiz(data, c) : [];
-  const [scope, setScope] = useState<"course" | "class" | "every">(week !== undefined ? "class" : "course");
+  const [scope, setScope] = useState<"course" | "class" | "custom">(week !== undefined ? "class" : "course");
   const [pick, setPick] = useState(week ?? "");
+  const [topics, setTopics] = useState("");
+  const [web, setWeb] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const sel = scope === "every" ? "every" : scope === "class" ? (weeks.some((w) => String(w.index) === pick) ? pick : String(weeks[0]?.index ?? "")) : undefined;
-  // the proposed name follows the choice until the student types their own
+  const sel = scope === "class" ? (weeks.some((w) => String(w.index) === pick) ? pick : String(weeks[0]?.index ?? "")) : undefined;
+  // the proposed name follows the choice until the student types their own (emptying the box brings it back)
   const [typed, setTyped] = useState<string>();
-  const proposed = c ? proposedQuizName(c, scope === "class" ? weeks.find((w) => String(w.index) === sel) ?? null : null) : "";
+  const proposed = !c ? "" : scope === "custom" ? proposedCustomQuizName(c, topics) : proposedQuizName(c, scope === "class" ? weeks.find((w) => String(w.index) === sel) ?? null : null);
   const name = typed ?? proposed;
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -37,20 +34,22 @@ function MakeQuizDialog({ data, course, week, onClose }: { data: SemesterData; c
   }, []);
   const submit = async () => {
     setBusy(true); setError(undefined);
-    try { await makeQuiz(data.id, code, sel, scope === "every" ? undefined : name.trim() || proposed); onClose(); }
+    const title = name.trim() || proposed;
+    try { await makeQuiz(data.id, code, scope === "custom" ? { title, topics, web } : { week: sel, title }); onClose(); }
     catch (e) { setError((e as Error).message); setBusy(false); }
   };
-  const radio = (v: "course" | "class" | "every", label: string, hint: string, disabled = false) => (
-    <label className={cx("flex cursor-pointer items-start gap-3 rounded-xl border-2 px-4 py-3", scope === v ? "border-ink bg-surface-2" : "border-line", disabled && "cursor-not-allowed opacity-50")}>
+  const box = (on: boolean, disabled = false) => cx("flex cursor-pointer items-start gap-3 rounded-xl border-2 px-4 py-3", on ? "border-ink bg-surface-2" : "border-line", disabled && "cursor-not-allowed opacity-50");
+  const radio = (v: "course" | "class" | "custom", label: string, hint: string, disabled = false) => (
+    <label className={box(scope === v, disabled)}>
       <input type="radio" name="quiz-scope" className="mt-1" checked={scope === v} disabled={disabled} onChange={() => setScope(v)} />
       <span><span className="block font-semibold">{label}</span><span className="text-xs text-muted">{hint}</span></span>
     </label>
   );
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div role="dialog" aria-modal="true" aria-label="Make a quiz" className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-xl">
         <h2 className="mb-1 font-serif text-2xl font-semibold">Make a quiz</h2>
-        <p className="mb-5 text-sm text-muted">Your AI writes it from the course material in the background. It shows up under Quizzes when it's ready.</p>
+        <p className="mb-5 text-sm text-muted">Your AI writes it in the background. It shows up under Quizzes when it's ready.</p>
         <label className="mb-4 block text-sm">
           <span className="mb-1 block font-semibold">Course</span>
           <select aria-label="Course" value={code} onChange={(e) => { setCode(e.target.value); setPick(""); }} className="w-full rounded-lg border border-line bg-surface px-3 py-2">
@@ -60,7 +59,7 @@ function MakeQuizDialog({ data, course, week, onClose }: { data: SemesterData; c
         <div className="mb-4 grid gap-2 text-sm">
           {radio("course", "Whole course", "Questions from every class so far")}
           {radio("class", "One class", weeks.length ? "Questions from one week or lecture" : "No class has material yet", !weeks.length)}
-          {radio("every", "Every class", missing.length ? `One quiz for each class without one yet (${missing.length})` : weeks.length ? "Every class with material already has a quiz" : "No class has material yet", !missing.length)}
+          {radio("custom", "Custom", "Questions on the topics you write")}
         </div>
         {scope === "class" && weeks.length > 0 && (
           <label className="mb-4 block text-sm">
@@ -70,16 +69,35 @@ function MakeQuizDialog({ data, course, week, onClose }: { data: SemesterData; c
             </select>
           </label>
         )}
-        {scope !== "every" && (
-          <label className="mb-4 block text-sm">
-            <span className="mb-1 block font-semibold">Name</span>
-            <input type="text" aria-label="Name" value={name} maxLength={120} onChange={(e) => setTyped(e.target.value)} className="w-full rounded-lg border border-line bg-surface px-3 py-2" />
-          </label>
+        {scope === "custom" && (
+          <>
+            <label className="mb-4 block text-sm">
+              <span className="mb-1 block font-semibold">Topics</span>
+              <textarea aria-label="Topics" value={topics} rows={3} maxLength={2000} onChange={(e) => setTopics(e.target.value)}
+                placeholder="e.g. signal detection theory, d′ and the ROC curve; mix in a few calculations"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2" />
+            </label>
+            <fieldset className="mb-4 grid gap-2 text-sm">
+              <legend className="mb-1 font-semibold">Sources</legend>
+              <label className={box(!web)}>
+                <input type="radio" name="quiz-sources" className="mt-1" checked={!web} onChange={() => setWeb(false)} />
+                <span><span className="block font-semibold">Course material only</span><span className="text-xs text-muted">Only what the course covers</span></span>
+              </label>
+              <label className={box(web)}>
+                <input type="radio" name="quiz-sources" className="mt-1" checked={web} onChange={() => setWeb(true)} />
+                <span><span className="block font-semibold">Course material and the web</span><span className="text-xs text-muted">Your AI can look things up beyond the course</span></span>
+              </label>
+            </fieldset>
+          </>
         )}
+        <label className="mb-4 block text-sm">
+          <span className="mb-1 block font-semibold">Name</span>
+          <input type="text" aria-label="Name" value={name} maxLength={120} onChange={(e) => setTyped(e.target.value || undefined)} className="w-full rounded-lg border border-line bg-surface px-3 py-2" />
+        </label>
         {error && <p className="mb-4 rounded-lg bg-bad-bg px-3 py-2 text-sm text-bad" role="alert">{error}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-full border border-line px-4 py-2 text-sm font-semibold">Cancel</button>
-          <button type="button" onClick={submit} disabled={busy || !code || (scope === "every" && !missing.length)} className="rounded-full bg-ink px-4 py-2 text-sm font-semibold text-bg disabled:opacity-40">{busy ? "Starting…" : scope === "every" ? `Make ${missing.length} quiz${missing.length === 1 ? "" : "zes"}` : "Make quiz"}</button>
+          <button type="button" onClick={submit} disabled={busy || !code || (scope === "custom" && !topics.trim())} className="rounded-full bg-ink px-4 py-2 text-sm font-semibold text-bg disabled:opacity-40">{busy ? "Starting…" : "Make quiz"}</button>
         </div>
       </div>
     </div>

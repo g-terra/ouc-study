@@ -82,6 +82,12 @@ export function proposedQuizName(course: { short: string }, week: { index: numbe
   return `Lecture ${n} · ${week.label}`;
 }
 
+/** The name proposed for a custom quiz: the course and the start of the student's topics. */
+export function proposedCustomQuizName(course: { short: string }, topics: string): string {
+  const t = topics.replace(/\s+/g, " ").trim();
+  return `${course.short} · ${!t ? "Custom quiz" : t.length > 40 ? `${t.slice(0, 40).trim()}…` : t}`;
+}
+
 /** What the student picked: true/false, or the indexes of the options they ticked. */
 export type QuizAnswer = boolean | number[];
 
