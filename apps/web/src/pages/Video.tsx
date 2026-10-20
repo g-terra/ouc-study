@@ -14,6 +14,7 @@ import { lineAt, parseTranscript, stamp, type Transcript, type TranscriptLine } 
 import { Maximize } from "../components/icons";
 import { markDone } from "../lib/progress";
 import { findItem } from "@ouc/content/progress";
+import { redoTranscript } from "../lib/ai";
 
 const FOLLOW = "ouc-video-follow";
 const readFollow = () => { try { return localStorage.getItem(FOLLOW) !== "0"; } catch { return true; } };
@@ -38,12 +39,19 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
   const transcriptHref = isTranscript ? href : item?.transcript ?? fileHref(data.id, file.replace(/\.[^./]+$/, ".transcript.md"));
 
   const [t, setT] = useState<Transcript | null>();
+  // "Make it again": the old transcript is gone until the new one is written, so check back until it's there
+  const [redoing, setRedoing] = useState(false);
   useEffect(() => {
-    let live = true;
-    setT(undefined);
-    fetch(transcriptHref).then((r) => (r.ok ? r.text() : null)).then((md) => live && setT(md ? parseTranscript(md) : null)).catch(() => live && setT(null));
-    return () => { live = false; };
-  }, [transcriptHref]);
+    let live = true, timer: number | undefined;
+    if (!redoing) setT(undefined);
+    const load = () => fetch(transcriptHref, { cache: "no-store" }).then((r) => (r.ok ? r.text() : null)).catch(() => null).then((md) => {
+      if (!live) return;
+      if (redoing && !md) { timer = window.setTimeout(load, 4000); return; }
+      setT(md ? parseTranscript(md) : null); setRedoing(false);
+    });
+    timer = window.setTimeout(load, redoing ? 4000 : 0);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [transcriptHref, redoing]);
 
   const video = useRef<HTMLVideoElement>(null);
   const [startAt] = useState(() => Number(window.location.hash.match(/^#t=(\d+)/)?.[1]) || 0);
@@ -102,10 +110,18 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
           ) : null}
         </div>
 
-        {t === undefined ? (
+        {redoing ? (
+          <div data-testid="transcript-redoing"><Card className="p-4 text-sm">
+            <p className="flex items-center gap-1.5 font-semibold"><span className="size-1.5 animate-pulse rounded-full bg-accent" />Making the transcript again…</p>
+            <p className="mt-1 text-muted">Whisper is listening to the recording on this computer. A lecture takes a few minutes; this page shows it when it's ready.</p>
+          </Card></div>
+        ) : t === undefined ? (
           <Card className="p-4 text-sm text-muted">Loading the transcript…</Card>
         ) : t === null ? (
-          <p className="text-sm text-muted">No transcript yet. Transcripts are made on this computer when Whisper is set up (Settings → Video transcripts).</p>
+          <div className="text-sm text-muted">
+            <p>No transcript yet. Transcripts are made on this computer when Whisper is set up (Settings → Video transcripts).</p>
+            {videoSrc && <Redo file={file} label="Make the transcript" onStarted={() => setRedoing(true)} />}
+          </div>
         ) : (
           <Card className="flex max-h-[75vh] min-h-0 flex-col overflow-hidden lg:sticky lg:top-4 lg:self-start">
             <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
@@ -132,10 +148,36 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
             <div className="border-t border-line px-4 py-2 text-xs text-muted">
               {t.by && <span>Made with {t.by}{t.made ? ` on ${t.made}` : ""}. </span>}
               <a href={transcriptHref} download className="underline hover:text-ink">⬇ Save the transcript</a>
+              {videoSrc && !/panopto/i.test(t.by ?? "") && <Redo file={file} language={t.language} label="Make it again" onStarted={() => setRedoing(true)} />}
             </div>
           </Card>
         )}
       </div>
+    </div>
+  );
+}
+
+const LANGUAGES: [string, string][] = [["en", "English"], ["el", "Ελληνικά (Greek)"], ["auto", "Let Whisper guess"]];
+
+/** Wrong language or garbled? Makes the transcript again in the language picked (it becomes the course's). */
+function Redo({ file, language, label, onStarted }: { file: string; language?: string; label: string; onStarted: () => void }) {
+  const [lang, setLang] = useState(language && LANGUAGES.some(([id]) => id === language) ? language : "en");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true); setError(null);
+    const e = await redoTranscript(file, lang);
+    setBusy(false);
+    if (e) setError(e); else onStarted();
+  };
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="transcript-redo">
+      <span>Wrong language or garbled? Spoken in</span>
+      <select value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Language spoken" className="rounded-lg border border-line bg-surface px-1.5 py-0.5 text-ink">
+        {LANGUAGES.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+      </select>
+      <button type="button" onClick={go} disabled={busy} className="rounded-full border border-line px-2.5 py-0.5 font-semibold text-ink hover:border-muted disabled:opacity-60">{label}</button>
+      {error && <span className="basis-full text-bad">{error}</span>}
     </div>
   );
 }

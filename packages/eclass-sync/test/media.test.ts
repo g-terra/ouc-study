@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadMediaConfig, panoptoCaptions, panoptoSession, paragraphs, srtToSegments, stamp, transcriptMarkdown, transcriptPath } from "../src/media.ts";
+import { courseLanguage, greekShare, loadMediaConfig, needsRedo, panoptoCaptions, panoptoSession, paragraphs, srtToSegments, stamp, transcriptMarkdown, transcriptPath } from "../src/media.ts";
 
 const ID = "0006a033-0ea5-4b2e-b1ab-b2000120fe5f";
 const SRT = "\uFEFF1\r\n00:00:01,000 --> 00:00:03,500\r\nHello <i>everyone</i>\r\n\r\n2\r\n00:00:04,000 --> 00:00:06,000\r\nwelcome to\r\nweek one\r\n\r\n3\r\n00:01:10,250 --> 00:01:12,000\r\n \r\n\r\n4\r\n00:01:30,000 --> 00:01:33,000\r\nNeurons fire.\r\n";
@@ -16,10 +16,10 @@ test("transcripts sit next to the file they transcribe", () => {
 
 test("settings default to on, with the small model", () => {
   const root = mkdtempSync(join(tmpdir(), "ouc-media-"));
-  assert.deepEqual(loadMediaConfig(root), { videos: true, transcribe: true, model: "small" });
+  assert.deepEqual(loadMediaConfig(root), { videos: true, transcribe: true, model: "small", language: "" });
   mkdirSync(join(root, ".ouc"));
-  writeFileSync(join(root, ".ouc/media.json"), JSON.stringify({ videos: false, model: "../evil" }));
-  assert.deepEqual(loadMediaConfig(root), { videos: false, transcribe: true, model: "small" });
+  writeFileSync(join(root, ".ouc/media.json"), JSON.stringify({ videos: false, model: "../evil", language: "en; rm" }));
+  assert.deepEqual(loadMediaConfig(root), { videos: false, transcribe: true, model: "small", language: "" });
 });
 
 test("Panopto viewer and embed links give the session; others don't", () => {
@@ -74,4 +74,30 @@ test("Panopto captions: saved when shared, 'signin' when Panopto asks for it", a
   assert.deepEqual(await panoptoCaptions(url, answer("", 404)), { ok: false, reason: "none" });
   assert.deepEqual(await panoptoCaptions(url, (async () => { throw new Error("ENOTFOUND"); }) as typeof fetch), { ok: false, reason: "offline" });
   assert.deepEqual(await panoptoCaptions("https://example.com/x", answer(SRT)), { ok: false, reason: "none" });
+});
+
+test("the language spoken: the course's setting, then the default, then Greek for a Greek title, else English", () => {
+  assert.equal(courseLanguage({ title: "Artificial Intelligence" }), "en");
+  assert.equal(courseLanguage({ title: "Τεχνητή Νοημοσύνη" }), "el");
+  assert.equal(courseLanguage({ title: "Artificial Intelligence" }, "el"), "el");
+  assert.equal(courseLanguage({ title: "Artificial Intelligence", language: "auto" }, "el"), "auto");
+  assert.equal(courseLanguage({ title: "AI", language: "nonsense!" }), "en");
+  assert.equal(greekShare("Λοιπόν, Chatt GPT είναι"), 11 / 19);
+  assert.equal(greekShare("123"), 0);
+});
+
+test("a Whisper transcript in the wrong language is made again; Panopto captions and the right ones aren't", () => {
+  const made = new Date("2026-10-20T10:00:00Z");
+  const greek = [{ segments: [{ start: 0, end: 5, text: "Λοιπόν, Chatt GPT είναι βέβαια σε GPT-4, ένας αδυνατής λαγκότητας" }] }];
+  const english = [{ segments: [{ start: 0, end: 5, text: "So, ChatGPT is based on GPT-4, a large language model" }] }];
+  const old = (parts: typeof greek, by = "whisper.cpp (small)") => transcriptMarkdown({ title: "L", source: "x.mp4", by, made }, parts);
+  assert.equal(needsRedo(old(greek), "en"), true, "an old transcript Whisper guessed as Greek, in an English course");
+  assert.equal(needsRedo(old(english), "en"), false);
+  assert.equal(needsRedo(old(english), "el"), true);
+  assert.equal(needsRedo(old(greek, "Panopto captions"), "en"), false);
+  assert.equal(needsRedo(old(greek), "auto"), false);
+  const told = transcriptMarkdown({ title: "L", source: "x.mp4", by: "faster-whisper (small)", made, language: "el" }, greek);
+  assert.match(told, /\nlanguage: el\n---/);
+  assert.equal(needsRedo(told, "el"), false, "Whisper was told Greek: kept even if it reads oddly");
+  assert.equal(needsRedo(told, "en"), true, "the course language changed since");
 });

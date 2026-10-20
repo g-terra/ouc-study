@@ -140,6 +140,14 @@ export async function setWhisper(body: { enabled: boolean } | { setup: true }): 
   return (await res?.json().catch(() => null)) ?? { error: "Couldn't save that. Is the app running on your computer?" };
 }
 
+/** Makes a class video's (or narrated slides') transcript again, in `language`; null when it started, else why not. */
+export async function redoTranscript(rel: string, language: string): Promise<string | null> {
+  const res = await fetch("/api/ai/transcribe", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ redo: rel, language }) }).catch(() => null);
+  if (res?.ok) return null;
+  if (res?.status === 403) refreshAi(true);
+  return (await res?.json().catch(() => null))?.error ?? "Couldn't start it. Is the app running on your computer?";
+}
+
 export async function token() {
   if (!current.token) await refreshAi();
   return current.token ?? "";

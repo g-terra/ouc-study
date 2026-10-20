@@ -2,7 +2,8 @@
 """Speech to text on this computer with faster-whisper (free; the model downloads once, then it works offline).
 Used by `ouc transcribe` where whisper.cpp isn't installed (packages/ai/src/transcribe.ts).
 
-Usage: python3 tools/transcribe.py [--model small] FILE...
+Usage: python3 tools/transcribe.py [--model small] [--language en|el|auto] FILE...
+The language is what's spoken (auto: Whisper guesses from the first 30 seconds). It never translates.
 Prints one JSON line per spoken segment: {"file": <index of FILE>, "start": s, "end": s, "text": "..."}.
 --check: exit 0 if faster-whisper is installed (pip install faster-whisper)."""
 import json
@@ -21,12 +22,17 @@ def main(argv):
         i = argv.index("--model")
         model = argv[i + 1]
         argv = argv[:i] + argv[i + 2:]
+    language = None
+    if "--language" in argv:
+        i = argv.index("--language")
+        language = None if argv[i + 1] == "auto" else argv[i + 1]
+        argv = argv[:i] + argv[i + 2:]
     from faster_whisper import WhisperModel
 
     m = WhisperModel(model, device="auto", compute_type="int8")
     for n, path in enumerate(argv):
         try:
-            segments, _info = m.transcribe(path, vad_filter=True)
+            segments, _info = m.transcribe(path, vad_filter=True, language=language, task="transcribe")
             for s in segments:
                 print(json.dumps({"file": n, "start": s.start, "end": s.end, "text": s.text.strip()}), flush=True)
         except Exception as e:  # one bad clip shouldn't lose the rest

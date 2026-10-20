@@ -11,19 +11,21 @@
 //
 // What gets a transcript: every video or audio file under semesters/<sem>/courses/ and every .pptx
 // with narration (one section per slide). The transcript sits next to it ("Lecture 3.transcript.md",
-// see packages/eclass-sync/src/media.ts) and is never redone. Settings: .ouc/media.json
+// see packages/eclass-sync/src/media.ts). Whisper is told the course's language (media.ts courseLanguage)
+// instead of guessing it; a transcript made in the wrong language is made again (media.ts needsRedo), and
+// the video page can ask for one again (redo). Settings: .ouc/media.json
 // ("transcribe": false turns it off, "model": "small" by default). Whisper is optional: `ouc setup` asks,
 // and ⚙ Settings in the app can set it up or turn it off. Without it nothing is transcribed and nothing
 // complains. Files that failed are tried again after a day (.ouc/transcribe-state.json).
 import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, extname, join, posix, relative, resolve, win32 } from "node:path";
+import { basename, dirname, extname, join, posix, relative, resolve, sep, win32 } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
-import { MEDIA_FILE, loadMediaConfig, saveMediaConfig, srtToSegments, transcriptMarkdown, transcriptPath, type Segment } from "../../eclass-sync/src/media.ts";
+import { MEDIA_FILE, courseLanguage, loadMediaConfig, needsRedo, saveMediaConfig, srtToSegments, transcriptMarkdown, transcriptPath, type Segment } from "../../eclass-sync/src/media.ts";
 import type { SemesterConfig } from "../../content/src/eclass.ts";
 import { currentSemesterId } from "./context.ts";
 import { unzipEntry } from "./docx.ts";
@@ -38,8 +40,8 @@ export const NO_WHISPER = MAC
   : WIN ? "Transcripts need Whisper (free, runs on this computer). Run: ouc transcribe --setup  (it installs Python with winget if needed, then faster-whisper)"
   : "Transcripts need Whisper (free, runs on this computer). Run: ouc transcribe --setup  (it installs faster-whisper for Python)";
 
-/** Speech to text for a list of files; per file its segments, or null if that one failed. */
-export interface Engine { label: string; transcribe(files: string[]): Promise<(Segment[] | null)[]> }
+/** Speech to text for a list of files, in `language` ("auto": Whisper guesses); per file its segments, or null if that one failed. Never translates. */
+export interface Engine { label: string; transcribe(files: string[], language?: string): Promise<(Segment[] | null)[]> }
 
 // ---------- running things ----------
 function run(bin: string, args: string[], { ms = 3 * 3600_000, onLine }: { ms?: number; onLine?: (l: string) => void } = {}) {
@@ -69,7 +71,7 @@ export const modelUrl = (model: string) => `https://huggingface.co/ggerganov/whi
 export function whisperCpp(cli: string, ffmpeg: string, model: string): Engine {
   return {
     label: `whisper.cpp (${basename(model).replace(/^ggml-|\.bin$/g, "")})`,
-    async transcribe(files) {
+    async transcribe(files, language = "auto") {
       const out: (Segment[] | null)[] = [];
       for (const f of files) {
         const work = mkdtempSync(join(tmpdir(), "ouc-whisper-"));
@@ -77,7 +79,7 @@ export function whisperCpp(cli: string, ffmpeg: string, model: string): Engine {
           const wav = join(work, "audio.wav");
           const a = await run(ffmpeg, ["-nostdin", "-y", "-loglevel", "error", "-i", f, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav]);
           if (!a.ok) { out.push(null); continue; }
-          const r = await run(cli, ["-m", model, "-f", wav, "-l", "auto", "-osrt", "-of", join(work, "out"), "-np"]);
+          const r = await run(cli, ["-m", model, "-f", wav, "-l", language, "-osrt", "-of", join(work, "out"), "-np"]);
           const srt = join(work, "out.srt");
           out.push(r.ok && existsSync(srt) ? srtToSegments(readFileSync(srt, "utf8")) : null);
         } finally { rmSync(work, { recursive: true, force: true }); }
@@ -91,9 +93,9 @@ export function whisperCpp(cli: string, ffmpeg: string, model: string): Engine {
 export function fasterWhisper(python: string, script: string, model: string): Engine {
   return {
     label: `faster-whisper (${model})`,
-    async transcribe(files) {
+    async transcribe(files, language = "auto") {
       const out: (Segment[] | null)[] = files.map(() => []);
-      const r = await run(python, [script, "--model", model, ...files], { onLine: (l) => {
+      const r = await run(python, [script, "--model", model, "--language", language, ...files], { onLine: (l) => {
         let j: { file?: number; start?: number; end?: number; text?: string; error?: string };
         try { j = JSON.parse(l); } catch { return; }
         if (typeof j.file !== "number" || !(j.file in out)) return;
@@ -181,19 +183,29 @@ export async function installWhisper(root: string, { log = (_: string) => {}, pr
 }
 
 // ---------- what to transcribe ----------
-export interface MediaJob { code: string; section: number; rel: string; abs: string; kind: "video" | "slides" }
+/** language: what's spoken (media.ts courseLanguage); redo: its transcript is in the wrong language and gets replaced. */
+export interface MediaJob { code: string; section: number; rel: string; abs: string; kind: "video" | "slides"; language: string; redo?: boolean }
 const walk = (dir: string): string[] => {
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.name.startsWith(".") ? [] : e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]);
 };
-/** Course videos, audio and slide files in a semester folder that have no transcript yet, oldest week first. */
-export function findMedia(semDir: string, cfg: Pick<SemesterConfig, "courses">): MediaJob[] {
+/**
+ * Course videos, audio and slide files in a semester folder with no transcript yet, or one in the
+ * wrong language, oldest week first. `language`: the default from .ouc/media.json.
+ */
+export function findMedia(semDir: string, cfg: Pick<SemesterConfig, "courses">, { language = "" }: { language?: string } = {}): MediaJob[] {
   return cfg.courses.flatMap((c) => walk(join(semDir, "courses", c.dir)).flatMap((abs): MediaJob[] => {
     const kind = MEDIA_FILE.test(abs) ? "video" : SLIDES.test(abs) ? "slides" : null;
-    if (!kind || existsSync(transcriptPath(abs))) return [];
+    if (!kind) return [];
+    const lang = courseLanguage(c, language);
+    let redo = false;
+    if (existsSync(transcriptPath(abs))) {
+      try { redo = needsRedo(readFileSync(transcriptPath(abs), "utf8"), lang); } catch { /* keep it */ }
+      if (!redo) return [];
+    }
     const rel = relative(semDir, abs).split(/[\\/]/).join("/");
     const section = Number(rel.split("/")[2]?.match(/^(\d+)-/)?.[1] ?? 0);
-    return [{ code: c.code, section, rel, abs, kind }];
+    return [{ code: c.code, section, rel, abs, kind, language: lang, ...(redo && { redo }) }];
   })).sort((a, b) => a.section - b.section || a.rel.localeCompare(b.rel));
 }
 
@@ -205,9 +217,9 @@ const titleOf = (abs: string) => basename(abs, extname(abs)).replace(/[_-]audio$
  */
 export async function transcribeOne(engine: Engine, job: MediaJob, semId: string): Promise<"done" | "noaudio" | "failed"> {
   const out = transcriptPath(job.abs);
-  const info = { title: titleOf(job.abs), source: `${semId}/${job.rel}`, by: engine.label };
+  const info = { title: titleOf(job.abs), source: `${semId}/${job.rel}`, by: engine.label, language: job.language };
   if (job.kind === "video") {
-    const [segs] = await engine.transcribe([job.abs]);
+    const [segs] = await engine.transcribe([job.abs], job.language);
     if (!segs) return "failed";
     writeFileSync(out, transcriptMarkdown(info, [{ segments: segs }]));
     return "done";
@@ -225,7 +237,7 @@ export async function transcribeOne(engine: Engine, job: MediaJob, semId: string
       writeFileSync(file, data);
       clips.push({ slide: s.n, file });
     }
-    const res = await engine.transcribe(clips.map((c) => c.file));
+    const res = await engine.transcribe(clips.map((c) => c.file), job.language);
     if (res.every((r) => !r)) return "failed";
     const parts = slides.map((s) => ({ heading: `Slide ${s.n}`, segments: clips.flatMap((c, i) => (c.slide === s.n ? res[i] ?? [] : [])) }));
     writeFileSync(out, transcriptMarkdown(info, parts));
@@ -258,7 +270,7 @@ export function createTranscriber(root: string, { engine = () => findEngine(root
   const check = () => { const e = engine(); w.available = !!e; w.engine = e?.label ?? null; return e; };
   const statePath = join(root, ".ouc", "transcribe-state.json");
   const readState = (): State => { try { return JSON.parse(readFileSync(statePath, "utf8")); } catch { return {}; } };
-  let queue: MediaJob[] = [];
+  let queue: MediaJob[] = [], running: MediaJob | null = null;
   let waiters: { only?: (j: MediaJob) => boolean; done: () => void }[] = [];
   /** What's left to do in the current semester (skips files that failed less than a day ago, and slides without narration). */
   function scan(): { semId: string; jobs: MediaJob[] } | null {
@@ -270,7 +282,7 @@ export function createTranscriber(root: string, { engine = () => findEngine(root
     let cfg: SemesterConfig;
     try { cfg = JSON.parse(readFileSync(join(semDir, "semester.json"), "utf8")); } catch { return null; }
     const state = readState();
-    const jobs = findMedia(semDir, cfg).filter((j) => {
+    const jobs = findMedia(semDir, cfg, conf).filter((j) => {
       const s = state[stateKey(j)];
       return !s || (s.result === "failed" && now().getTime() - Date.parse(s.at) > 24 * 3600_000);
     });
@@ -279,7 +291,7 @@ export function createTranscriber(root: string, { engine = () => findEngine(root
   /** Resolves the waiters with nothing left in the queue (all of them when the loop ends). */
   const settle = (all = false) => {
     waiters = waiters.filter((w) => {
-      if (all || (w.only && !queue.some(w.only))) { w.done(); return false; }
+      if (all || (w.only && !queue.some(w.only) && !(running && w.only(running)))) { w.done(); return false; }
       return true;
     });
   };
@@ -289,8 +301,8 @@ export function createTranscriber(root: string, { engine = () => findEngine(root
       while (queue.length) {
         const i = Math.max(0, queue.findIndex((j) => waiters.some((w) => w.only?.(j))));
         const [j] = queue.splice(i, 1);
-        if (!j || existsSync(transcriptPath(j.abs))) { st.done++; settle(); continue; }
-        st.current = j.rel;
+        if (!j || (!j.redo && existsSync(transcriptPath(j.abs)))) { st.done++; settle(); continue; }
+        st.current = j.rel; running = j;
         on?.(st, j);
         let r: Awaited<ReturnType<typeof transcribeOne>> = "failed";
         try { r = await transcribeOne(eng, j, semId); } catch (e) { st.error = (e as Error).message; }
@@ -302,10 +314,10 @@ export function createTranscriber(root: string, { engine = () => findEngine(root
           mkdirSync(dirname(statePath), { recursive: true });
           writeFileSync(statePath, JSON.stringify(state, null, 1));
         }
-        st.done++;
+        st.done++; running = null;
         settle();
       }
-    } finally { st.busy = false; st.current = null; settle(true); on?.(st); }
+    } finally { st.busy = false; st.current = null; running = null; settle(true); on?.(st); }
   }
   const api = {
     run(opts: { only?: (j: MediaJob) => boolean } = {}): Promise<void> {
@@ -341,6 +353,37 @@ export function createTranscriber(root: string, { engine = () => findEngine(root
       st.enabled = saveMediaConfig(root, { transcribe: on }).transcribe;
       if (on) void api.run();
       return api.whisper();
+    },
+    /**
+     * The video page's "Make it again": replaces the transcript of `rel` (a path in the current semester's
+     * folder), first in the queue. `language` becomes the course's ("language" in semester.json) so the
+     * next sync doesn't undo it.
+     */
+    redo(rel: string, language?: string): { ok: true } | { ok: false; error: string } {
+      const semId = semester();
+      if (!semId) return { ok: false, error: "No current semester." };
+      if (!loadMediaConfig(root).transcribe) return { ok: false, error: "Transcripts are turned off (Settings → Video transcripts)." };
+      if (!check()) return { ok: false, error: "Set up Whisper first (Settings → Video transcripts)." };
+      if (language !== undefined && !/^([a-z]{2,3}|auto)$/.test(language)) return { ok: false, error: "Unknown language." };
+      const semDir = join(root, "semesters", semId), cfgPath = join(semDir, "semester.json");
+      const abs = resolve(semDir, rel);
+      let cfg: SemesterConfig;
+      try { cfg = JSON.parse(readFileSync(cfgPath, "utf8")); } catch { return { ok: false, error: "No semester.json." }; }
+      const course = cfg.courses.find((c) => abs.startsWith(join(semDir, "courses", c.dir) + sep));
+      if (!course || !(MEDIA_FILE.test(abs) || SLIDES.test(abs)) || !existsSync(abs)) return { ok: false, error: "Not a class video or slide file." };
+      if (language && course.language !== language) {
+        course.language = language;
+        writeFileSync(cfgPath, `${JSON.stringify(cfg, null, 2)}\n`);
+      }
+      rmSync(transcriptPath(abs), { force: true });
+      const key = `${relative(semDir, abs).split(/[\\/]/).join("/")}|`;
+      const state = readState();
+      if (Object.keys(state).some((k) => k.startsWith(key))) {
+        for (const k of Object.keys(state)) if (k.startsWith(key)) delete state[k];
+        writeFileSync(statePath, JSON.stringify(state, null, 1));
+      }
+      void api.run({ only: (j) => j.abs === abs });
+      return { ok: true };
     },
     /** Sets Whisper up in the background (the app's "Set up Whisper"), then transcribes what's waiting. */
     setup(): WhisperStatus {

@@ -413,6 +413,9 @@ test("Video transcripts in Settings: whether Whisper is set up, set it up, turn 
   assert.equal(first.available, false);
   assert.equal(first.enabled, true);
   assert.equal((await post({ setup: true }, "wrong")).status, 403);
+  const redo = await post({ redo: "courses/X/01/v.mp4", language: "en" });
+  assert.equal(redo.status, 400, "no transcript is made again before Whisper is set up");
+  assert.match((await json(redo)).error, /Set up Whisper first|No current semester/);
   assert.equal((await post({ enabled: "yes" })).status, 400);
   assert.equal((await json(post({ setup: true }))).installing, true);
   await new Promise((r) => setTimeout(r, 20));

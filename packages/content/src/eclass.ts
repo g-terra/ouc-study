@@ -10,6 +10,7 @@ export interface CourseConfig {
   dir: string;                               // folder under courses/
   dating: { mode: "title" } | { mode: "weekly"; first: string; pattern: string };
   label?: "firstResource" | "stripWeek" | "lecture" | "name";
+  language?: string;                         // spoken in its recordings ("en", "el", "auto"), for transcripts
 }
 /** semesters/<id>/semester.json */
 export interface SemesterConfig {

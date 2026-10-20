@@ -37,16 +37,17 @@ function semester() {
 }
 /** Says the file's name back as one segment; files named in `fail` fail. */
 function fakeEngine(fail: string[] = [], gate?: Promise<void>) {
-  const seen: string[] = [];
+  const seen: string[] = [], languages: (string | undefined)[] = [];
   const engine: Engine = {
     label: "fake (tiny)",
-    async transcribe(files) {
+    async transcribe(files, language) {
       await gate;
       seen.push(...files.map((f) => basename(f)));
+      languages.push(language);
       return files.map((f) => (fail.some((x) => f.includes(x)) ? null : [{ start: 0, end: 1, text: `said in ${basename(f)}` }, { start: 75, end: 76, text: "later on" }]));
     },
   };
-  return { engine, seen };
+  return { engine, seen, languages };
 }
 
 test("findMedia: videos and slide files without a transcript, oldest week first", () => {
@@ -174,4 +175,45 @@ test("Windows: the py launcher and installed Pythons, never the Microsoft Store 
   assert.equal(pythonCandidates({ platform: "win32", env, which: (b) => onPath[b] ?? null, list: () => [], exists: () => false })[0], "C:\\Windows\\py.exe");
   assert.deepEqual(pythonCandidates({ platform: "win32", env, which: () => null, list: () => [], exists: () => false }), []);
   assert.deepEqual(pythonCandidates({ platform: "darwin", which: (b) => (b === "python3" ? "/usr/bin/python3" : null) }), ["/usr/bin/python3"]);
+});
+
+test("Whisper is told the course's language, and it goes in the transcript", async () => {
+  const { root, sem } = semester();
+  const { engine, languages } = fakeEngine();
+  await createTranscriber(root, { engine: () => engine }).run();
+  assert.deepEqual([...new Set(languages)], ["en"], "an English course title: English");
+  assert.match(readFileSync(join(sem, `${W2}/Video-1/Intro.transcript.md`), "utf8"), /\nlanguage: en\n/);
+  const cfg = JSON.parse(readFileSync(join(sem, "semester.json"), "utf8"));
+  assert.equal(findMedia(sem, cfg).filter((j) => j.redo).length, 0, "made in the right language: nothing to redo");
+  assert.deepEqual(findMedia(sem, { courses: [{ ...cfg.courses[0], language: "el" }] }).filter((j) => j.redo).map((j) => j.rel).sort(),
+    [`${W1}/Lecture 1_audio.pptx`, `${W2}/Video-1/Intro.mp4`], "the course is set to Greek since: made again");
+});
+
+test("a transcript Whisper guessed as Greek in an English course is made again on the next run", async () => {
+  const { root, sem } = semester();
+  const cfg = JSON.parse(readFileSync(join(sem, "semester.json"), "utf8"));
+  writeFileSync(join(sem, `${W2}/Video-1/Intro.transcript.md`), "---\ntitle: \"Intro\"\nby: \"whisper.cpp (small)\"\n---\n\n# Transcript: Intro\n\n[0:00] Λοιπόν, Chatt GPT είναι βέβαια σε GPT-4, ένας αδυνατής λαγκότητας\n");
+  assert.deepEqual(findMedia(sem, cfg).filter((j) => j.redo).map((j) => j.rel), [`${W2}/Video-1/Intro.mp4`]);
+  const { engine, seen } = fakeEngine();
+  await createTranscriber(root, { engine: () => engine }).run();
+  assert.ok(seen.includes("Intro.mp4"));
+  assert.match(readFileSync(join(sem, `${W2}/Video-1/Intro.transcript.md`), "utf8"), /said in Intro\.mp4/);
+});
+
+test("Make it again (the video page): in the language picked, which becomes the course's", async () => {
+  const { root, sem } = semester();
+  const { engine, languages } = fakeEngine();
+  const t = createTranscriber(root, { engine: () => engine });
+  await t.run();
+  languages.length = 0;
+  assert.deepEqual(t.redo("../../etc/passwd"), { ok: false, error: "Not a class video or slide file." });
+  assert.deepEqual(t.redo(`${W2}/Video-1/Intro.mp4`, "xx yy"), { ok: false, error: "Unknown language." });
+  assert.deepEqual(t.redo(`${W2}/Video-1/Intro.mp4`, "el"), { ok: true });
+  assert.ok(!existsSync(join(sem, `${W2}/Video-1/Intro.transcript.md`)), "the wrong one is gone at once");
+  await t.run({ only: (j) => j.rel === `${W2}/Video-1/Intro.mp4` });
+  assert.deepEqual(languages, ["el"]);
+  assert.match(readFileSync(join(sem, `${W2}/Video-1/Intro.transcript.md`), "utf8"), /\nlanguage: el\n/);
+  assert.equal(JSON.parse(readFileSync(join(sem, "semester.json"), "utf8")).courses[0].language, "el");
+  assert.equal(createTranscriber(root, { engine: () => null }).redo(`${W2}/Video-1/Intro.mp4`).ok, false, "without Whisper nothing is deleted");
+  assert.ok(existsSync(join(sem, `${W2}/Video-1/Intro.transcript.md`)));
 });

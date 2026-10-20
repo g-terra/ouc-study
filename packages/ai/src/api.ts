@@ -29,7 +29,7 @@
 // Class videos and narrated slides get transcripts in the background too (transcribe.ts); Sync now
 // makes those of the weeks about to get notes first, so the notes are made from them. Only when Whisper
 // is set up: GET /api/ai/transcribe says whether it is, POST { enabled } turns transcripts on or off and
-// POST { setup: true } installs it (⚙ Settings).
+// POST { setup: true } installs it (⚙ Settings), POST { redo: <path>, language? } makes one transcript again (the video page).
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -562,6 +562,10 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         if (req.method !== "POST") return json(res, transcriber.whisper(url.searchParams.has("fresh")));
         const b = await readBody(req);
         if (b.setup === true) return json(res, transcriber.setup());
+        if (typeof b.redo === "string") {
+          const r = transcriber.redo(b.redo, typeof b.language === "string" ? b.language : undefined);
+          return r.ok ? json(res, r) : json(res, r, 400);
+        }
         if (typeof b.enabled !== "boolean") return json(res, { error: "Bad request" }, 400);
         return json(res, transcriber.setEnabled(b.enabled));
       }

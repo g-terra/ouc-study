@@ -177,6 +177,26 @@ test("a class video opens on its own page, the transcript beside it: a line jump
   await expect.poll(() => page.evaluate("document.fullscreenElement?.tagName")).toBe("VIDEO");
 });
 
+test("a transcript in the wrong language can be made again from the video page", async ({ page }) => {
+  let posted: unknown = null;
+  await page.route("**/api/ai/transcribe", (route) => {
+    posted = route.request().postDataJSON();
+    return route.fulfill({ json: { ok: true } });
+  });
+  // while it's being made again the transcript is gone, then it's back
+  let gone = false;
+  await page.route("**/Welcome.transcript.md", (route) => (gone ? route.fulfill({ status: 404, body: "File not found" }) : route.continue()));
+  await page.goto(`${SEM}/video/${encodeURIComponent("courses/DEMO101-Demo-Studies/01-Week-1-Getting-started/Video-Welcome-to-the-demo/Welcome.mp4")}`);
+  const redo = page.getByTestId("transcript-redo");
+  await redo.getByRole("combobox", { name: "Language spoken" }).selectOption("el");
+  gone = true;
+  await redo.getByRole("button", { name: "Make it again" }).click();
+  await expect(page.getByTestId("transcript-redoing")).toBeVisible();
+  expect(posted).toEqual({ redo: "courses/DEMO101-Demo-Studies/01-Week-1-Getting-started/Video-Welcome-to-the-demo/Welcome.mp4", language: "el" });
+  gone = false;
+  await expect(page.getByTestId("transcript")).toContainText("Welcome to the demo course.", { timeout: 15_000 });
+});
+
 test("the activity bar shows background work, and Details opens each part", async ({ page }) => {
   await page.route("**/api/ai/prep", (r) => r.fulfill({ json: {
     enabled: true, busy: false, running: [], queue: [], finished: [], total: 0, done: 0, error: null,
