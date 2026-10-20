@@ -110,11 +110,13 @@ test("the queue: run({ only }) jumps ahead and resolves when its files are done"
   assert.equal(seen.length, 2);
 });
 
-test("the queue: no engine says how to install one; turned off does nothing", async () => {
-  const { root } = semester();
+test("the queue: without Whisper nothing happens and nothing complains; turned off does nothing", async () => {
+  const { root, sem } = semester();
   const t = createTranscriber(root, { engine: () => null });
   await t.run();
-  assert.equal(t.status().error, NO_WHISPER);
+  assert.deepEqual({ ...t.status() }, { enabled: true, busy: false, total: 0, done: 0, made: 0, failed: 0, current: null, error: null });
+  assert.equal(t.whisper().available, false);
+  assert.ok(!existsSync(join(sem, `${W2}/Video-1/Intro.transcript.md`)));
   mkdirSync(join(root, ".ouc"), { recursive: true });
   writeFileSync(join(root, ".ouc/media.json"), JSON.stringify({ transcribe: false }));
   let asked = 0;
@@ -122,6 +124,30 @@ test("the queue: no engine says how to install one; turned off does nothing", as
   await off.run();
   assert.equal(asked, 0);
   assert.equal(off.status().enabled, false);
+});
+
+test("Settings: set Whisper up from the app, then it transcribes; turning it off keeps the other settings", async () => {
+  const { root, sem } = semester();
+  mkdirSync(join(root, ".ouc"), { recursive: true });
+  writeFileSync(join(root, ".ouc/media.json"), JSON.stringify({ videos: false, transcribe: false }));
+  let installed = false, finish!: () => void;
+  const finished = new Promise<void>((r) => (finish = r));
+  const { engine } = fakeEngine();
+  const t = createTranscriber(root, { engine: () => (installed ? engine : null), install: async () => { await finished; installed = true; return { ok: true, message: "fake" }; } });
+  assert.deepEqual(t.whisper(), { enabled: false, available: false, engine: null, installing: false, error: null, manual: NO_WHISPER });
+  assert.equal(t.setup().installing, true);
+  assert.equal(t.setup().installing, true, "a second click doesn't install twice");
+  finish();
+  await finished; await new Promise((r) => setImmediate(r));
+  assert.deepEqual(t.whisper(), { enabled: true, available: true, engine: "fake (tiny)", installing: false, error: null, manual: NO_WHISPER });
+  await t.run();
+  assert.ok(existsSync(join(sem, `${W2}/Video-1/Intro.transcript.md`)), "setting it up turns transcripts on");
+  assert.equal(t.setEnabled(false).enabled, false);
+  assert.deepEqual(JSON.parse(readFileSync(join(root, ".ouc/media.json"), "utf8")), { videos: false, transcribe: false });
+  const failing = createTranscriber(root, { engine: () => null, install: async () => ({ ok: false, message: "brew failed" }) });
+  failing.setup();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(failing.whisper().error, "brew failed");
 });
 
 test("faster-whisper: the helper's JSON lines become segments per file", async () => {

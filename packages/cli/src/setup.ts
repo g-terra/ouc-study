@@ -273,11 +273,11 @@ async function main() {
   }
   // class videos and narrated slides → transcripts the notes are made from, with Whisper on this computer
   if (loadMediaConfig(ROOT).transcribe && !findEngine(ROOT)) {
-    if (await confirm("Install Whisper (free, runs on this computer) to turn class videos and narrated slides into transcripts for your notes?", true)) {
+    if (await confirm("Optional: install Whisper (free, runs on this computer) to turn class videos and narrated slides into transcripts for your notes?", true)) {
       const sp = ui.spinner("Installing Whisper (a few minutes: it downloads a speech model once)…");
       const r = await installWhisper(ROOT);
       r.ok ? sp.succeed(`Whisper ready (${r.message}): the app transcribes videos in the background`) : sp.warn(`Whisper: ${r.message}`);
-    } else ui.info(`Transcripts later: ${c.cyan("ouc transcribe --setup")}`);
+    } else ui.info(`No transcripts. To turn them on later: ⚙ Settings → Video transcripts in the app, or ${c.cyan("ouc transcribe --setup")}`);
   }
   {
     const first = !existsSync(join(semDir, "_meta/sync-state.json"));

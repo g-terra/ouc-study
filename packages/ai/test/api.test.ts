@@ -357,3 +357,31 @@ test("Sync now: the videos of the weeks about to get notes are transcribed first
   assert.equal(chat.action, "make-notes");
   assert.match(chat.messages[0].prompt, /transcripts of its videos and narrated slides/);
 });
+
+test("Video transcripts in Settings: whether Whisper is set up, set it up, turn it off", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-ai-"));
+  mkdirSync(join(root, ".ouc"));
+  let installed = false;
+  const mw = createAiApi(root, {
+    noAutoPrep: true,
+    whisper: () => (installed ? { label: "fake", transcribe: async (files) => files.map(() => null) } : null),
+    installWhisper: async () => { installed = true; return { ok: true, message: "fake" }; },
+  });
+  const server = http.createServer((req, res) => mw(req, res, () => { res.statusCode = 404; res.end(); }));
+  await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok));
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${portOf(server)}`;
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const post = (body: object, tok = token) => fetch(`${base}/api/ai/transcribe`, { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": tok }, body: JSON.stringify(body) });
+
+  const first = await json(fetch(`${base}/api/ai/transcribe`));
+  assert.equal(first.available, false);
+  assert.equal(first.enabled, true);
+  assert.equal((await post({ setup: true }, "wrong")).status, 403);
+  assert.equal((await post({ enabled: "yes" })).status, 400);
+  assert.equal((await json(post({ setup: true }))).installing, true);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(await json(fetch(`${base}/api/ai/transcribe`)), { ...first, available: true, engine: "fake" });
+  assert.equal((await json(post({ enabled: false }))).enabled, false);
+  assert.deepEqual(JSON.parse(readFileSync(join(root, ".ouc/media.json"), "utf8")), { transcribe: false });
+});

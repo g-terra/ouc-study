@@ -26,7 +26,9 @@
 // missing notes, for every week with files, and a quiz for every class with material and no quiz
 // ("autoQuiz": false turns the quizzes off). Up to "parallel" (default 3) runs at once.
 // Class videos and narrated slides get transcripts in the background too (transcribe.ts); Sync now
-// makes those of the weeks about to get notes first, so the notes are made from them.
+// makes those of the weeks about to get notes first, so the notes are made from them. Only when Whisper
+// is set up: GET /api/ai/transcribe says whether it is, POST { enabled } turns transcripts on or off and
+// POST { setup: true } installs it (⚙ Settings).
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -73,6 +75,7 @@ export interface AiApiOptions {
   converter?: Converter | null;
   noAutoPrep?: boolean;
   whisper?: () => Engine | null;                        // tests: a fake speech-to-text engine
+  installWhisper?: () => Promise<{ ok: boolean; message: string }>;   // tests: a fake install
 }
 export type AiApi = ((req: IncomingMessage, res: ServerResponse, next: () => void) => Promise<void>) & {
   autoPrep(): void; catchUp(): { notes: number; prep: number; quizzes: number }; prepIdle(): boolean;
@@ -381,7 +384,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
   // ----- automatic prep: one assignment at a time, in the background -----
   const prepState = join(root, ".ouc", "prep-state.json");
   type Slot = { id: string; chatId: string; ok?: boolean };
-  const transcriber = createTranscriber(root, opts.whisper ? { engine: opts.whisper } : {});
+  const transcriber = createTranscriber(root, { ...(opts.whisper && { engine: opts.whisper }), ...(opts.installWhisper && { install: opts.installWhisper }) });
   const prep = { busy: false, again: false, notes: false, force: false, running: [] as Slot[], queue: [] as string[], finished: [] as Slot[], total: 0, done: 0, error: null as string | null };
   async function status(fresh = false) {
     if (!cache || Date.now() - cache.at > 5 * 60_000 || fresh) cache = { at: Date.now(), body: await aiStatus(root) };
@@ -538,6 +541,13 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
       const p = url.pathname;
       if (p === "/api/ai/status") return json(res, { ...(await status(url.searchParams.has("fresh"))), token });
       if (p === "/api/ai/prep") return json(res, { enabled: prepEnabled(), busy: prep.busy, running: prep.running, queue: prep.queue, finished: prep.finished, total: prep.total, done: prep.done, error: prep.error, transcribe: transcriber.status() });
+      if (p === "/api/ai/transcribe") {
+        if (req.method !== "POST") return json(res, transcriber.whisper(url.searchParams.has("fresh")));
+        const b = await readBody(req);
+        if (b.setup === true) return json(res, transcriber.setup());
+        if (typeof b.enabled !== "boolean") return json(res, { error: "Bad request" }, 400);
+        return json(res, transcriber.setEnabled(b.enabled));
+      }
       if (p === "/api/ai/view") {
         const abs = viewablePath(root, url.searchParams.get("path"));
         if (!abs) return json(res, { error: "Not found" }, 404);

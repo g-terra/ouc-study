@@ -3,7 +3,7 @@ import { Link, useRouter, enc } from "../lib/router";
 import { useIndex, useSemester } from "../lib/data";
 import { cx } from "./ui";
 import { CONN_LABEL, useConnection } from "../lib/connection";
-import { TOOL_STATE, refreshAi, useAiStatus, usePrepStatus, workLabel } from "../lib/ai";
+import { TOOL_STATE, getWhisper, refreshAi, setWhisper, useAiStatus, usePrepStatus, workLabel, type WhisperStatus } from "../lib/ai";
 import { useAssistant } from "./Assistant";
 import { THEMES, setTheme, useTheme, type ThemeChoice } from "../lib/theme";
 import { releaseHighlights, useUpdate } from "../lib/update";
@@ -126,11 +126,60 @@ function SettingsFab({ to }: { to: string }) {
           <ConnectionDetails to={to} onNavigate={() => setOpen(false)} />
           <div className="mt-4 mb-1 border-t border-line px-2 pt-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Colour theme</div>
           <ThemePicker />
+          <VideoTranscripts head="mt-4 mb-1 border-t border-line px-2 pt-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted" />
           <div className="mt-4 mb-1 border-t border-line px-2 pt-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted">App version</div>
           <AppVersion />
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Transcripts of class videos and narrated slides (optional): set Whisper up, or turn them on and off.
+ * Hidden when the app runs without its server (nothing to set up then).
+ */
+export function VideoTranscripts({ head }: { head: string }) {
+  const [w, setW] = useState<WhisperStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { getWhisper().then(setW); }, []);
+  // while installing, check back until it's done
+  useEffect(() => {
+    if (!w?.installing) return;
+    const t = window.setInterval(() => getWhisper().then(setW), 3000);
+    return () => window.clearInterval(t);
+  }, [w?.installing]);
+  if (!w) return null;
+  const post = async (body: { enabled: boolean } | { setup: true }) => {
+    setError(null);
+    if ("enabled" in body) setW({ ...w, enabled: body.enabled });   // the switch moves at once
+    const r = await setWhisper(body);
+    if ("error" in r && !("enabled" in r)) { setError(r.error); getWhisper().then((x) => x && setW(x)); } else setW(r as WhisperStatus);
+  };
+  const on = w.enabled && !!w.available;
+  return (
+    <>
+      <div className={head}>Video transcripts</div>
+      <div className="space-y-2 px-2" data-testid="video-transcripts">
+        <p className="text-muted">Optional. Whisper turns class videos and narrated slides into text for your notes, free and on this computer.</p>
+        {w.installing ? (
+          <p className="flex items-center gap-1.5 font-semibold"><span className="size-1.5 animate-pulse rounded-full bg-accent" />Setting up Whisper… it downloads a speech model once</p>
+        ) : w.available ? (
+          <label className="flex cursor-pointer items-center justify-between gap-2">
+            <span><span className="font-semibold">{on ? "On" : "Off"}</span> <span className="text-xs text-muted">· {w.engine}</span></span>
+            <input type="checkbox" role="switch" checked={on} onChange={(e) => post({ enabled: e.target.checked })} aria-label="Make video transcripts" className="size-4 accent-[var(--accent)]" />
+          </label>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-sm"><span className="font-semibold">Off</span> <span className="text-muted">· Whisper isn't set up</span></span>
+            <button type="button" onClick={() => post({ setup: true })} className="rounded-full bg-ink px-3 py-1 font-semibold text-bg hover:opacity-90">Set up Whisper</button>
+            <button type="button" onClick={() => getWhisper(true).then(setW)} className="text-muted underline hover:text-ink">Check again</button>
+          </div>
+        )}
+        {(error ?? w.error) && <p className="text-xs text-bad">{error ?? w.error}</p>}
+        {w.error && <p className="text-xs text-muted">By hand: {w.manual}</p>}
+      </div>
+    </>
   );
 }
 

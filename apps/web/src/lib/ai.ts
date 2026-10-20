@@ -128,6 +128,17 @@ export function usePrepStatus(): PrepStatus | null {
   return s;
 }
 
+/** Video transcripts in ⚙ Settings: on or off, and whether Whisper is set up on this computer. */
+export interface WhisperStatus { enabled: boolean; available: boolean | null; engine: string | null; installing: boolean; error: string | null; manual: string }
+export const getWhisper = (fresh = false): Promise<WhisperStatus | null> =>
+  fetch(`/api/ai/transcribe${fresh ? "?fresh" : ""}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+/** { enabled } turns transcripts on or off; { setup: true } installs Whisper in the background. */
+export async function setWhisper(body: { enabled: boolean } | { setup: true }): Promise<WhisperStatus | { error: string }> {
+  const res = await fetch("/api/ai/transcribe", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify(body) }).catch(() => null);
+  if (res?.status === 403) refreshAi(true);
+  return (await res?.json().catch(() => null)) ?? { error: "Couldn't save that. Is the app running on your computer?" };
+}
+
 export async function token() {
   if (!current.token) await refreshAi();
   return current.token ?? "";
