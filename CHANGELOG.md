@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.2](https://github.com/g-terra/ouc-study/compare/v0.23.1...v0.23.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* **web:** name only the ai in the ask ai dropdown, not its model ([#128](https://github.com/g-terra/ouc-study/issues/128)) ([829cc08](https://github.com/g-terra/ouc-study/commit/829cc08467ef589943473e2607ad6185a9d8bc8f))
+
 ## [0.23.1](https://github.com/g-terra/ouc-study/compare/v0.23.0...v0.23.1) (2026-10-20)
 
 
