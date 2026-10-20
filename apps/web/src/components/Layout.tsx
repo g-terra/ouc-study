@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, linkHref, useRouter, enc } from "../lib/router";
 import { useIndex, useSemester } from "../lib/data";
-import { cx } from "./ui";
+import { Switch, cx } from "./ui";
 import { CONN_LABEL, useConnection } from "../lib/connection";
 import { TOOL_STATE, getWhisper, refreshAi, setWhisper, useAiStatus, usePrepStatus, workLabel, type WhisperStatus } from "../lib/ai";
 import { useAssistant } from "./Assistant";
@@ -176,10 +176,10 @@ export function VideoTranscripts({ head, fallback = null }: { head: string; fall
         {w.installing ? (
           <p className="flex items-center gap-1.5 font-semibold"><span className="size-1.5 animate-pulse rounded-full bg-accent" />Setting up Whisper… it downloads a speech model once</p>
         ) : w.available ? (
-          <label className="flex cursor-pointer items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2">
             <span><span className="font-semibold">{on ? "On" : "Off"}</span> <span className="text-xs text-muted">· {w.engine}</span></span>
-            <input type="checkbox" role="switch" checked={on} onChange={(e) => post({ enabled: e.target.checked })} aria-label="Make video transcripts" className="size-4 accent-[var(--accent)]" />
-          </label>
+            <Switch checked={on} onChange={(enabled) => post({ enabled })} label="Make video transcripts" />
+          </div>
         ) : (
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-sm"><span className="font-semibold">Off</span> <span className="text-muted">· Whisper isn't set up</span></span>
