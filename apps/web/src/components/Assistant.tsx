@@ -10,7 +10,7 @@ import { Link, useRouter, enc } from "../lib/router";
 import { chatPathFor, isChatPath } from "../lib/chat-path";
 import { mdToHtml } from "../lib/markdown";
 import { linkLabel } from "../lib/links";
-import { TOOL_STATE, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
+import { TOOL_STATE, deleteChats, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
 import { refreshData } from "../lib/data";
 import { cx } from "./ui";
 
@@ -33,6 +33,8 @@ interface Ctx {
   input: string; setInput: (s: string) => void;
   /** The chats saved before a reload are back in their tabs (they may still be loading). */
   ready: boolean;
+  /** Deletes a saved chat (or all of them, when no id) and closes their tabs; resolves to an error message, if any. */
+  remove: (id?: string) => Promise<string | undefined>;
 }
 const AssistantCtx = createContext<Ctx | null>(null);
 const store = {
@@ -186,13 +188,25 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     if (saved) { update(key, (x) => ({ ...x, chat: saved, busy: !!saved.running })); if (saved.running) follow(key, id); }
   };
   const stop = () => { if (active.chat?.id) stopRun(active.chat.id); };
+  const remove = async (id?: string) => {
+    const r = await deleteChats(id);
+    if (r.error) return r.error;
+    // close their tabs (a running chat stays: the server keeps it too)
+    const gone = (x: Session) => !!x.chat?.id && !x.busy && (!id || x.chat.id === id);
+    let next = live.current.filter((x) => !gone(x));
+    if (!next.length) next = [blank()];
+    if (!next.some((x) => x.key === activeKey)) setActiveKey(next[next.length - 1].key);
+    live.current = next;
+    setSessions(next);
+    return r.kept ? `${r.kept} ${r.kept === 1 ? "chat is" : "chats are"} still working, so ${r.kept === 1 ? "it was" : "they were"} kept.` : undefined;
+  };
 
   return (
     <AssistantCtx.Provider value={{
       open, setOpen, sessions, activeKey: active.key, activate: setActiveKey, close,
       chat: active.chat, busy: active.busy, error: active.error, draft: active.draft,
       setDraft: (d) => update(active.key, (x) => ({ ...x, draft: d })),
-      start, send, stop, reset, load, input, setInput, ready,
+      start, send, stop, reset, load, input, setInput, ready, remove,
       tool: active.tool ?? tool,
       // a tab started for a given AI keeps its own choice; otherwise this is the default for new chats
       setTool: (t) => (active.tool ? update(active.key, (x) => ({ ...x, tool: t ?? undefined })) : setTool(t)),
@@ -216,6 +230,7 @@ export function AskAiButton({ action, params, children, className }: { action: s
 // ---------------------------------------------------------------------------
 // where "Back to the pop-up" returns to: the page the chat was expanded from
 let expandedFrom: string | null = null;
+const SIDE_KEY = "ouc-ai-history";
 const BTN = "rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-ink";
 
 /** The chat as a popup over the page; it stays out of the way while the full-page chat is open. */
@@ -271,9 +286,20 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
   const { path, navigate } = useRouter();
   const { input, setInput } = a;
   const [history, setHistory] = useState<ChatSummary[] | null>(null);
-  // the full page always lists the chats on the side (wide screens); refreshed when a chat starts or ends
+  // the full page lists the chats on the side (wide screens, unless hidden); refreshed when a chat starts or ends
   const [side, setSide] = useState<ChatSummary[] | null>(null);
+  const [sideOn, setSideOn] = useState(() => { try { return localStorage.getItem(SIDE_KEY) !== "hidden"; } catch { return true; } });
+  const showSide = (on: boolean) => { setSideOn(on); try { localStorage.setItem(SIDE_KEY, on ? "shown" : "hidden"); } catch { /* private mode */ } };
   useEffect(() => { if (page) listChats().then(setSide); }, [page, a.chat?.id, a.busy]);
+  const [note, setNote] = useState<string>();
+  const remove = async (id?: string) => {
+    const n = id ? 1 : (side ?? history ?? []).length;
+    if (!window.confirm(id ? "Delete this chat? This can't be undone." : `Delete all ${n} saved chats? This can't be undone.`)) return;
+    setNote(await a.remove(id));
+    const fresh = await listChats();
+    if (page) setSide(fresh);
+    if (history) setHistory(fresh);
+  };
   const end = useRef<HTMLDivElement>(null);
   // the reply box starts at four lines and grows with what's typed (up to its max height, then it scrolls)
   const field = useRef<HTMLTextAreaElement>(null);
@@ -299,6 +325,8 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
     await a.send(data.id, msg, meta?.title);
   };
   const pick = async (id: string) => { setHistory(null); await a.load(id); };
+  // on the full page's wide layout, History shows or hides the side list; otherwise it opens the list in place
+  const wide = () => page && window.matchMedia("(min-width: 1024px)").matches;
   const expand = () => {
     expandedFrom = path;
     a.setOpen(false);
@@ -315,7 +343,7 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
   const conversation = (
     <>
       {history ? (
-        <HistoryList chats={history} onPick={pick} />
+        <HistoryList chats={history} onPick={pick} onDelete={remove} />
       ) : !a.chat ? (
         <>
           {!a.draft && <Intro />}
@@ -328,6 +356,7 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
         </div>
       )}
       {a.error && <p className="mt-4 rounded-xl bg-bad-bg px-3 py-2 text-sm text-bad">{a.error}</p>}
+      {note && <p role="status" className="mt-4 rounded-xl bg-warn-bg px-3 py-2 text-sm text-warn">{note} <button type="button" className="underline" onClick={() => setNote(undefined)}>OK</button></p>}
       <div ref={end} className={cx(page && "scroll-mb-48")} />
     </>
   );
@@ -351,8 +380,10 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
             ) : ai.state === "checking" ? "Checking your AI…" : ai.label ?? "No AI chosen"}
           </div>
         </div>
-        <button type="button" className={cx(BTN, page && "lg:hidden")}
-          onClick={async () => setHistory(history ? null : await listChats())}>History</button>
+        <button type="button" className={BTN} aria-pressed={page ? undefined : !!history}
+          onClick={async () => (wide() ? showSide(!sideOn) : setHistory(history ? null : await listChats()))}>
+          {page ? <><span className="hidden lg:inline">{sideOn ? "Hide history" : "Show history"}</span><span className="lg:hidden">History</span></> : "History"}
+        </button>
         <button type="button" className={cx(BTN, "disabled:opacity-40")} disabled={!a.chat && !a.draft}
           onClick={() => { a.reset(); setHistory(null); }}>New chat</button>
         {page ? (
@@ -392,10 +423,15 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
   if (!page) return view;
   return (
     <section aria-label="Ask AI" className="flex gap-8">
-      <nav aria-label="Chat history" className="sticky top-24 hidden max-h-[calc(100vh-8rem)] w-64 shrink-0 self-start overflow-y-auto lg:block">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">History</div>
-        {side ? <HistoryList chats={side} active={a.chat?.id} onPick={pick} /> : <p className="text-sm text-muted">Loading…</p>}
-      </nav>
+      {sideOn && (
+        <nav aria-label="Chat history" className="sticky top-24 hidden max-h-[calc(100vh-8rem)] w-64 shrink-0 self-start overflow-y-auto lg:block">
+          <div className="mb-2 flex items-center text-xs font-semibold uppercase tracking-wide text-muted">
+            <span className="flex-1">History</span>
+            <button type="button" className="rounded px-1.5 py-0.5 normal-case tracking-normal hover:bg-surface-2 hover:text-ink" onClick={() => showSide(false)}>Hide</button>
+          </div>
+          {side ? <HistoryList chats={side} active={a.chat?.id} onPick={pick} onDelete={remove} /> : <p className="text-sm text-muted">Loading…</p>}
+        </nav>
+      )}
       <div className="flex min-h-[70vh] min-w-0 flex-1 flex-col">{view}</div>
     </section>
   );
@@ -615,19 +651,24 @@ function Message({ msg, live, sem }: { msg: ChatMessage; live: boolean; sem?: st
   );
 }
 
-function HistoryList({ chats, active, onPick }: { chats: ChatSummary[]; active?: string; onPick: (id: string) => void }) {
+/** Saved chats, newest first; each can be deleted, or all at once (onDelete asks first). */
+function HistoryList({ chats, active, onPick, onDelete }: { chats: ChatSummary[]; active?: string; onPick: (id: string) => void; onDelete: (id?: string) => void }) {
   if (!chats.length) return <p className="text-sm text-muted">No chats yet.</p>;
   return (
-    <ul className="flex flex-col gap-1">
-      {chats.map((c) => (
-        <li key={c.id}>
-          <button type="button" onClick={() => onPick(c.id)} aria-current={c.id === active ? "true" : undefined}
-            className={cx("w-full rounded-lg px-3 py-2 text-left hover:bg-surface-2", c.id === active && "bg-surface-2")}>
-            <div className="truncate text-sm font-semibold">{c.title}</div>
-            <div className="text-xs text-muted">{new Date(c.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}{c.tool ? ` · ${c.tool}` : ""}</div>
-          </button>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="flex flex-col gap-1">
+        {chats.map((c) => (
+          <li key={c.id} className={cx("group flex items-center rounded-lg hover:bg-surface-2", c.id === active && "bg-surface-2")}>
+            <button type="button" onClick={() => onPick(c.id)} aria-current={c.id === active ? "true" : undefined} className="min-w-0 flex-1 px-3 py-2 text-left">
+              <div className="truncate text-sm font-semibold">{c.title}</div>
+              <div className="text-xs text-muted">{new Date(c.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}{c.tool ? ` · ${c.tool}` : ""}</div>
+            </button>
+            <button type="button" aria-label={`Delete ${c.title}`} title="Delete this chat" onClick={() => onDelete(c.id)}
+              className="mr-1 grid size-8 shrink-0 place-items-center rounded-full text-muted hover:bg-bad-bg hover:text-bad sm:opacity-0 sm:focus:opacity-100 sm:group-hover:opacity-100">🗑</button>
+          </li>
+        ))}
+      </ul>
+      <button type="button" onClick={() => onDelete()} className="mt-3 rounded-full px-3 py-1.5 text-xs text-muted hover:bg-bad-bg hover:text-bad">Delete all chats</button>
+    </>
   );
 }

@@ -71,6 +71,17 @@ test("actions, guard, run and follow-up", async (t) => {
 
   const { chats } = await json(fetch(`${base}/api/ai/chats`));
   assert.equal(chats[0].id, chatId);
+
+  // deleting: needs the app's token; one chat, then all of them
+  const del = (path: string, t = token) => fetch(`${base}${path}`, { method: "DELETE", headers: { "X-OUC-AI": t } });
+  assert.equal((await del(`/api/ai/chats/${chatId}`, "nope")).status, 403);
+  assert.equal((await del("/api/ai/chats/not-a-chat")).status, 404);
+  const other = (await sse(await post("/api/ai/run", { message: "another one" }))).find((e) => e.type === "chat")?.id;
+  assert.deepEqual(await json(del(`/api/ai/chats/${chatId}`)), { deleted: 1, kept: 0 });
+  assert.equal((await fetch(`${base}/api/ai/chats/${chatId}`)).status, 404);
+  assert.deepEqual((await json(fetch(`${base}/api/ai/chats`))).chats.map((c: { id: string }) => c.id), [other]);
+  assert.deepEqual(await json(del("/api/ai/chats")), { deleted: 1, kept: 0 });
+  assert.deepEqual((await json(fetch(`${base}/api/ai/chats`))).chats, []);
 });
 
 test("a failing agent reports its error", async (t) => {

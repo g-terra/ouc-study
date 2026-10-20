@@ -75,6 +75,13 @@ export function useActions(): AiAction[] {
 }
 
 export const listChats = (): Promise<ChatSummary[]> => fetch("/api/ai/chats").then((r) => r.json()).then((j) => j.chats ?? []).catch(() => []);
+/** Deletes a saved chat, or all of them (running chats are kept): what was deleted and kept, or why not. */
+export async function deleteChats(id?: string): Promise<{ deleted: number; kept: number; error?: string }> {
+  const res = await fetch(`/api/ai/chats${id ? `/${encodeURIComponent(id)}` : ""}`, { method: "DELETE", headers: { "X-OUC-AI": await token() } }).catch(() => null);
+  const j = await res?.json().catch(() => ({})) ?? {};
+  if (res?.status === 403) refreshAi(true); // the app server restarted: get a new token
+  return res?.ok ? { deleted: j.deleted ?? 0, kept: j.kept ?? 0 } : { deleted: 0, kept: 0, error: j.error ?? "Couldn't delete. Is the app still running?" };
+}
 export const getChat = (id: string): Promise<Chat | null> => fetch(`/api/ai/chats/${encodeURIComponent(id)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
 /** Background AI work (missing notes and prep packs): what's running, what's queued, how far along. */

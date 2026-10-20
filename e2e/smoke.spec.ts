@@ -142,3 +142,34 @@ test("Ask AI expands to a full page and back to the pop-up, keeping what's typed
   await expect(page).toHaveURL(/\/2026-Demo\/courses$/);
   await expect(popup.getByRole("textbox", { name: "Message" })).toHaveValue("Explain week 1 in depth");
 });
+
+test("chat history can be hidden on the full page, and chats deleted one by one or all at once", async ({ page }) => {
+  // made-up chats served by the test, so your own saved chats are never touched
+  let chats = ["one", "two", "three"].map((id, i) => ({ id: `chat-${id}`, title: `Chat ${id}`, updatedAt: `2026-10-0${3 - i}T10:00:00Z` }));
+  await page.route("**/api/ai/chats**", (route) => {
+    const id = new URL(route.request().url()).pathname.split("/api/ai/chats")[1].replace(/^\//, "");
+    if (route.request().method() === "DELETE") {
+      const before = chats.length;
+      chats = id ? chats.filter((c) => c.id !== id) : [];
+      return route.fulfill({ json: { deleted: before - chats.length, kept: 0 } });
+    }
+    const c = chats.find((x) => x.id === id);
+    return id ? route.fulfill(c ? { json: { ...c, messages: [] } } : { status: 404, json: {} }) : route.fulfill({ json: { chats } });
+  });
+  page.on("dialog", (d) => d.accept());
+  await page.goto(`${SEM}/chat`);
+  const side = page.getByRole("navigation", { name: "Chat history" });
+  await expect(side.getByText("Chat two")).toBeVisible();
+  await side.getByRole("button", { name: "Delete Chat two" }).click();
+  await expect(side.getByText("Chat two")).toBeHidden();
+  await expect(side.getByText("Chat one")).toBeVisible();
+  // hidden stays hidden after a reload
+  await side.getByRole("button", { name: "Hide" }).click();
+  await expect(side).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "Ask AI" })).toBeVisible();
+  await expect(side).toBeHidden();
+  await page.getByRole("button", { name: "Show history" }).click();
+  await side.getByRole("button", { name: "Delete all chats" }).click();
+  await expect(side.getByText("No chats yet.")).toBeVisible();
+});
