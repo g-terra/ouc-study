@@ -1,10 +1,11 @@
 // Which models the Ask AI panel offers, and how a picked one reaches each tool's command line.
 import test from "node:test";
+import { explainError } from "../src/api.ts";
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AGENT_MODELS, agentCommand, codexModelsAsync, loadConfig, ownDefault, parseCodexModels, setServerModels, toolModels, type AiConfig, type LocalModel } from "../src/providers.ts";
+import { AGENT_MODELS, agentCommand, codexModelsAsync, loadConfig, longContextModel, ownDefault, preferLongContext, parseCodexModels, setServerModels, toolModels, type AiConfig, type LocalModel } from "../src/providers.ts";
 
 const noHome = mkdtempSync(join(tmpdir(), "ouc-home-"));   // no Claude Code or Codex settings
 const ollama: LocalModel = { kind: "ollama", baseUrl: "http://127.0.0.1:11434", model: "qwen3:8b", models: ["qwen3:8b", "llama3.2"] };
@@ -91,4 +92,37 @@ test("opencode set up outside `ouc ai setup`: its model and server are read from
   // what `ouc ai setup` saved still wins
   writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "opencode", opencode: ollama }));
   assert.equal(loadConfig(root)?.opencode?.model, "qwen3:8b");
+});
+
+test("a model picked for opencode gets the 32k context window it needs", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-ctx-"));
+  const calls: string[][] = [];
+  const run = async (_bin: string, args: string[]) => { calls.push(args); return { ok: true, out: "" }; };
+  // Ollama: a copy with a 32k window, made once (then it's in the list)
+  assert.equal(await longContextModel(root, ollama, "gemma4:26b", { run, bin: "ollama" }), "gemma4-32k:26b");
+  assert.deepEqual(calls.shift(), ["create", "gemma4-32k:26b", "-f", join(root, ".ouc", "Modelfile")]);
+  assert.match(readFileSync(join(root, ".ouc/Modelfile"), "utf8"), /FROM gemma4:26b\nPARAMETER num_ctx 32768/);
+  assert.equal(await longContextModel(root, { ...ollama, models: ["llama3-32k:latest"] }, "llama3", { run, bin: "ollama" }), "llama3-32k:latest");
+  assert.equal(await longContextModel(root, ollama, "qwen3-32k:8b", { run, bin: "ollama" }), "qwen3-32k:8b");
+  assert.equal(calls.length, 0);
+  // LM Studio: loaded with Context Length 32768, once
+  const lms: LocalModel = { kind: "lmstudio", baseUrl: "http://localhost:1234/v1", model: "qwen/qwen3-8b" };
+  assert.equal(await longContextModel(root, lms, "openai/gpt-oss-20b", { run, bin: "lms" }), "openai/gpt-oss-20b");
+  assert.deepEqual(calls, [["unload", "openai/gpt-oss-20b"], ["load", "openai/gpt-oss-20b", "--context-length", "32768", "--yes"]]);
+  await longContextModel(root, lms, "openai/gpt-oss-20b", { run, bin: "lms" });
+  assert.equal(calls.length, 2);
+  // it can't be done: says what to do
+  const fails = async () => ({ ok: false, out: "out of memory" });
+  await assert.rejects(longContextModel(root, ollama, "big:70b", { run: fails, bin: "ollama" }), /Couldn't give big:70b a 32k context window.*out of memory.*Pick another model/);
+  await assert.rejects(longContextModel(root, lms, "x/y", { run: fails, bin: "lms" }), /Context Length 32768/);
+});
+
+test("Ollama's list shows the 32k copy instead of the model it was made from", () => {
+  assert.deepEqual(preferLongContext(["gpt-oss:20b", "gpt-oss-32k:20b", "gemma4:26b", "llama3", "llama3-32k:latest"]), ["gpt-oss-32k:20b", "gemma4:26b", "llama3-32k:latest"]);
+});
+
+test("opencode's context errors say what to do", () => {
+  assert.match(explainError("opencode", "gemma4:26b", "The compaction request cannot be reduced further without losing the latest exchange or checkpoint"), /^gemma4:26b ran out of room.*32k context window.*New chat/);
+  assert.equal(explainError("claude", "opus", "The compaction request cannot be reduced further"), "The compaction request cannot be reduced further");
+  assert.equal(explainError("opencode", undefined, "boom"), "boom");
 });

@@ -35,7 +35,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
-import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, saveConfig, codexModelsAsync, loginStatusAsync, serverUp, setServerModels, toolModels, writeOpencodeConfig, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
+import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, longContextModel, preferLongContext, saveConfig, codexModelsAsync, loginStatusAsync, serverUp, setServerModels, toolModels, writeOpencodeConfig, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
 import { buildPrompt, chatSystem, listActions, prepPath, quizPath, quizScope, weeksWithoutNotes, weeksWithoutQuiz, type Params } from "./actions.ts";
 import { parseQuiz } from "../../content/src/quiz.ts";
 import { currentSemesterId, loadData, read } from "./context.ts";
@@ -130,7 +130,8 @@ export async function aiStatus(root: string): Promise<AiStatus> {
   if (cfg?.local) tools.push({ id: "local", label: TOOL_LABEL.local, ...(await server(cfg.local)) });
   // the models Ollama or LM Studio has right now, to pick from (opencode and plain local models)
   const live = (s?: LocalModel) => (s?.kind === "ollama" ? d.ollama?.models : s?.kind === "lmstudio" ? d.lmstudio?.models : undefined);
-  setServerModels("opencode", live(ocServer ?? undefined));
+  const ocLive = live(ocServer ?? undefined);
+  setServerModels("opencode", ocServer?.kind === "ollama" && ocLive ? preferLongContext(ocLive) : ocLive);
   setServerModels("local", live(cfg?.local));
   // opencode with no model saved anywhere still offers what the server has
   const offer = { ...cfg, opencode: ocServer ?? undefined };
@@ -264,6 +265,13 @@ function readRaw(req: IncomingMessage, max: number): Promise<Buffer> {
 }
 
 /** Connect-style middleware. opts.bin overrides the agent binary and opts.status the sign-in check (tests). */
+/** An agent's error, in words the student can act on (opencode's "compaction" error means the model's context window is too small). */
+export function explainError(tool: string, model: string | undefined, message: string): string {
+  if (tool === "opencode" && /compaction|context (length|window|size)|too (long|many tokens)|exceeds? the (context|maximum)/i.test(message))
+    return `${model ?? "This model"} ran out of room for the chat: opencode needs a model with a 32k context window. Pick another model next to Send (or set the default back in Settings, AI tools), then start a New chat.`;
+  return message;
+}
+
 export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
   widenPath();
   const token = randomBytes(18).toString("base64url");   // only pages served by this app can read it
@@ -286,12 +294,18 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     const offered = toolModels(cfg, tool);
     const model = body.model || offered.setting;
     if (model && !offered.models.includes(model)) return fail(`${TOOL_LABEL[tool as keyof typeof TOOL_LABEL]} can't use the model "${model}" here.`);
-    // opencode only runs models its config lists: add one the server has that `ouc ai setup` didn't save
-    if (model && tool === "opencode" && cfg.opencode && !(cfg.opencode.models ?? [cfg.opencode.model]).includes(model)) {
-      cfg.opencode = { ...cfg.opencode, models: [...new Set([cfg.opencode.model, ...(cfg.opencode.models ?? []), model])] };
-      writeOpencodeConfig(root, cfg.opencode);
-      saveConfig(root, { ...(loadConfig(root) ?? { tool: null }), opencode: cfg.opencode });
-    }
+    // a model other than the one `ouc ai setup` prepared: give it the 32k window opencode needs, and
+    // add it to opencode's config (opencode only runs models it lists)
+    const oc = cfg.opencode;
+    const ready: Promise<string | undefined> = !(model && tool === "opencode" && oc && model !== oc.model) ? Promise.resolve(model)
+      : longContextModel(root, oc, model).then((m) => {
+        if (!(oc.models ?? [oc.model]).includes(m)) {
+          cfg.opencode = { ...oc, models: [...new Set([oc.model, ...(oc.models ?? []), m])] };
+          writeOpencodeConfig(root, cfg.opencode);
+          saveConfig(root, { ...(loadConfig(root) ?? { tool: null }), opencode: cfg.opencode });
+        }
+        return m;
+      });
     const semId = body.sem && existsSync(join(root, "semesters", body.sem)) ? body.sem : currentSemesterId(root);
     let data: SemesterData;
     try { data = semId ? loadData(root, semId) : ({ courses: [], notes: [], assignments: [] } as unknown as SemesterData); } catch (e) { return fail((e as Error).message, 500); }
@@ -352,12 +366,13 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
       if (e.type === "session") turnChat.sessionId = e.id;
       else if (e.type === "tool") reply.steps.push(e.label);
       else if (e.type === "file") { if (!e.path || reply.files.includes(e.path)) return; reply.files.push(e.path); saveChat(root, turnChat); }
-      else if (e.type === "error") reply.error = e.message;
+      else if (e.type === "error") reply.error = e.message = explainError(tool, model, e.message);
       send(e);
     };
     const onStart = ({ stop }: RunHandle) => { live.stop = stop; };
     const done = (isAgentic(tool)
-      ? runAgentTurn(root, cfg, prompt, { resume: sameTool ? chat.sessionId : undefined, model, onEvent, onStart, bin: opts.bin })
+      ? ready.then((m) => runAgentTurn(root, cfg, prompt, { resume: sameTool ? turnChat.sessionId : undefined, model: m, onEvent, onStart, bin: opts.bin }),
+        (e: Error) => { onEvent({ type: "error", message: e.message }); return { ok: false }; })
       : runChatTurn(model ? { ...cfg.local!, model } : cfg.local!, [{ role: "system", content: chatSystem({ root, semId: semId ?? "", data, action, params }) },
         ...chat.messages.slice(0, -1).map((m) => ({ role: m.role, content: m.role === "user" ? m.prompt ?? m.text : m.text }))], { onEvent, onStart }))
       .then((r) => {

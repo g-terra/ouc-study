@@ -115,15 +115,16 @@ test("opencode can use any model the local server has: it's added to opencode's 
   writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "opencode", opencode }));
   mkdirSync(join(root, ".opencode"));
   writeFileSync(join(root, ".opencode/opencode.json"), "{}");
-  setServerModels("opencode", ["qwen3:8b", "gemma3:4b"]);   // what Ollama has (read with the status)
+  setServerModels("opencode", ["qwen3:8b", "gemma3:4b", "gemma3-32k:4b"]);   // what Ollama has (read with the status)
   const { token } = await json(fetch(`${base}/api/ai/status`));
   const post = (body: object) => fetch(`${base}/api/ai/run`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
   assert.equal((await post({ message: "hi", model: "not-there" })).status, 400);
+  // gemma3:4b runs as its copy with a 32k context window (opencode needs one)
   await sse(await post({ message: "hi", model: "gemma3:4b" }));
   const oc = JSON.parse(readFileSync(join(root, ".opencode/opencode.json"), "utf8"));
-  assert.deepEqual(Object.keys(oc.provider.ollama.models), ["qwen3:8b", "gemma3:4b"]);
+  assert.deepEqual(Object.keys(oc.provider.ollama.models), ["qwen3:8b", "gemma3-32k:4b"]);
   assert.equal(oc.model, "ollama/qwen3:8b");   // its own default stays
-  assert.deepEqual(JSON.parse(readFileSync(join(root, ".ouc/ai.json"), "utf8")).opencode.models, ["qwen3:8b", "gemma3:4b"]);
+  assert.deepEqual(JSON.parse(readFileSync(join(root, ".ouc/ai.json"), "utf8")).opencode.models, ["qwen3:8b", "gemma3-32k:4b"]);
 });
 
 test("a failing agent reports its error", async (t) => {

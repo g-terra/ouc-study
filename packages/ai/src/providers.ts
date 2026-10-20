@@ -101,6 +101,53 @@ export function ownDefault(tool: "claude" | "codex", home = homedir()): string |
 const serverModels: Partial<Record<"opencode" | "local", string[]>> = {};
 export function setServerModels(tool: "opencode" | "local", models: string[] | undefined) { if (models?.length) serverModels[tool] = models; }
 
+/** Ollama's list without a model that has a 32k copy (gpt-oss:20b when gpt-oss-32k:20b is there): opencode runs the copy. */
+export function preferLongContext(models: string[]): string[] {
+  const long = (m: string) => { const [name, tag = "latest"] = m.split(":"); return `${name}-32k:${tag}`; };
+  return models.filter((m) => /-32k(:|$)/.test(m) || !models.includes(long(m)));
+}
+const OLLAMA_WIN = () => join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData/Local"), "Programs/Ollama/ollama.exe");
+const LMS_PATHS = [".lmstudio/bin/lms", ".cache/lm-studio/bin/lms"];
+const runCmd = (bin: string, args: string[]) => new Promise<{ ok: boolean; out: string }>((done) => {
+  let out = "";
+  const p = spawnCli(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+  p.stdout?.on("data", (d) => (out += d)); p.stderr?.on("data", (d) => (out += d));
+  p.on("error", (e) => done({ ok: false, out: e.message }));
+  p.on("close", (code) => done({ ok: code === 0, out: out.trim().split("\n").pop() ?? "" }));
+});
+const loaded = new Set<string>();
+/**
+ * opencode needs a 32k context window, and a model only has one when it's set up for it (`ouc ai setup`
+ * does that for the model it picks). For another model picked in the app: Ollama gets a copy with a 32k
+ * window (name-32k:tag), LM Studio loads it with Context Length 32768. Returns the model to run; throws
+ * an Error that says what to do when that can't be done.
+ */
+export async function longContextModel(root: string, local: LocalModel, model: string, { run = runCmd, bin: given }: { run?: typeof runCmd; bin?: string } = {}): Promise<string> {
+  if (local.kind === "ollama") {
+    if (/-32k(:|$)/.test(model)) return model;
+    const [name, tag = "latest"] = model.split(":");
+    const long = `${name}-32k:${tag}`;
+    if ([...(serverModels.opencode ?? []), ...(local.models ?? [])].includes(long)) return long;
+    const bin = given ?? which("ollama") ?? (process.platform === "win32" && existsSync(OLLAMA_WIN()) ? OLLAMA_WIN() : null);
+    if (!bin) throw new Error(`${model} needs a 32k context window for opencode. In Terminal, run: ouc ai setup`);
+    mkdirSync(join(root, ".ouc"), { recursive: true });
+    writeFileSync(join(root, ".ouc", "Modelfile"), `FROM ${model}\nPARAMETER num_ctx 32768\n`);
+    const r = await run(bin, ["create", long, "-f", join(root, ".ouc", "Modelfile")]);
+    if (!r.ok) throw new Error(`Couldn't give ${model} a 32k context window for opencode (${r.out}). Pick another model, or run: ouc ai setup`);
+    return long;
+  }
+  if (local.kind === "lmstudio") {
+    if (loaded.has(model)) return model;
+    const bin = given ?? which("lms") ?? LMS_PATHS.flatMap((p) => (process.platform === "win32" ? [`${p}.exe`] : [p])).map((p) => join(homedir(), p)).find(existsSync);
+    if (!bin) throw new Error(`In LM Studio, load ${model} with Context Length 32768 (opencode needs it), then send again.`);
+    await run(bin, ["unload", model]);   // it may be loaded with LM Studio's small default window
+    const r = await run(bin, ["load", model, "--context-length", "32768", "--yes"]);
+    if (!r.ok) throw new Error(`Couldn't load ${model} in LM Studio with a 32k context window (${r.out}). Pick another model, or load it in LM Studio with Context Length 32768.`);
+    loaded.add(model);
+  }
+  return model;
+}
+
 // Older configs used Codex's --oss mode for local models; opencode replaces it.
 export const ALIASES: Record<string, Tool> = { "codex-oss": "opencode" };
 
