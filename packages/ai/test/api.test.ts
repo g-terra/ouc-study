@@ -71,6 +71,24 @@ test("actions, guard, run and follow-up", async (t) => {
 
   const { chats } = await json(fetch(`${base}/api/ai/chats`));
   assert.equal(chats[0].id, chatId);
+
+  // a model the panel offers is passed on; anything else is refused before the agent starts
+  const { tools } = await json(fetch(`${base}/api/ai/status`));
+  assert.deepEqual(tools.find((x: { id: string }) => x.id === "claude").models, ["sonnet", "opus", "haiku"]);
+  const withModel = await sse(await post("/api/ai/run", { chatId, message: "again", model: "opus" }));
+  assert.equal(withModel.filter((e) => e.type === "text").map((e) => e.text).join(""), "Second turn. [opus]");
+  assert.equal((await post("/api/ai/run", { chatId, message: "again", model: "--dangerously-skip-permissions" })).status, 400);
+
+  // deleting: needs the app's token; one chat, then all of them
+  const del = (path: string, t = token) => fetch(`${base}${path}`, { method: "DELETE", headers: { "X-OUC-AI": t } });
+  assert.equal((await del(`/api/ai/chats/${chatId}`, "nope")).status, 403);
+  assert.equal((await del("/api/ai/chats/not-a-chat")).status, 404);
+  const other = (await sse(await post("/api/ai/run", { message: "another one" }))).find((e) => e.type === "chat")?.id;
+  assert.deepEqual(await json(del(`/api/ai/chats/${chatId}`)), { deleted: 1, kept: 0 });
+  assert.equal((await fetch(`${base}/api/ai/chats/${chatId}`)).status, 404);
+  assert.deepEqual((await json(fetch(`${base}/api/ai/chats`))).chats.map((c: { id: string }) => c.id), [other]);
+  assert.deepEqual(await json(del("/api/ai/chats")), { deleted: 1, kept: 0 });
+  assert.deepEqual((await json(fetch(`${base}/api/ai/chats`))).chats, []);
 });
 
 test("a failing agent reports its error", async (t) => {
@@ -256,7 +274,7 @@ test("the Make a quiz pop-up: the quiz is made in the background, and the page c
   const post = (body: object) => fetch(`${base}/api/ai/quiz`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
   assert.equal((await post({ sem: "S", course: "ZZZ" })).status, 400);
   assert.equal((await fetch(`${base}/api/ai/quiz`, { method: "POST", body: "{}" })).status, 403);   // needs the app's token
-  const { job } = await json(post({ sem: "S", course: "AAA", week: 1 }));
+  const { jobs: [job] } = await json(post({ sem: "S", course: "AAA", week: 1 }));
   assert.equal(job.running, true);
   assert.equal(job.quiz, "semesters/S/quizzes/AAA/week-01-intro.json");
   let jobs: Ev[] = [];
@@ -265,11 +283,56 @@ test("the Make a quiz pop-up: the quiz is made in the background, and the page c
   assert.ok(existsSync(join(root, job.quiz)));
 });
 
+/** quizSemester with a second class that has a note, so "every class" has two to make. */
+function twoClasses(root: string) {
+  quizSemester(root);
+  writeFileSync(join(root, "semesters/S/notes/AAA/week-02-more.md"), "---\ntitle: More\n---\nGrass is green.\n");
+  writeFileSync(join(root, "apps/web/public/data/S.json"), JSON.stringify({
+    courses: [{ code: "AAA", short: "AAA", title: "AAA course", weeks: [{ index: 1, name: "Week 1", label: "Intro", items: [] }, { index: 2, name: "Week 2", label: "More", items: [] }, { index: 3, name: "Week 3", label: "Empty", items: [] }] }],
+    notes: [{ code: "AAA", weekIndex: 1, slug: "week-01-intro", title: "Intro", body: "The sky is blue." }, { code: "AAA", weekIndex: 2, slug: "week-02-more", title: "More", body: "Grass is green." }], assignments: [],
+  }));
+}
+
+test("Every class: one quiz per class with material, a few at a time, then nothing left to make", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  twoClasses(root);
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude", parallel: 1 }));
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const post = (body: object) => fetch(`${base}/api/ai/quiz`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
+  const { jobs: made } = await json(post({ sem: "S", course: "AAA", every: true }));
+  assert.deepEqual(made.map((j: Ev) => j.week), ["1", "2"]);   // week 3 has no material
+  assert.deepEqual(made.map((j: Ev) => [j.running, !!j.queued]), [[true, false], [false, true]]);   // parallel: 1
+  let jobs: Ev[] = made;
+  for (let i = 0; i < 200 && jobs.some((j) => j.running || j.queued); i++) { await new Promise((ok) => setTimeout(ok, 20)); jobs = (await json(fetch(`${base}/api/ai/quiz`))).jobs; }
+  assert.deepEqual(jobs.map((j) => j.ok), [true, true]);
+  assert.ok(existsSync(join(root, "semesters/S/quizzes/AAA/week-01-intro.json")) && existsSync(join(root, "semesters/S/quizzes/AAA/week-02-more.json")));
+  const again = await post({ sem: "S", course: "AAA", every: true });
+  assert.equal(again.status, 400);
+  assert.match(((await again.json()) as Ev).error, /already has a quiz/);
+});
+
+test("Sync now also makes a quiz for every class without one, unless autoQuiz is off", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-ai-"));
+  cpSync(join(REPO, "ai/skills"), join(root, "ai/skills"), { recursive: true });
+  mkdirSync(join(root, ".ouc"), { recursive: true });
+  twoClasses(root);
+  const mw = createAiApi(root, { bin: join(HERE, "fixtures/fake-agent.mjs"), status: async () => ({ ready: true }), noAutoPrep: true });
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude", autoQuiz: false }));
+  assert.equal(mw.catchUp().quizzes, 0);
+  while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
+  assert.ok(!existsSync(join(root, "semesters/S/quizzes")));
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude" }));
+  assert.equal(mw.catchUp().quizzes, 2);
+  while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
+  assert.ok(existsSync(join(root, "semesters/S/quizzes/AAA/week-01-intro.json")) && existsSync(join(root, "semesters/S/quizzes/AAA/week-02-more.json")));
+});
+
 test("Sync now: the videos of the weeks about to get notes are transcribed first", async () => {
   const root = mkdtempSync(join(tmpdir(), "ouc-ai-"));
   cpSync(join(REPO, "ai/skills"), join(root, "ai/skills"), { recursive: true });
   mkdirSync(join(root, ".ouc"));
-  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude" }));
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude", autoQuiz: false }));
   const sem = join(root, "semesters/S");
   const video = join(sem, "courses/AAA-Course/01-Week-1/Lesson.mp4");
   mkdirSync(dirname(video), { recursive: true });
@@ -286,7 +349,7 @@ test("Sync now: the videos of the weeks about to get notes are transcribed first
     bin: join(HERE, "fixtures/fake-agent.mjs"), status: async () => ({ ready: true }),
     whisper: () => ({ label: "fake", transcribe: async (files) => { order.push("transcribe"); return files.map(() => [{ start: 0, end: 1, text: "hello" }]); } }),
   });
-  assert.deepEqual(mw.catchUp(), { notes: 1, prep: 0 });
+  assert.deepEqual(mw.catchUp(), { notes: 1, prep: 0, quizzes: 0 });
   while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
   assert.ok(existsSync(join(sem, "courses/AAA-Course/01-Week-1/Lesson.transcript.md")));
   assert.deepEqual(order, ["transcribe"]);

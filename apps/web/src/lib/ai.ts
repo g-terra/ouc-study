@@ -5,7 +5,16 @@ import { fileLink } from "./links";
 export { fileLink, linkPaths } from "./links";
 
 export type ToolState = "connected" | "signedout" | "apikey" | "missing" | "noserver" | "unknown";
-export interface AiTool { id: string; label: string; state: ToolState; detail?: string; fix?: string; chosen: boolean }
+export interface AiTool { id: string; label: string; state: ToolState; detail?: string; fix?: string; chosen: boolean; /** models the panel offers; model: the default (none: the tool's own) */ models?: string[]; model?: string }
+
+/** The model picked for each tool in the panel, remembered as that tool's default for new messages ("": its own default). */
+const MODEL_KEY = "ouc-ai-model";
+export function pickedModels(): Record<string, string> { try { return JSON.parse(localStorage.getItem(MODEL_KEY) ?? "{}") ?? {}; } catch { return {}; } }
+export function rememberModel(tool: string, model: string) {
+  const all = { ...pickedModels(), [tool]: model };
+  if (!model) delete all[tool];
+  try { localStorage.setItem(MODEL_KEY, JSON.stringify(all)); } catch { /* private mode */ }
+}
 export interface AiStatus {
   state: "checking" | "ok" | "unavailable";
   chosen?: string | null; label?: string; agentic?: boolean; ready?: boolean; reason?: string;
@@ -75,6 +84,13 @@ export function useActions(): AiAction[] {
 }
 
 export const listChats = (): Promise<ChatSummary[]> => fetch("/api/ai/chats").then((r) => r.json()).then((j) => j.chats ?? []).catch(() => []);
+/** Deletes a saved chat, or all of them (running chats are kept): what was deleted and kept, or why not. */
+export async function deleteChats(id?: string): Promise<{ deleted: number; kept: number; error?: string }> {
+  const res = await fetch(`/api/ai/chats${id ? `/${encodeURIComponent(id)}` : ""}`, { method: "DELETE", headers: { "X-OUC-AI": await token() } }).catch(() => null);
+  const j = await res?.json().catch(() => ({})) ?? {};
+  if (res?.status === 403) refreshAi(true); // the app server restarted: get a new token
+  return res?.ok ? { deleted: j.deleted ?? 0, kept: j.kept ?? 0 } : { deleted: 0, kept: 0, error: j.error ?? "Couldn't delete. Is the app still running?" };
+}
 export const getChat = (id: string): Promise<Chat | null> => fetch(`/api/ai/chats/${encodeURIComponent(id)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
 /** Background AI work (missing notes and prep packs): what's running, what's queued, how far along. */
@@ -92,6 +108,12 @@ export const refreshPrep = () => fetch("/api/ai/prep").then((r) => (r.ok ? r.jso
   .then((j) => { prepNow = j; prepListeners.forEach((l) => l(j)); });
 /** "Notes · Short name" or "Prep · CODE title" for a background job id. */
 export function workLabel(id: string, data?: SemesterData | null): string {
+  if (id.startsWith("quiz:")) {
+    const [code, week] = id.slice(5).split("/");
+    const c = data?.courses.find((x) => x.code === code);
+    const w = c?.weeks.find((x) => String(x.index) === week);
+    return `Quiz · ${c?.short ?? code}${w ? ` ${w.index === 0 ? "General" : w.label}` : ""}`;
+  }
   if (id.startsWith("notes:")) { const c = data?.courses.find((x) => x.code === id.slice(6)); return `Notes · ${c?.short ?? id.slice(6)}`; }
   const a = data?.assignments.find((x) => x.id === id);
   return `Prep · ${a ? `${a.code} ${a.title}` : id.split("/").pop()}`;

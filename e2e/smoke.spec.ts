@@ -85,6 +85,8 @@ test("a quiz's progress can be reset; Make a quiz opens a pop-up; Remove asks fi
   const dialog = page.getByRole("dialog", { name: "Make a quiz" });
   await dialog.getByText("One class").click();
   await expect(dialog.getByRole("combobox", { name: "Class", exact: true })).toHaveValue("1");
+  // "Every class" makes one quiz per class without one; the demo's only class already has a quiz
+  await expect(dialog.getByRole("radio", { name: /Every class with material already has a quiz/ })).toBeDisabled();
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
 });
@@ -163,4 +165,74 @@ test("Ask AI expands to a full page and back to the pop-up, keeping what's typed
   await page.getByRole("button", { name: "Back to the pop-up" }).click();
   await expect(page).toHaveURL(/\/2026-Demo\/courses$/);
   await expect(popup.getByRole("textbox", { name: "Message" })).toHaveValue("Explain week 1 in depth");
+});
+
+test("chat history can be hidden on the full page, and chats deleted one by one or all at once", async ({ page }) => {
+  // made-up chats served by the test, so your own saved chats are never touched
+  let chats = ["one", "two", "three"].map((id, i) => ({ id: `chat-${id}`, title: `Chat ${id}`, updatedAt: `2026-10-0${3 - i}T10:00:00Z` }));
+  await page.route("**/api/ai/chats**", (route) => {
+    const id = new URL(route.request().url()).pathname.split("/api/ai/chats")[1].replace(/^\//, "");
+    if (route.request().method() === "DELETE") {
+      const before = chats.length;
+      chats = id ? chats.filter((c) => c.id !== id) : [];
+      return route.fulfill({ json: { deleted: before - chats.length, kept: 0 } });
+    }
+    const c = chats.find((x) => x.id === id);
+    return id ? route.fulfill(c ? { json: { ...c, messages: [] } } : { status: 404, json: {} }) : route.fulfill({ json: { chats } });
+  });
+  page.on("dialog", (d) => d.accept());
+  await page.goto(`${SEM}/chat`);
+  const side = page.getByRole("navigation", { name: "Chat history" });
+  await expect(side.getByText("Chat two")).toBeVisible();
+  await side.getByRole("button", { name: "Delete Chat two" }).click();
+  await expect(side.getByText("Chat two")).toBeHidden();
+  await expect(side.getByText("Chat one")).toBeVisible();
+  // hidden stays hidden after a reload
+  await side.getByRole("button", { name: "Hide" }).click();
+  await expect(side).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "Ask AI" })).toBeVisible();
+  await expect(side).toBeHidden();
+  await page.getByRole("button", { name: "Show history" }).click();
+  await side.getByRole("button", { name: "Delete all chats" }).click();
+  await expect(side.getByText("No chats yet.")).toBeVisible();
+});
+
+test("a flow in a chat reply shows as a Mermaid diagram; code that isn't a diagram stays as code", async ({ page }) => {
+  const text = "How a neuron fires:\n\n```mermaid\nflowchart TD\n  A[Input] --> B[\"V ≥ threshold?\"]\n  B -- yes --> C[Spike]\n```\n\nNot a diagram:\n\n```mermaid\nthis is not mermaid -->\n```";
+  const chat = { id: "chat-flow", title: "Flows", updatedAt: "2026-10-01T10:00:00Z", messages: [{ role: "user", text: "Explain it" }, { role: "assistant", text }] };
+  await page.route("**/api/ai/chats**", (route) => route.fulfill({ json: route.request().url().includes("chat-flow") ? chat : { chats: [chat] } }));
+  await page.goto(`${SEM}/chat/chat-flow`);
+  const diagram = page.locator("figure[data-diagram] svg");
+  await expect(diagram).toHaveCount(1);
+  await expect(diagram).toContainText("Spike");
+  await expect(page.getByText("this is not mermaid -->")).toBeVisible();
+});
+
+test("the AI and its model are picked next to Send; the model is remembered and sent", async ({ page }) => {
+  // a made-up status: Claude Code and Codex signed in
+  const tool = (id: string, label: string, models: string[], chosen = false) => ({ id, label, state: "connected", chosen, models });
+  await page.route("**/api/ai/status**", (route) => route.fulfill({ json: {
+    chosen: "claude", label: "Claude Code", agentic: true, ready: true, reason: "", token: "t",
+    tools: [tool("claude", "Claude Code", ["sonnet", "opus", "haiku"], true), tool("codex", "Codex", ["gpt-5-codex", "gpt-5"])],
+  } }));
+  let sent: Record<string, unknown> | undefined;
+  await page.route("**/api/ai/run", (route) => {
+    sent = route.request().postDataJSON();
+    return route.fulfill({ contentType: "text/event-stream", body: 'data: {"type":"text","text":"Hi!"}\n\ndata: {"type":"done","ok":true}\n\n' });
+  });
+  await page.goto(`${SEM}/chat`);
+  const model = page.getByRole("combobox", { name: "Model" });
+  await expect(model.locator("option")).toHaveText(["Default model", "sonnet", "opus", "haiku"]);
+  await model.selectOption("opus");
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Model" })).toHaveValue("opus");
+  // another AI has its own models (and its own remembered pick)
+  await page.getByRole("combobox", { name: "Which AI answers" }).selectOption("codex");
+  await expect(page.getByRole("combobox", { name: "Model" })).toHaveValue("");
+  await page.getByRole("combobox", { name: "Which AI answers" }).selectOption("claude");
+  await page.getByRole("textbox", { name: "Message" }).fill("Hello");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Hi!")).toBeVisible();
+  expect(sent).toMatchObject({ message: "Hello", model: "opus" });
 });

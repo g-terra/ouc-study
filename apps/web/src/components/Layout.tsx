@@ -201,7 +201,7 @@ export function AiWorkBar({ sem }: { sem: string }) {
   const syncing = !!conn.syncing, transcribing = !!(tr?.busy && tr.total), ai = !!(st?.busy && st.total);
   if (!syncing && !transcribing && !ai) {
     return st?.error && !st.busy && st.total ? (
-      <div className="border-t border-line bg-bad-bg px-4 py-1.5 text-center text-xs text-bad">The AI stopped making notes and prep packs: {st.error}</div>
+      <div className="border-t border-line bg-bad-bg px-4 py-1.5 text-center text-xs text-bad">The AI stopped its background work: {st.error}</div>
     ) : null;
   }
   const label = (id: string) => workLabel(id, data);
@@ -211,7 +211,7 @@ export function AiWorkBar({ sem }: { sem: string }) {
   const [title, pct] = syncing
     ? [`🔄 ${SYNC_STEPS[(p?.step ?? 1) - 1] ?? "Syncing"}${downloading ? `: ${p.done} of ${p.total}` : "…"}`, downloading ? (p.done! / p.total!) * 100 : ((p?.step ?? 1) - 1) * 33]
     : transcribing ? [`🎧 Transcribing class videos: ${tr!.done} of ${tr!.total}`, (tr!.done / tr!.total) * 100]
-    : [`✨ AI is making notes and prep packs: ${st!.done} of ${st!.total} done`, (st!.done / st!.total) * 100];
+    : [`✨ AI is making notes, prep packs and quizzes: ${st!.done} of ${st!.total} done`, (st!.done / st!.total) * 100];
   const row = "flex flex-wrap items-center gap-x-3 gap-y-1";
   const mark = (state: "done" | "now" | "todo") => <span className={cx("w-4 shrink-0 text-center", state === "done" ? "text-ok" : state === "now" ? "text-accent" : "text-muted")}>{state === "done" ? "✓" : state === "now" ? "●" : "○"}</span>;
   return (
@@ -256,7 +256,7 @@ export function AiWorkBar({ sem }: { sem: string }) {
           )}
           {st && (ai || st.finished.length > 0) && (
             <section>
-              <h3 className="mb-1 font-semibold">AI notes and prep packs <span className="font-normal text-muted">{st.done} of {st.total} done{st.queue.length ? ` · ${st.queue.length} waiting` : ""}</span></h3>
+              <h3 className="mb-1 font-semibold">AI notes, prep packs and quizzes <span className="font-normal text-muted">{st.done} of {st.total} done{st.queue.length ? ` · ${st.queue.length} waiting` : ""}</span></h3>
               <div className="flex flex-wrap gap-1.5">
                 {st.running.map((r) => (
                   <button key={r.id} type="button" data-ask-ai onClick={() => { setOpen(true); load(r.chatId); }} title="Watch it work"

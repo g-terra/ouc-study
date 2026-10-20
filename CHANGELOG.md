@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.12.0](https://github.com/g-terra/ouc-study/compare/v0.11.0...v0.12.0) (2026-10-20)
+
+
+### Features
+
+* **ai:** draw flows in the ask ai chat as mermaid diagrams ([#71](https://github.com/g-terra/ouc-study/issues/71)) ([3417771](https://github.com/g-terra/ouc-study/commit/34177716cfccbac0aa42cc3e5d6b1b9f7aad473a))
+* **ai:** pick the ai and its model next to send ([#73](https://github.com/g-terra/ouc-study/issues/73)) ([454dcdb](https://github.com/g-terra/ouc-study/commit/454dcdbe0932603c386ff317a13a1781e4eabdf0))
+* **web:** hide the chat history list and delete saved chats ([#69](https://github.com/g-terra/ouc-study/issues/69)) ([acbd945](https://github.com/g-terra/ouc-study/commit/acbd945e561d24f0beb6816f4d10ea4b9358fde5))
+
+## [0.11.0](https://github.com/g-terra/ouc-study/compare/v0.10.0...v0.11.0) (2026-10-20)
+
+
+### Features
+
+* **web:** make a quiz for every class at once, and on sync ([#67](https://github.com/g-terra/ouc-study/issues/67)) ([ea51a1e](https://github.com/g-terra/ouc-study/commit/ea51a1e249239540bbf082a80be4a1c7e7d36f71))
+
 ## [0.10.0](https://github.com/g-terra/ouc-study/compare/v0.9.2...v0.10.0) (2026-10-20)
 
 

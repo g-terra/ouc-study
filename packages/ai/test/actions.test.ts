@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildPrompt, listActions, quizPath, weeksWithoutNotes } from "../src/actions.ts";
+import { buildPrompt, chatSystem, listActions, quizPath, weeksWithoutNotes } from "../src/actions.ts";
 import type { Course, SemesterData } from "../../content/src/types.ts";
 
 // made-up data with only the fields these prompts read
@@ -71,4 +71,11 @@ test("make a quiz is an action every AI can do, local models included", () => {
   assert.equal(a?.title, "Make a quiz");
   assert.equal(a?.agentOnly, false);
   assert.deepEqual(a?.fields.map((f) => f.key), ["course"]);
+});
+
+test("every chat is told to draw flows as Mermaid diagrams", () => {
+  const first = buildPrompt({ root: ".", semId: "S", data, message: "how does a neuron fire?" });
+  assert.match(first, /```mermaid diagram/);
+  assert.doesNotMatch(buildPrompt({ root: ".", semId: "S", data, message: "and then?", first: false }), /mermaid/);   // said once per chat
+  assert.match(chatSystem({ root: ".", semId: "S", data }), /```mermaid diagram/);   // local models too
 });

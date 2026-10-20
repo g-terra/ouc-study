@@ -10,9 +10,11 @@ import { Link, useRouter, enc } from "../lib/router";
 import { chatPathFor, isChatPath } from "../lib/chat-path";
 import { mdToHtml } from "../lib/markdown";
 import { linkLabel } from "../lib/links";
-import { TOOL_STATE, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
+import { TOOL_STATE, deleteChats, pickedModels, rememberModel, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
 import { refreshData } from "../lib/data";
 import { cx } from "./ui";
+import { renderMermaid } from "../notes/Mermaid";
+import { useTheme } from "../lib/theme";
 
 interface Draft { action: string; params: Record<string, string> }
 /** One tab in the panel: a chat (or a draft action), with its own run. */
@@ -25,7 +27,7 @@ interface Ctx {
   chat: Chat | null; busy: boolean; error?: string; draft: Draft | null; setDraft: (d: Draft | null) => void;
   /** Opens the panel with an action picked (and its inputs filled in), in a free tab; `tool` picks the AI for that tab only. */
   start: (action: string, params?: Record<string, string>, tool?: string) => void;
-  send: (sem: string, message: string, title?: string) => Promise<void>;
+  send: (sem: string, message: string, title?: string, model?: string) => Promise<void>;
   /** The coding tool for the active tab: its own, else the one picked in the panel (null = the one from `ouc ai setup`). */
   tool: string | null; setTool: (t: string | null) => void;
   stop: () => void; reset: () => void; load: (id: string) => Promise<void>;
@@ -33,6 +35,8 @@ interface Ctx {
   input: string; setInput: (s: string) => void;
   /** The chats saved before a reload are back in their tabs (they may still be loading). */
   ready: boolean;
+  /** Deletes a saved chat (or all of them, when no id) and closes their tabs; resolves to an error message, if any. */
+  remove: (id?: string) => Promise<string | undefined>;
 }
 const AssistantCtx = createContext<Ctx | null>(null);
 const store = {
@@ -139,12 +143,12 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     store.set({ chats: withChat.map((x) => x.chat?.id ?? x.loading!), active: Math.max(0, withChat.findIndex((x) => x.key === activeKey)), open });
   }, [sessions.map((x) => x.chat?.id ?? x.loading).join(), activeKey, open]);
 
-  const send = async (sem: string, message: string, title?: string) => {
+  const send = async (sem: string, message: string, title?: string, model?: string) => {
     const key = active.key;
     const { chat, draft } = active;
     const useTool = active.tool ?? tool ?? undefined;
     if (active.busy) return;
-    const body = { ...(chat ? { sem, chatId: chat.id, message } : { sem, action: draft?.action, params: draft?.params, message }), ...(useTool ? { tool: useTool } : {}) };
+    const body = { ...(chat ? { sem, chatId: chat.id, message } : { sem, action: draft?.action, params: draft?.params, message }), ...(useTool ? { tool: useTool } : {}), ...(model ? { model } : {}) };
     const user = message.trim() || null;
     let id = chat?.id, wrote = false;
     // show the message straight away; the reply fills in as events arrive
@@ -186,13 +190,25 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     if (saved) { update(key, (x) => ({ ...x, chat: saved, busy: !!saved.running })); if (saved.running) follow(key, id); }
   };
   const stop = () => { if (active.chat?.id) stopRun(active.chat.id); };
+  const remove = async (id?: string) => {
+    const r = await deleteChats(id);
+    if (r.error) return r.error;
+    // close their tabs (a running chat stays: the server keeps it too)
+    const gone = (x: Session) => !!x.chat?.id && !x.busy && (!id || x.chat.id === id);
+    let next = live.current.filter((x) => !gone(x));
+    if (!next.length) next = [blank()];
+    if (!next.some((x) => x.key === activeKey)) setActiveKey(next[next.length - 1].key);
+    live.current = next;
+    setSessions(next);
+    return r.kept ? `${r.kept} ${r.kept === 1 ? "chat is" : "chats are"} still working, so ${r.kept === 1 ? "it was" : "they were"} kept.` : undefined;
+  };
 
   return (
     <AssistantCtx.Provider value={{
       open, setOpen, sessions, activeKey: active.key, activate: setActiveKey, close,
       chat: active.chat, busy: active.busy, error: active.error, draft: active.draft,
       setDraft: (d) => update(active.key, (x) => ({ ...x, draft: d })),
-      start, send, stop, reset, load, input, setInput, ready,
+      start, send, stop, reset, load, input, setInput, ready, remove,
       tool: active.tool ?? tool,
       // a tab started for a given AI keeps its own choice; otherwise this is the default for new chats
       setTool: (t) => (active.tool ? update(active.key, (x) => ({ ...x, tool: t ?? undefined })) : setTool(t)),
@@ -216,6 +232,8 @@ export function AskAiButton({ action, params, children, className }: { action: s
 // ---------------------------------------------------------------------------
 // where "Back to the pop-up" returns to: the page the chat was expanded from
 let expandedFrom: string | null = null;
+const SIDE_KEY = "ouc-ai-history";
+const PICK = "min-w-0 truncate rounded-lg border border-line bg-surface py-1 pl-2 pr-1 text-xs text-muted hover:text-ink disabled:opacity-60";
 const BTN = "rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-ink";
 
 /** The chat as a popup over the page; it stays out of the way while the full-page chat is open. */
@@ -271,9 +289,20 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
   const { path, navigate } = useRouter();
   const { input, setInput } = a;
   const [history, setHistory] = useState<ChatSummary[] | null>(null);
-  // the full page always lists the chats on the side (wide screens); refreshed when a chat starts or ends
+  // the full page lists the chats on the side (wide screens, unless hidden); refreshed when a chat starts or ends
   const [side, setSide] = useState<ChatSummary[] | null>(null);
+  const [sideOn, setSideOn] = useState(() => { try { return localStorage.getItem(SIDE_KEY) !== "hidden"; } catch { return true; } });
+  const showSide = (on: boolean) => { setSideOn(on); try { localStorage.setItem(SIDE_KEY, on ? "shown" : "hidden"); } catch { /* private mode */ } };
   useEffect(() => { if (page) listChats().then(setSide); }, [page, a.chat?.id, a.busy]);
+  const [note, setNote] = useState<string>();
+  const remove = async (id?: string) => {
+    const n = id ? 1 : (side ?? history ?? []).length;
+    if (!window.confirm(id ? "Delete this chat? This can't be undone." : `Delete all ${n} saved chats? This can't be undone.`)) return;
+    setNote(await a.remove(id));
+    const fresh = await listChats();
+    if (page) setSide(fresh);
+    if (history) setHistory(fresh);
+  };
   const end = useRef<HTMLDivElement>(null);
   // the reply box starts at four lines and grows with what's typed (up to its max height, then it scrolls)
   const field = useRef<HTMLTextAreaElement>(null);
@@ -290,15 +319,21 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
     : ai.state !== "ok" ? undefined
     : !picked ? (ai.reason || "No AI chosen yet. In Terminal, run: ouc ai setup")
     : !ready ? `${picked.label}: ${picked.detail ?? "not ready"}${picked.fix ? `. Fix: ${picked.fix}` : ""}` : undefined;
+  // the model for the picked AI: the one picked for it last (if it still has it), else its default
+  const [models, setModels] = useState(pickedModels);
+  const model = picked && picked.models?.includes(models[picked.id]) ? models[picked.id] : "";
+  const pickModel = (m: string) => { if (!picked) return; rememberModel(picked.id, m); setModels(pickedModels()); };
   const needsAgent = meta?.agentOnly && ai.state === "ok" && !agentic ? `"${meta.title}" needs Claude Code, Codex or opencode.` : undefined;
   const canSend = !a.busy && !blocked && !needsAgent && (a.chat ? !!input.trim() : !!a.draft || !!input.trim());
   const submit = async () => {
     if (!canSend) return;
     const msg = input;
     setInput("");
-    await a.send(data.id, msg, meta?.title);
+    await a.send(data.id, msg, meta?.title, model || undefined);
   };
   const pick = async (id: string) => { setHistory(null); await a.load(id); };
+  // on the full page's wide layout, History shows or hides the side list; otherwise it opens the list in place
+  const wide = () => page && window.matchMedia("(min-width: 1024px)").matches;
   const expand = () => {
     expandedFrom = path;
     a.setOpen(false);
@@ -315,7 +350,7 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
   const conversation = (
     <>
       {history ? (
-        <HistoryList chats={history} onPick={pick} />
+        <HistoryList chats={history} onPick={pick} onDelete={remove} />
       ) : !a.chat ? (
         <>
           {!a.draft && <Intro />}
@@ -328,6 +363,7 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
         </div>
       )}
       {a.error && <p className="mt-4 rounded-xl bg-bad-bg px-3 py-2 text-sm text-bad">{a.error}</p>}
+      {note && <p role="status" className="mt-4 rounded-xl bg-warn-bg px-3 py-2 text-sm text-warn">{note} <button type="button" className="underline" onClick={() => setNote(undefined)}>OK</button></p>}
       <div ref={end} className={cx(page && "scroll-mb-48")} />
     </>
   );
@@ -337,22 +373,11 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
       <header className={cx("flex items-center gap-2 border-b border-line", page ? "pb-3" : "px-4 py-3")}>
         <div className="min-w-0 flex-1">
           {page ? <h1 className="font-serif text-2xl font-semibold leading-tight">Ask AI</h1> : <div className="font-serif text-lg font-semibold leading-tight">Ask AI</div>}
-          <div className="flex items-center gap-1.5 truncate text-xs text-muted">
-            <span className={cx("inline-block size-2 shrink-0 rounded-full", ai.state === "checking" ? "animate-pulse bg-muted" : ready ? "bg-ok" : "bg-warn")} />
-            {ai.state === "ok" && ai.tools.some((t) => t.state !== "missing") ? (
-              <select aria-label="Which AI answers" value={picked?.id ?? ""} disabled={a.busy}
-                onChange={(e) => a.setTool(ai.tools.find((t) => t.id === e.target.value)?.chosen ? null : e.target.value)}
-                className="-ml-1 min-w-0 truncate rounded bg-transparent py-0.5 pr-1 text-xs text-muted hover:text-ink">
-                {!picked && <option value="">Choose an AI</option>}
-                {ai.tools.filter((t) => t.state !== "missing").map((t) => (
-                  <option key={t.id} value={t.id}>{t.id === "opencode" || t.id === "local" ? `${t.label}${t.detail && t.state === "connected" ? ` · ${t.detail}` : ""}` : t.label}{t.state === "connected" ? "" : ` (${TOOL_STATE[t.state].text.toLowerCase()})`}</option>
-                ))}
-              </select>
-            ) : ai.state === "checking" ? "Checking your AI…" : ai.label ?? "No AI chosen"}
-          </div>
         </div>
-        <button type="button" className={cx(BTN, page && "lg:hidden")}
-          onClick={async () => setHistory(history ? null : await listChats())}>History</button>
+        <button type="button" className={BTN} aria-pressed={page ? undefined : !!history}
+          onClick={async () => (wide() ? showSide(!sideOn) : setHistory(history ? null : await listChats()))}>
+          {page ? <><span className="hidden lg:inline">{sideOn ? "Hide history" : "Show history"}</span><span className="lg:hidden">History</span></> : "History"}
+        </button>
         <button type="button" className={cx(BTN, "disabled:opacity-40")} disabled={!a.chat && !a.draft}
           onClick={() => { a.reset(); setHistory(null); }}>New chat</button>
         {page ? (
@@ -376,11 +401,34 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
           </p>
         )}
         {(meta?.id === "assignment-helper" || meta?.id === "assignment-prep") && <p className="mb-2 text-xs text-muted">The AI explains, hints and reviews; it won't write answers for you to submit.</p>}
-        <div className="flex items-end gap-2">
-          <textarea ref={field} value={input} onChange={(e) => setInput(e.target.value)} rows={4} aria-label="Message"
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-            placeholder={a.chat ? "Reply…" : a.draft ? "Anything to add? (optional)" : "Ask anything about your courses…"}
-            className="max-h-64 min-h-[6.5rem] flex-1 resize-none rounded-xl border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-muted" />
+        <textarea ref={field} value={input} onChange={(e) => setInput(e.target.value)} rows={4} aria-label="Message"
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
+          placeholder={a.chat ? "Reply…" : a.draft ? "Anything to add? (optional)" : "Ask anything about your courses…"}
+          className="block max-h-64 min-h-[6.5rem] w-full resize-none rounded-xl border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-muted" />
+        {/* which AI answers (and its model), next to Send */}
+        <div className="mt-2 flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted">
+            <span className={cx("inline-block size-2 shrink-0 rounded-full", ai.state === "checking" ? "animate-pulse bg-muted" : ready ? "bg-ok" : "bg-warn")} />
+            {ai.state === "ok" && ai.tools.some((t) => t.state !== "missing") ? (
+              <>
+                <select aria-label="Which AI answers" value={picked?.id ?? ""} disabled={a.busy}
+                  onChange={(e) => a.setTool(ai.tools.find((t) => t.id === e.target.value)?.chosen ? null : e.target.value)}
+                  className={cx(PICK, "max-w-[11rem]")}>
+                  {!picked && <option value="">Choose an AI</option>}
+                  {ai.tools.filter((t) => t.state !== "missing").map((t) => (
+                    <option key={t.id} value={t.id}>{t.id === "opencode" || t.id === "local" ? `${t.label}${t.detail && t.state === "connected" ? ` · ${t.detail}` : ""}` : t.label}{t.state === "connected" ? "" : ` (${TOOL_STATE[t.state].text.toLowerCase()})`}</option>
+                  ))}
+                </select>
+                {!!picked?.models?.length && (
+                  <select aria-label="Model" title="The model for this AI (remembered as its default)" value={model} disabled={a.busy}
+                    onChange={(e) => pickModel(e.target.value)} className={cx(PICK, "max-w-[9rem]")}>
+                    <option value="">{picked.model ? `Default (${picked.model})` : "Default model"}</option>
+                    {picked.models.filter((m) => m !== picked.model).map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                )}
+              </>
+            ) : <span className="truncate">{ai.state === "checking" ? "Checking your AI…" : ai.label ?? "No AI chosen"}</span>}
+          </div>
           {a.busy
             ? <button type="button" onClick={a.stop} className="rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold">Stop</button>
             : <button type="button" onClick={submit} disabled={!canSend} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-bg disabled:opacity-40">{!a.chat && a.draft ? "Start" : "Send"}</button>}
@@ -392,10 +440,15 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
   if (!page) return view;
   return (
     <section aria-label="Ask AI" className="flex gap-8">
-      <nav aria-label="Chat history" className="sticky top-24 hidden max-h-[calc(100vh-8rem)] w-64 shrink-0 self-start overflow-y-auto lg:block">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">History</div>
-        {side ? <HistoryList chats={side} active={a.chat?.id} onPick={pick} /> : <p className="text-sm text-muted">Loading…</p>}
-      </nav>
+      {sideOn && (
+        <nav aria-label="Chat history" className="sticky top-24 hidden max-h-[calc(100vh-8rem)] w-64 shrink-0 self-start overflow-y-auto lg:block">
+          <div className="mb-2 flex items-center text-xs font-semibold uppercase tracking-wide text-muted">
+            <span className="flex-1">History</span>
+            <button type="button" className="rounded px-1.5 py-0.5 normal-case tracking-normal hover:bg-surface-2 hover:text-ink" onClick={() => showSide(false)}>Hide</button>
+          </div>
+          {side ? <HistoryList chats={side} active={a.chat?.id} onPick={pick} onDelete={remove} /> : <p className="text-sm text-muted">Loading…</p>}
+        </nav>
+      )}
       <div className="flex min-h-[70vh] min-w-0 flex-1 flex-col">{view}</div>
     </section>
   );
@@ -514,15 +567,36 @@ function RunningTasks({ sem }: { sem: string }) {
   );
 }
 
-/** A reply in Markdown; file paths in it link to the app's pages (notes, assignments) or open the file. */
-export function Markdown({ text, className, sem }: { text: string; className?: string; sem?: string }) {
+/** A reply in Markdown; file paths in it link to the app's pages (notes, assignments) or open the file; ```mermaid blocks become diagrams. */
+export function Markdown({ text, className, sem, diagrams = true }: { text: string; className?: string; sem?: string; diagrams?: boolean }) {
   const { setOpen } = useAssistant();
+  const box = useRef<HTMLDivElement>(null);
+  const html = mdToHtml(text, sem);
+  const { theme } = useTheme();
+  useEffect(() => { if (diagrams && box.current) drawDiagrams(box.current); }, [html, theme, diagrams]);
   return (
-    <div className={cx("text-sm leading-relaxed [&_a]:underline [&_a_code]:text-accent [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:break-all [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_pre_code]:break-normal [&_pre_code]:whitespace-pre [&_ul]:list-disc", className)}
+    <div ref={box} className={cx("text-sm leading-relaxed [&_a]:underline [&_a_code]:text-accent [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:break-all [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_pre_code]:break-normal [&_pre_code]:whitespace-pre [&_ul]:list-disc", className)}
       // file paths open their page (the router follows the link); on phones the chat covers the page, so close it
       onClick={(e) => { if ((e.target as HTMLElement).closest("a[data-internal]") && !window.matchMedia("(min-width: 640px)").matches) setOpen(false); }}
-      dangerouslySetInnerHTML={{ __html: mdToHtml(text, sem) }} />
+      dangerouslySetInnerHTML={{ __html: html }} />
   );
+}
+
+/** Swaps each ```mermaid code block for its diagram (again on a theme change); a block that isn't a valid diagram stays as code. */
+function drawDiagrams(root: HTMLElement) {
+  const blocks = [...root.querySelectorAll<HTMLElement>("pre > code.language-mermaid")].map((c) => ({ el: c.parentElement!, code: c.textContent ?? "" }))
+    .concat([...root.querySelectorAll<HTMLElement>("[data-mermaid]")].map((el) => ({ el, code: el.dataset.mermaid ?? "" })));
+  for (const { el, code } of blocks) {
+    renderMermaid(code).then((svg) => {
+      if (!el.isConnected) return;
+      const fig = document.createElement("figure");
+      fig.dataset.mermaid = code;
+      fig.dataset.diagram = "";
+      fig.className = "my-3 grid place-items-center overflow-x-auto rounded-xl border border-line bg-surface p-3 [&_svg]:max-w-full";
+      fig.innerHTML = svg;
+      el.replaceWith(fig);
+    }).catch(() => { /* not a valid diagram: the code stays */ });
+  }
 }
 
 const PREP_MODE: Record<string, string> = {
@@ -589,7 +663,7 @@ function Message({ msg, live, sem }: { msg: ChatMessage; live: boolean; sem?: st
           {!steps.length && !msg.text && <p className="pl-6">Reading your request and the study files to work out what to do.</p>}
           {steps.length > LIVE_STEPS && <div className="pl-6">… {steps.length - LIVE_STEPS} earlier</div>}
           <ul className="flex flex-col gap-0.5 pl-6">{steps.slice(-LIVE_STEPS).map((s, i, a) => <li key={steps.length - LIVE_STEPS + i} className={cx("truncate", i === a.length - 1 && "font-medium text-ink")}>{s}</li>)}</ul>
-          {msg.text && <div className="mt-2 flex max-h-36 flex-col justify-end overflow-hidden border-t border-line pt-1 [mask-image:linear-gradient(to_bottom,transparent,black_2.5rem)]"><Markdown text={msg.text} sem={sem} className="text-ink" /></div>}
+          {msg.text && <div className="mt-2 flex max-h-36 flex-col justify-end overflow-hidden border-t border-line pt-1 [mask-image:linear-gradient(to_bottom,transparent,black_2.5rem)]"><Markdown text={msg.text} sem={sem} className="text-ink" diagrams={false} /></div>}
         </div>
       ) : (
         <>
@@ -615,19 +689,24 @@ function Message({ msg, live, sem }: { msg: ChatMessage; live: boolean; sem?: st
   );
 }
 
-function HistoryList({ chats, active, onPick }: { chats: ChatSummary[]; active?: string; onPick: (id: string) => void }) {
+/** Saved chats, newest first; each can be deleted, or all at once (onDelete asks first). */
+function HistoryList({ chats, active, onPick, onDelete }: { chats: ChatSummary[]; active?: string; onPick: (id: string) => void; onDelete: (id?: string) => void }) {
   if (!chats.length) return <p className="text-sm text-muted">No chats yet.</p>;
   return (
-    <ul className="flex flex-col gap-1">
-      {chats.map((c) => (
-        <li key={c.id}>
-          <button type="button" onClick={() => onPick(c.id)} aria-current={c.id === active ? "true" : undefined}
-            className={cx("w-full rounded-lg px-3 py-2 text-left hover:bg-surface-2", c.id === active && "bg-surface-2")}>
-            <div className="truncate text-sm font-semibold">{c.title}</div>
-            <div className="text-xs text-muted">{new Date(c.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}{c.tool ? ` · ${c.tool}` : ""}</div>
-          </button>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="flex flex-col gap-1">
+        {chats.map((c) => (
+          <li key={c.id} className={cx("group flex items-center rounded-lg hover:bg-surface-2", c.id === active && "bg-surface-2")}>
+            <button type="button" onClick={() => onPick(c.id)} aria-current={c.id === active ? "true" : undefined} className="min-w-0 flex-1 px-3 py-2 text-left">
+              <div className="truncate text-sm font-semibold">{c.title}</div>
+              <div className="text-xs text-muted">{new Date(c.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}{c.tool ? ` · ${c.tool}` : ""}</div>
+            </button>
+            <button type="button" aria-label={`Delete ${c.title}`} title="Delete this chat" onClick={() => onDelete(c.id)}
+              className="mr-1 grid size-8 shrink-0 place-items-center rounded-full text-muted hover:bg-bad-bg hover:text-bad sm:opacity-0 sm:focus:opacity-100 sm:group-hover:opacity-100">🗑</button>
+          </li>
+        ))}
+      </ul>
+      <button type="button" onClick={() => onDelete()} className="mt-3 rounded-full px-3 py-1.5 text-xs text-muted hover:bg-bad-bg hover:text-bad">Delete all chats</button>
+    </>
   );
 }
