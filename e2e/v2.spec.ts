@@ -166,3 +166,13 @@ test("v2: an open week groups its items under Watch, Read, My notes and Practice
   await expect(week.getByRole("heading", { name: "Watch" }).locator("..")).toContainText("transcript");
   await expect(week.getByRole("heading", { name: "Practice" }).locator("..").getByRole("button", { name: /Quiz me/ })).toBeVisible();
 });
+
+test("v2: course cards count in the singular, and the bell's drop-down fits on a phone", async ({ page }) => {
+  await page.goto(`/v2${SEM}/courses`);
+  await expect(page.getByText(/1 note · .*1 quiz$/)).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: /^Notifications/ }).click();
+  const box = await page.getByRole("dialog", { name: "Notifications" }).boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+});
