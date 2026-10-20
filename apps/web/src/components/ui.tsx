@@ -95,3 +95,14 @@ export function FileCard({ file, label }: { file: FileRef; label: string }) {
 export function Empty({ children }: { children: ReactNode }) {
   return <p className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">{children}</p>;
 }
+
+/** An on/off setting: a sliding switch (a button with role="switch"; Space and Enter flip it), in the theme's accent colour. */
+export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (on: boolean) => void; label: string; disabled?: boolean }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}
+      className={cx("relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50",
+        checked ? "border-accent bg-accent" : "border-line bg-surface-2")}>
+      <span aria-hidden className={cx("inline-block size-[18px] rounded-full shadow transition-transform", checked ? "translate-x-[21px] bg-bg" : "translate-x-[2px] bg-muted")} />
+    </button>
+  );
+}

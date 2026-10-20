@@ -121,7 +121,12 @@ test("settings: video transcripts are optional; Set up Whisper, then an on/off s
   await expect(box).toContainText("whisper.cpp (small)");
   await sw.uncheck();
   await expect(box).toContainText("Off");
-  expect(posted).toEqual([{ setup: true }, { enabled: false }]);
+  // a sliding switch, not a checkbox, and the keyboard flips it too
+  await expect(box.getByRole("checkbox")).toHaveCount(0);
+  await sw.focus();
+  await page.keyboard.press("Space");
+  await expect(sw).toBeChecked();
+  expect(posted).toEqual([{ setup: true }, { enabled: false }, { enabled: true }]);
 });
 
 test("the app's local APIs answer", async ({ request }) => {
