@@ -1,3 +1,5 @@
+<img src="docs/images/logo.svg" alt="" width="64">
+
 # OUC Study
 
 Your Open University of Cyprus **eClass courses offline**, in a visual study app: every slide and file, assignment questions, your own submissions and grades, a semester timeline, daily alerts for new grades, feedback and deadlines, and AI study agents (Claude Code, Codex or a local model).

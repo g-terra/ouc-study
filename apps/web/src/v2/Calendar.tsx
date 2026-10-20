@@ -4,6 +4,7 @@ import { courseMap } from "../lib/data";
 import { addDays, startOfWeek, weekRange } from "../lib/dates";
 import { Card, CourseDot, Empty, PageHeader, cx } from "../components/ui";
 import { DayGroups, EvRow, agenda, type Ev } from "./agenda";
+import { ClipboardList, GraduationCap, INLINE, Video } from "../components/icons";
 
 type Show = "all" | "due" | "class" | "exam";
 type View = "upcoming" | "done";
@@ -60,7 +61,7 @@ export function Calendar({ data }: { data: SemesterData }) {
       {view === "upcoming" && (
         <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Show">
           {(["all", "due", "class", "exam"] as const).map((k) => (
-            <Chip key={k} on={show === k} onClick={() => setShow(k)}>{{ all: "Everything", due: "📝 Deadlines", class: "🎥 Classes", exam: "🎓 Exams" }[k]}</Chip>
+            <Chip key={k} on={show === k} onClick={() => setShow(k)}>{{ all: "Everything", due: <><ClipboardList aria-hidden className={INLINE} /> Deadlines</>, class: <><Video aria-hidden className={INLINE} /> Classes</>, exam: <><GraduationCap aria-hidden className={INLINE} /> Exams</> }[k]}</Chip>
           ))}
         </div>
       )}

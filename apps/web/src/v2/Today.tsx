@@ -9,6 +9,7 @@ import { PlanCard, currentPlan } from "../pages/Plan";
 import { ORDER, UpdateRow } from "../pages/Updates";
 import { DayGroups, agenda, assignmentHref } from "./agenda";
 import { unreadItems } from "./Notifications";
+import { GraduationCap, INLINE, PartyPopper } from "../components/icons";
 
 /**
  * Today: what to do next and nothing else. The next deadline and class, this week's plan, the next 7 days,
@@ -37,7 +38,7 @@ export function Today({ data }: { data: SemesterData }) {
           <AskAiButton action="plan-week">{currentPlan(data) ? "Update my plan" : "Plan my week"}</AskAiButton>
           {exam && (
             <span className="rounded-full bg-surface-2 px-3 py-1.5 text-sm text-muted" title={fmtFull(at(exam.at))}>
-              🎓 First final in <b className="text-ink">{daysBetween(now, at(exam.at))} days</b> · {C[exam.code]?.short}
+              <GraduationCap aria-hidden className={INLINE} /> First final in <b className="text-ink">{daysBetween(now, at(exam.at))} days</b> · {C[exam.code]?.short}
             </span>
           )}
         </div>
@@ -55,7 +56,7 @@ export function Today({ data }: { data: SemesterData }) {
               </div>
             </Card>
           </Link>
-        ) : <Card className="grid place-items-center p-4 text-muted">Nothing due right now. 🎉</Card>}
+        ) : <Card className="grid place-items-center p-4 text-muted"><span className="flex items-center gap-2"><PartyPopper aria-hidden className="size-4" />Nothing due right now.</span></Card>}
         {nextClass && (
           <div>
             <div className="sr-only">Next live class</div>

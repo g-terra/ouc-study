@@ -12,6 +12,7 @@
   "dependencies": {
     "@ouc/content": "*",
     "katex": "^0.19.0",
+    "lucide-react": "^1.54.0",
     "mermaid": "^12.2.0",
     "micromark": "^4.0.1",
     "micromark-extension-gfm-autolink-literal": "^2.1.0",

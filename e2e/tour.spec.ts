@@ -14,20 +14,20 @@ test("the tour opens on the first visit, visits each place, and doesn't open aga
   const tour = page.getByRole("dialog", { name: /Welcome to OUC Study/ });
   await expect(tour).toBeVisible();
   await tour.getByRole("button", { name: "Show me" }).click();
-  await expect(page.getByRole("dialog", { name: "☀️ Today" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Today" })).toBeVisible();
   await page.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "📚 Courses" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Courses" })).toBeVisible();
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses$/);
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Inside a course" })).toBeVisible();
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses\/DEMO101$/);
   // the arrow keys move too
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("dialog", { name: "🗓️ Calendar" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Calendar" })).toBeVisible();
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/calendar$/);
   await page.keyboard.press("ArrowLeft");
   await expect(page.getByRole("dialog", { name: "Inside a course" })).toBeVisible();
-  for (const name of ["🗓️ Calendar", "🔔 Notifications", "🤖 Ask AI", "👤 Profile and Settings", "You're all set 🎉"]) {
+  for (const name of ["Calendar", "Notifications", "Ask AI", "Profile and Settings", "You're all set"]) {
     await page.getByRole("button", { name: "Next", exact: true }).click();
     await expect(page.getByRole("dialog", { name })).toBeVisible();
   }

@@ -10,6 +10,7 @@ import { releaseHighlights, useUpdate } from "../lib/update";
 import { rememberLook } from "../v2/look";
 import { toV2 } from "../v2/paths";
 import { isChatPath } from "../lib/chat-path";
+import { Bot, Headphones, RefreshCw, Sparkles, X } from "./icons";
 
 /** eClass and the AI coding tools: one summary dot, plus the details shown in Settings. */
 export function useConnectionSummary() {
@@ -235,7 +236,7 @@ export function AskAiFab() {
     <button type="button" data-ask-ai onClick={() => setOpen(!open)} aria-pressed={open} aria-label={open ? "Close Ask AI" : "Ask AI"} title="Ask AI"
       className={cx("fixed bottom-20 right-4 z-40 flex items-center gap-2 rounded-full bg-ink py-3 pl-3.5 pr-4 text-sm font-semibold text-bg shadow-xl transition hover:scale-105 sm:bottom-6 sm:right-6",
         open && "max-sm:hidden")}>
-      <span aria-hidden className={cx("text-xl leading-none", busy && "animate-pulse")}>{open ? "✕" : "🤖"}</span>
+      {open ? <X aria-hidden className="size-5" /> : <Bot aria-hidden className={cx("size-5", busy && "animate-pulse")} />}
       <span>{open ? "Close" : "Ask AI"}</span>
       {busy && !open && <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-bg bg-accent" />}
     </button>
@@ -267,16 +268,16 @@ export function AiWorkBar({ sem }: { sem: string }) {
   const p = conn.progress;
   const downloading = p?.step === 2 && p.phase === "download" && p.total;
   // the line and the bar follow the first part still running
-  const [title, pct] = syncing
-    ? [`🔄 ${SYNC_STEPS[(p?.step ?? 1) - 1] ?? "Syncing"}${downloading ? `: ${p.done} of ${p.total}` : "…"}`, downloading ? (p.done! / p.total!) * 100 : ((p?.step ?? 1) - 1) * 33]
-    : transcribing ? [`🎧 Transcribing class videos: ${tr!.done} of ${tr!.total}`, (tr!.done / tr!.total) * 100]
-    : [`✨ AI is making notes, prep packs and quizzes: ${st!.done} of ${st!.total} done`, (st!.done / st!.total) * 100];
+  const [Icon, title, pct] = syncing
+    ? [RefreshCw, `${SYNC_STEPS[(p?.step ?? 1) - 1] ?? "Syncing"}${downloading ? `: ${p.done} of ${p.total}` : "…"}`, downloading ? (p.done! / p.total!) * 100 : ((p?.step ?? 1) - 1) * 33]
+    : transcribing ? [Headphones, `Transcribing class videos: ${tr!.done} of ${tr!.total}`, (tr!.done / tr!.total) * 100]
+    : [Sparkles, `AI is making notes, prep packs and quizzes: ${st!.done} of ${st!.total} done`, (st!.done / st!.total) * 100];
   const row = "flex flex-wrap items-center gap-x-3 gap-y-1";
   const mark = (state: "done" | "now" | "todo") => <span className={cx("w-4 shrink-0 text-center", state === "done" ? "text-ok" : state === "now" ? "text-accent" : "text-muted")}>{state === "done" ? "✓" : state === "now" ? "●" : "○"}</span>;
   return (
     <div className="border-t border-line">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs">
-        <span className="font-semibold">{title}</span>
+        <span className="flex items-center gap-1.5 font-semibold"><Icon aria-hidden className={cx("size-3.5", Icon === RefreshCw && "animate-spin")} />{title}</span>
         {[syncing, transcribing, ai].filter(Boolean).length > 1 && <span className="text-muted">and {[syncing && "sync", transcribing && "transcripts", ai && "AI notes"].filter(Boolean).slice(1).join(", ")} too</span>}
         <span className="flex-1" />
         <button type="button" onClick={toggle} aria-expanded={open} className="rounded-full border border-line bg-surface px-2.5 py-0.5 font-semibold hover:border-muted">{open ? "Hide details ▴" : "Details ▾"}</button>

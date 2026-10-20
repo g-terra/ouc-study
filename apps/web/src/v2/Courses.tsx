@@ -9,6 +9,7 @@ import { ClassCard, ClassTimeEditor, upcomingClasses } from "../components/Class
 import { MakeQuizButton, QuizJobs } from "../components/MakeQuiz";
 import { QuizLinks, WeekRow } from "../pages/Courses";
 import { assignmentHref } from "./agenda";
+import { Flame, GraduationCap, INLINE, NotebookPen, Trophy, Video } from "../components/icons";
 
 /** Courses: one row per course with where it's at. Notes and quizzes live inside each course. */
 export function CourseList({ data }: { data: SemesterData }) {
@@ -18,7 +19,7 @@ export function CourseList({ data }: { data: SemesterData }) {
     <>
       <PageHeader title="Courses" eyebrow={data.label}>
         Each course has its weeks, notes, quizzes and assignments in one place.
-        {stats.points > 0 && <> <span className="whitespace-nowrap">🏆 {stats.points} quiz points{stats.streak > 0 && ` · 🔥 ${stats.streak}-day streak`}</span></>}
+        {stats.points > 0 && <> <span className="whitespace-nowrap"><Trophy aria-hidden className={INLINE} /> {stats.points} quiz points{stats.streak > 0 && <> · <Flame aria-hidden className={INLINE} /> {stats.streak}-day streak</>}</span></>}
       </PageHeader>
       <div className="grid gap-3">
         {data.courses.map((c) => {
@@ -38,7 +39,7 @@ export function CourseList({ data }: { data: SemesterData }) {
                   <div className="mt-1 text-sm"><span className="text-muted">This week:</span> {wk?.label ?? "between weeks"}</div>
                   <div className="text-sm"><span className="text-muted">Next due:</span> {nd ? `${nd.title}, ${relative(at(nd.due!), now)}` : "nothing open"}</div>
                   <div className="text-sm"><span className="text-muted">Exam:</span> {exam ? `${exam.kind}, ${exam.noTime ? fmtShort(at(exam.at)) : fmtFull(at(exam.at))} (${relative(at(exam.at), now)})` : "no date yet"}</div>
-                  <div className="mt-1.5 text-xs text-muted">📒 {notes} notes · 🏆 {quizzes} quizzes</div>
+                  <div className="mt-1.5 text-xs text-muted"><NotebookPen aria-hidden className={INLINE} /> {notes} notes · <Trophy aria-hidden className={INLINE} /> {quizzes} quizzes</div>
                 </div>
                 <div className="flex shrink-0 flex-col items-center" title={`${done} of ${as.length} assignments handed in`}>
                   <ProgressRing value={as.length ? done / as.length : 0} color={c.color} label={`${done}/${as.length}`} />
@@ -89,11 +90,11 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
       <Link to={`/v2/${enc(data.id)}/courses`} className="text-sm text-muted hover:text-ink">← Courses</Link>
       <header className="mt-2 mb-4 flex flex-wrap items-end gap-x-4 gap-y-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-sm text-muted"><span className="size-2.5 rounded-full" style={{ background: c.color }} />{c.code}{exam && <> · 🎓 Final {fmtFull(at(exam.at))}</>}</div>
+          <div className="flex items-center gap-2 text-sm text-muted"><span className="size-2.5 rounded-full" style={{ background: c.color }} />{c.code}{exam && <> · <GraduationCap aria-hidden className={INLINE} /> Final {fmtFull(at(exam.at))}</>}</div>
           <h1 className="font-serif text-3xl font-semibold leading-tight tracking-tight">{c.title}</h1>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
-          {c.joinUrl && <a href={c.joinUrl} target="_blank" rel="noreferrer" className="rounded-full border border-line bg-surface px-3 py-1.5 hover:border-muted">🎥 Webconference ↗</a>}
+          {c.joinUrl && <a href={c.joinUrl} target="_blank" rel="noreferrer" className="rounded-full border border-line bg-surface px-3 py-1.5 hover:border-muted"><Video aria-hidden className={INLINE} /> Webconference ↗</a>}
           {c.eclassUrl && <a href={c.eclassUrl} target="_blank" rel="noreferrer" className="rounded-full border border-line bg-surface px-3 py-1.5 hover:border-muted">eClass ↗</a>}
         </div>
       </header>
@@ -150,7 +151,7 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
         <div className="grid gap-2 sm:grid-cols-2">
           {notes.map((n) => (
             <Link key={n.slug} to={`${base}/notes/${enc(code)}/${enc(n.slug)}`} className="rounded-xl border border-line bg-surface px-4 py-3 transition hover:border-muted">
-              <span className="block font-semibold">📒 {n.title}</span>
+              <span className="block font-semibold"><NotebookPen aria-hidden className={INLINE} /> {n.title}</span>
               {n.summary && <span className="mt-0.5 line-clamp-2 block text-sm text-muted">{n.summary}</span>}
             </Link>
           ))}

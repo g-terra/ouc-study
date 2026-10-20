@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="128" height="128">
+  <title>OUC Study</title>
+  <style>.t{fill:#1c1b19}.o{stroke:#f6f4ef}.r{fill:#c2410c}@media (prefers-color-scheme:dark){.t{fill:#ecebe6}.o{stroke:#131312}.r{fill:#fb923c}}</style>
+  <rect class="t" width="32" height="32" rx="8"/>
+  <circle class="o" cx="15" cy="15.5" r="7.5" fill="none" stroke-width="3.6"/>
+  <path class="r" d="M19.5 16h5.5v11l-2.75-2.2L19.5 27z"/>
+</svg>

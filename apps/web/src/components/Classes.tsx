@@ -6,6 +6,7 @@ import { courseMap } from "../lib/data";
 import { at, fmtDay, fmtTime, relative } from "../lib/dates";
 import { AskAiButton } from "./Assistant";
 import { Card, CourseBadge, FileLink, cx, isMaterial, kindIcon } from "./ui";
+import { INLINE, NotebookPen, Video } from "./icons";
 
 /** Classes still to come (or running now), oldest first. */
 export function upcomingClasses(data: SemesterData, now = new Date()): ClassSession[] {
@@ -26,7 +27,7 @@ export function JoinButton({ c, now = new Date(), className }: { c: ClassSession
     <a href={c.joinUrl} target="_blank" rel="noreferrer" title="Opens the course's Webconference on eClass"
       className={cx("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold transition",
         live || soon ? "bg-accent text-bg" : "border border-line bg-surface hover:border-muted", className)}>
-      🎥 {live ? "Join now" : "Join"} ↗
+      <Video aria-hidden className="size-3.5" /> {live ? "Join now" : "Join"} ↗
     </a>
   );
 }
@@ -70,7 +71,7 @@ export function ClassCard({ c, data, now = new Date(), showCourse = true }: { c:
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">Before class</div>
           <ul className="grid grid-cols-[minmax(0,1fr)] gap-0.5 text-sm">
             {notes.map((n) => (
-              <li key={n.noteSlug}><Link to={`${base}/notes/${enc(c.code)}/${enc(n.noteSlug!)}`} className="flex gap-2 rounded px-1 py-0.5 font-semibold hover:bg-surface-2">📒 <span className="min-w-0 truncate">My notes: {n.title}</span></Link></li>
+              <li key={n.noteSlug}><Link to={`${base}/notes/${enc(c.code)}/${enc(n.noteSlug!)}`} className="flex gap-2 rounded px-1 py-0.5 font-semibold hover:bg-surface-2"><NotebookPen aria-hidden className={`${INLINE} mt-0.5`} /> <span className="min-w-0 truncate">My notes: {n.title}</span></Link></li>
             ))}
             {[...c.extras.map((f) => ({ ...f, kind: "file" as const })), ...material].slice(0, 4).map((f, i) => (
               <li key={i}><FileLink href={f.href} className="flex gap-2 rounded px-1 py-0.5 hover:bg-surface-2">

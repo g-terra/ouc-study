@@ -3,6 +3,7 @@ import { Link } from "../lib/router";
 import { slidesPage } from "../lib/links";
 import type { Course, FileRef, ItemKind, WeekItem } from "@ouc/content/types";
 import { STATE_LABEL, type State } from "../lib/data";
+import { KindIcon } from "./icons";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -67,11 +68,9 @@ export function ProgressRing({ value, color, size = 56, label }: { value: number
   );
 }
 
-const KIND_ICON: Record<ItemKind, string> = { file: "📄", video: "🎬", link: "🔗", assignment: "📝", forum: "💬", tool: "🖥️", note: "📒" };
-const EXT_ICON: Record<string, string> = { pdf: "📕", pptx: "📊", docx: "📘", ipynb: "📓", png: "🖼️", jpg: "🖼️", jpeg: "🖼️", md: "🗒️" };
 /** Course material that is on this computer: files and downloaded videos (what notes and quizzes are made from). */
 export const isMaterial = (i: WeekItem) => i.kind === "file" || (i.kind === "video" && !i.external);
-export const kindIcon = (k: ItemKind, ext?: string) => (k === "file" && ext && EXT_ICON[ext]) || KIND_ICON[k];
+export const kindIcon = (k: ItemKind, ext?: string) => <KindIcon kind={k} ext={ext} />;
 
 /** A link to a course file: slides open in the app's slide viewer, anything else in a new tab. */
 export function FileLink({ href, className, title, children }: { href?: string; className?: string; title?: string; children: ReactNode }) {
@@ -83,7 +82,7 @@ export function FileLink({ href, className, title, children }: { href?: string; 
 export function FileCard({ file, label }: { file: FileRef; label: string }) {
   return (
     <FileLink href={file.href} className="flex items-center gap-3 rounded-xl border border-line bg-surface p-3 transition hover:border-muted">
-      <span className="text-2xl">{EXT_ICON[file.ext] ?? "📄"}</span>
+      <KindIcon kind="file" ext={file.ext} className="size-7" />
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold">{file.name}</span>
         <span className="text-xs text-muted">{label} · {file.ext.toUpperCase()} · {slidesPage(file.href) ? "opens in the slide viewer" : "opens in a new tab"}</span>
