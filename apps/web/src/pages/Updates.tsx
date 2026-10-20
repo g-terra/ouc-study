@@ -1,6 +1,9 @@
 import { useState, type ReactNode } from "react";
 import type { SemesterData, UpdateItem, UpdateType } from "@ouc/content/types";
 import { courseMap, refreshData } from "../lib/data";
+import { Link } from "../lib/router";
+import { assignmentFor } from "../lib/updateLink";
+import { assignmentHref } from "../v2/agenda";
 import { refreshPrep } from "../lib/ai";
 import { day, fmtFull, relative } from "../lib/dates";
 import { Card, CourseBadge, Empty, PageHeader, cx } from "../components/ui";
@@ -48,12 +51,15 @@ export function UpdateRow({ u, data, compact }: { u: UpdateItem; data: SemesterD
   const [more, setMore] = useState(false);
   const long = !compact && isLong(u.detail);
   const title = <span className="font-semibold leading-snug">{u.title}</span>;
+  // a grade, feedback or deadline opens its assignment here (grade and feedback at the top); eClass stays one tap away (↗)
+  const own = assignmentFor(data.assignments, u);
   return (
-    <div className={cx("flex gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition", u.url && "hover:border-muted", (u.type === "grade" || u.type === "feedback") && "border-ok/40")}>
+    <div className={cx("flex gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition", (u.url || own) && "hover:border-muted", (u.type === "grade" || u.type === "feedback") && "border-ok/40")}>
       <span className={cx("grid size-9 shrink-0 place-items-center rounded-lg text-lg", m.tone)}><TypeIcon type={u.type} className="size-[18px]" /></span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          {u.url ? <a href={u.url} target="_blank" rel="noreferrer" className="hover:underline">{title}</a> : title}
+          {own ? <Link to={assignmentHref(data.id, own.id)} className="hover:underline">{title}</Link>
+            : u.url ? <a href={u.url} target="_blank" rel="noreferrer" className="hover:underline">{title}</a> : title}
           {C[u.code] && <CourseBadge course={C[u.code]} />}
         </div>
         {u.detail && (

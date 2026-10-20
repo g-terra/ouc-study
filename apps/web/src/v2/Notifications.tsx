@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SemesterData, UpdateItem } from "@ouc/content/types";
-import { Link, enc } from "../lib/router";
+import { Link, enc, useRouter } from "../lib/router";
 import { Empty, PageHeader, cx } from "../components/ui";
 import { ORDER, SetupCard, SyncStatus, UpdateRow, UpdatesList, useSync } from "../pages/Updates";
 import { PANEL, usePopover } from "./popover";
@@ -55,6 +55,8 @@ const id = (u: UpdateItem) => `${u.type}|${u.title}|${u.detail}`;
 /** The bell in the header: a count of what's new, and a drop-down of the latest updates. Opening it marks them read. */
 export function NotificationsBell({ data }: { data?: SemesterData | null }) {
   const { open, setOpen, box } = usePopover();
+  const { path } = useRouter();
+  useEffect(() => { setOpen(false); }, [path]);   // an update opened a page: close the drop-down
   const [fresh, setFresh] = useState<UpdateItem[]>([]);   // what was new when the drop-down opened
   useNotificationsVersion();
   const unread = data ? unreadCount(data) : 0;

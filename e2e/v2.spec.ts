@@ -167,6 +167,29 @@ test("v2: an open week groups its items under Watch, Read, My notes and Practice
   await expect(week.getByRole("heading", { name: "Practice" }).locator("..").getByRole("button", { name: /Quiz me/ })).toBeVisible();
 });
 
+test("v2: a grade update opens its assignment, with the grade and the tutor's feedback at the top", async ({ page }) => {
+  // made-up: the demo assignment graded, with written feedback
+  await page.route("**/data/2026-Demo.json", async (route) => {
+    const data = await (await route.fetch()).json();
+    const a = data.assignments.find((x: { title: string }) => x.title === "Assignment 1");
+    Object.assign(a, { submitted: true, grade: "8.00", feedback: "Clear argument.\nCite the reading next time." });
+    await route.fulfill({ json: data });
+  });
+  await page.goto(`/v2${SEM}`);
+  await page.getByRole("button", { name: /^Notifications/ }).click();
+  await page.getByRole("dialog", { name: "Notifications" }).getByRole("link", { name: "New grade: Assignment 1" }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/assignments\/DEMO101\//);
+  await expect(page.getByRole("dialog", { name: "Notifications" })).toBeHidden();
+  const box = page.getByTestId("assignment-grade");
+  await expect(box).toContainText("8.00");
+  await expect(box).toContainText("Cite the reading next time.");
+  await expect(page.getByText("Graded 8.00").first()).toBeVisible();
+  // the course's assignment list says Graded too
+  await page.goto(`/v2${SEM}/courses/DEMO101`);
+  await page.getByRole("tab", { name: /Assignments/ }).click();
+  await expect(page.getByText("Graded 8.00")).toBeVisible();
+});
+
 test("v2: course cards count in the singular, and the bell's drop-down fits on a phone", async ({ page }) => {
   await page.goto(`/v2${SEM}/courses`);
   await expect(page.getByText(/1 note · .*1 quiz$/)).toBeVisible();
