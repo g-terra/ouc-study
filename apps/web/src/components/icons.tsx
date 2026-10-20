@@ -1,12 +1,12 @@
 import type { ItemKind } from "@ouc/content/types";
 import {
-  AlarmClock, Award, Bell, BookOpen, Bot, Braces, CalendarDays, Check, CircleAlert, Clapperboard, ClipboardList, Compass, File, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, KeyRound, Library, Megaphone, MessageSquareText, MessagesSquare, Monitor, NotebookPen, NotebookText, PartyPopper, Presentation, RefreshCw, Settings, Sparkles, Star, Sun, Trash2, TriangleAlert, Trophy, Upload, User, Video, Wifi, WifiOff, X,
+  AlarmClock, Award, Bell, BookOpen, Bot, Braces, CalendarDays, Check, CircleAlert, Clapperboard, ClipboardList, Compass, File, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, KeyRound, Library, Maximize, Megaphone, MessageSquareText, MessagesSquare, Monitor, NotebookPen, NotebookText, PartyPopper, Presentation, RefreshCw, Settings, Sparkles, Star, Sun, Trash2, TriangleAlert, Trophy, Upload, User, Video, Volume2, Wifi, WifiOff, X,
   Link as LinkIcon, type LucideIcon,
 } from "lucide-react";
 
 // One icon set for the app (Lucide, ISC licence): thin line icons in the text colour, so they suit every colour theme.
 export {
-  AlarmClock, Award, Bell, BookOpen, Bot, CalendarDays, Check, CircleAlert, Clapperboard, ClipboardList, Compass, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, KeyRound, Library, Megaphone, MessageSquareText, MessagesSquare, NotebookPen, PartyPopper, RefreshCw, Settings, Sparkles, Star, Sun, Trash2, TriangleAlert, Trophy, Upload, User, Video, Wifi, WifiOff, X,
+  AlarmClock, Award, Bell, BookOpen, Bot, CalendarDays, Check, CircleAlert, Clapperboard, ClipboardList, Compass, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, KeyRound, Library, Maximize, Megaphone, MessageSquareText, MessagesSquare, NotebookPen, PartyPopper, Presentation, RefreshCw, Settings, Sparkles, Star, Sun, Trash2, TriangleAlert, Trophy, Upload, User, Video, Volume2, Wifi, WifiOff, X,
   type LucideIcon,
 };
 

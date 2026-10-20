@@ -10,6 +10,7 @@ import type { SemesterData, WeekItem } from "@ouc/content/types";
 import { Link, enc } from "../lib/router";
 import { Card, CourseBadge, cx } from "../components/ui";
 import { lineAt, parseTranscript, stamp, type Transcript, type TranscriptLine } from "../lib/transcript";
+import { Maximize } from "../components/icons";
 
 const FOLLOW = "ouc-video-follow";
 const readFollow = () => { try { return localStorage.getItem(FOLLOW) !== "0"; } catch { return true; } };
@@ -81,7 +82,7 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
                 onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} onSeeked={(e) => setNow(e.currentTarget.currentTime)}
                 className="aspect-video w-full rounded-2xl border border-line bg-black" />
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                <button type="button" onClick={() => video.current?.requestFullscreen?.()} className="rounded-full border border-line px-3 py-1 hover:border-muted">⛶ Full screen</button>
+                <button type="button" onClick={() => video.current?.requestFullscreen?.()} className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 hover:border-muted"><Maximize aria-hidden className="size-3.5" />Full screen</button>
                 <span className="text-xs text-muted">Or double-click the video. Esc leaves full screen.</span>
               </div>
             </>

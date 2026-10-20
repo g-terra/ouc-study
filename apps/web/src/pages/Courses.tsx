@@ -189,7 +189,7 @@ function WeekItemRow({ it, base, code }: { it: WeekItem; base: string; code: str
   // a video or narrated slides open with their transcript beside them; a Panopto link's transcript has its own page
   const transcript = it.transcript && (it.external
     ? <Link to={transcriptPage(it)} className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-muted underline hover:text-ink">Transcript</Link>
-    : <span className="shrink-0 px-2 py-1.5 text-xs text-muted" title="Opens with its transcript">📝 transcript</span>);
+    : <span className="shrink-0 px-2 py-1.5 text-xs text-muted" title="Opens with its transcript"><FileText aria-hidden className={INLINE} /> transcript</span>);
   return <li className="flex items-start gap-2">{link}{transcript}</li>;
 }
 
