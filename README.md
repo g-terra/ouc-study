@@ -5,8 +5,8 @@ Your Open University of Cyprus **eClass courses offline**, in a visual study app
 Built by students for students. Works with **your own** eClass account: nothing is shared between users.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.webp">
-  <img src="docs/images/dashboard.webp" alt="The OUC Study dashboard: next deadline with a countdown, final exams and what's new on eClass">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/today-dark.webp">
+  <img src="docs/images/today.webp" alt="The Today page: greeting, next deadline, the next 7 days and what's new on eClass">
 </picture>
 
 <sub>Screenshots use a made-up demo semester. They follow your light or dark theme.</sub>
@@ -19,20 +19,20 @@ Built by students for students. Works with **your own** eClass account: nothing 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/course-dark.webp">
-  <img src="docs/images/course.webp" alt="A course page listing each week's materials, upcoming assignments and grades">
+  <img src="docs/images/course.webp" alt="A course page listing each week's materials, with this week open">
 </picture>
 
-**Every course, week by week**<br>Slides, recordings, readings and your notes for each week, with upcoming work and grades on the side.
+**Every course, week by week**<br>Slides, recordings, readings, notes and quizzes for each week, with buttons to make notes or a quiz.
 
 </td>
 <td width="50%" valign="top">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/timeline-dark.webp">
-  <img src="docs/images/timeline.webp" alt="The timeline page with the semester bar and deadlines grouped by week">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/calendar-dark.webp">
+  <img src="docs/images/calendar.webp" alt="The calendar page with deadlines grouped by week">
 </picture>
 
-**The whole semester at a glance**<br>Every deadline and final exam on one line, then week by week with a filter per course.
+**Calendar**<br>Every deadline, live class and exam, week by week, with filters per course and type.
 
 </td>
 </tr>
@@ -44,7 +44,7 @@ Built by students for students. Works with **your own** eClass account: nothing 
   <img src="docs/images/note.webp" alt="A visual note with a big-idea callout and concept cards">
 </picture>
 
-**Visual notes**<br>Notes your AI writes from the slides: big idea, concept cards, diagrams, formulas and flashcards.
+**Visual notes**<br>Notes your AI writes from the slides and class videos: big idea, concept cards, diagrams, formulas and flashcards.
 
 </td>
 <td width="50%" valign="top">
@@ -63,7 +63,7 @@ Built by students for students. Works with **your own** eClass account: nothing 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/ask-ai-dark.webp">
-  <img src="docs/images/ask-ai.webp" alt="The Ask AI panel answering a question next to a note">
+  <img src="docs/images/ask-ai.webp" alt="The Ask AI pop-up answering a question next to a note">
 </picture>
 
 **Ask AI, on any page**<br>Chat with Claude Code, Codex or a local model about what you're looking at. It knows your courses and notes.
@@ -72,11 +72,33 @@ Built by students for students. Works with **your own** eClass account: nothing 
 <td width="50%" valign="top">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/updates-dark.webp">
-  <img src="docs/images/updates.webp" alt="The daily updates page grouped by day">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/chat-dark.webp">
+  <img src="docs/images/chat.webp" alt="The Ask AI chat as a full page with the history list">
 </picture>
 
-**What changed on eClass**<br>New grades, feedback, files, moved deadlines and announcements, checked every day.
+**Or as a full page**<br>Longer conversations get the whole screen, with your chat history on the side and the AI and model next to Send.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/notifications-dark.webp">
+  <img src="docs/images/notifications.webp" alt="The notifications drop-down under the bell">
+</picture>
+
+**What's new on eClass**<br>The 🔔 bell lists new grades, feedback, files, moved deadlines and announcements, with Sync now.
+
+</td>
+<td width="50%" valign="top">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark.webp">
+  <img src="docs/images/settings.webp" alt="The settings page with eClass, AI tools and appearance sections">
+</picture>
+
+**Settings**<br>The eClass connection, your AI tools, video transcripts and the colour theme, from the profile circle.
 
 </td>
 </tr>
@@ -134,16 +156,19 @@ How it runs in the background: on macOS two LaunchAgents (`~/Library/LaunchAgent
 
 ## Pages
 
-- **Dashboard**: next deadline with a countdown, the final exams, the next live class of each course, what's new on eClass, the next 14 days, and progress per course.
-- **Timeline**: the semester at a glance, then week by week (deadlines, live classes, exams), with filters per course.
-- **Courses**: each course week by week (slides, videos, assignments, your notes, the week's live class) plus your grades.
+The top bar has **Today**, **Courses** and **Calendar**, plus the 🔔 bell (notifications) and the profile circle (Settings) on the right.
+
+- **Today**: next deadline, the first final exam, the next 7 days (deadlines and live classes), and what's new on eClass.
+- **Courses**: each course with its weeks (slides, videos, assignments, your notes, the week's live class), notes, quizzes and assignments, plus your grades.
+- **Calendar**: deadlines, live classes and exams week by week, with filters per course and type, and your submitted work.
 - **Slides**: click a PowerPoint on a course week and it opens right in the app, slide by slide (arrow keys, full screen), with no download. Slides with recorded narration have a 🔊 player under them; tick **Play as a lecture** to hear each slide and move on by itself. The app makes a PDF copy the first time you open a deck (a few seconds; kept in `.ouc/slides/`) using [LibreOffice](https://www.libreoffice.org/download/) (free; `ouc setup` offers to install it, or on a Mac `brew install --cask libreoffice`, on Windows `winget install TheDocumentFoundation.LibreOffice`). Animations and videos inside the slides don't play there: use **Download** for those.
 - **Notes**: visual notes with diagrams, LaTeX formulas, comparison tables and flip-card self-tests.
 - **Class videos and transcripts**: videos posted on eClass (for example on a week's page) download with the other course files and play in the app. Each one, and each PowerPoint with recorded narration, gets a transcript next to it (`Lecture 3.transcript.md`, a **Transcript** link on the course week), and your AI makes that week's notes from it. Transcripts are optional and made on your computer with [Whisper](https://github.com/ggml-org/whisper.cpp), free and offline. Without Whisper the videos still download, and nothing is transcribed. `ouc setup` asks whether to install it, and **Settings → Video transcripts** in the app (the profile circle, top right) can set it up later (**Set up Whisper**) or turn transcripts off (on a Mac `brew install whisper-cpp ffmpeg` plus a speech model of about 500 MB; on Windows Python from winget if you don't have it, then `pip install faster-whisper`, whose model downloads on the first transcript; on Linux `pip install faster-whisper`), or in Terminal run `ouc transcribe --setup`. The app transcribes one file at a time in the background; **Sync now** does the weeks about to get notes first. The activity bar under the header shows what's running (sync steps and downloads, transcripts, AI notes); **Details** opens each part. Recordings on Panopto (video.ouc.ac.cy) need a Panopto sign-in, so they stay links; their captions are saved as the transcript when Panopto shares them publicly. Webconference recordings aren't reachable with the eClass key. To turn things off, put `{ "videos": false }` (no video downloads) or `{ "transcribe": false }` in `.ouc/media.json`; `"model": "base"` is faster, `"medium"` more accurate (default `"small"`).
 - **Quizzes**: scored quizzes your AI makes on the topics of the course material (the questions can go wider than the slides), for one lecture or the whole course: true/false, one answer, or select all that apply (including "All of the above"). After each answer you get a full explanation of why it is right, then your score at the end. Points (10 per right answer, 20 more for a perfect score), your best score per quiz and a daily streak 🔥 are kept on your computer in `semesters/<id>/quizzes/attempts.json`. **Make a quiz** (on the Quizzes page, a course page or a course week) opens a small pop-up: pick one class, **Every class** (one quiz for each class that doesn't have one yet, a few at a time) or the whole course, and your AI makes them in the background without opening the chat. **Sync now** also makes a quiz for every new class with material (add `"autoQuiz": false` to `.ouc/ai.json` to turn that off). Each quiz has **Reset progress** (start it over) and **Remove**; **Reset all progress** clears every score. The format is in [`docs/QUIZ_FORMAT.md`](docs/QUIZ_FORMAT.md).
 - **Assignments**: the question, files, PDF preview, study links, grade and feedback.
-- **Updates**: what changed on eClass each day, with a live 🟢 connection status, **Re-check** and **Sync now**.
-- **Ask AI** (button in the top bar, on every page): talk to your AI assistant from the app. See [Ask AI in the app](#ask-ai-in-the-app).
+- **Notifications** (🔔): what changed on eClass each day, with **Sync now**. See [Daily updates](#daily-updates).
+- **Settings** (profile circle): eClass connection, AI tools, video transcripts, colour theme, and **Back to the classic look** if you prefer the older layout.
+- **Ask AI** (the 🤖 button at the bottom right, on every page): talk to your AI assistant from the app. See [Ask AI in the app](#ask-ai-in-the-app).
 
 ### Live classes
 
@@ -209,14 +234,14 @@ The assistant helps you understand, plan and review. It won't write answers for 
 
 ### Ask AI in the app
 
-Press **✨ Ask AI** in the top bar. Pick an action (Make notes, Quiz me, Make a quiz, Plan my week, Research a topic, Find material, Assignment help, Sync eClass) or just type a question. The app runs the AI you chose with `ouc ai setup` on your own computer, with your own login, and shows its reply as it works. Notes and plans it writes appear as links, and new notes show up in the app straight away. Shortcuts open the panel with the right action filled in: **Plan my week** on the dashboard, **Make notes** and **Quiz me** on a course week, **Quiz me on this** on a note, **Help me with this** on an assignment. For a longer conversation, press **⤢** in the panel's header: the chat opens as a full page with your past chats on the side (bookmark it or open it in a new tab), and **⤡ Pop-up** puts it back. **History** lists your saved chats: delete one with 🗑 or all of them with **Delete all chats**, and on the full page **Hide history** folds the list away (the app remembers). When the AI explains a flow or a process, it draws a diagram (Mermaid) right in the chat. Next to **Send** you pick which AI answers and its model: Claude Code offers `sonnet`, `opus` and `haiku`, Codex the models your installed Codex lists for your ChatGPT plan (read from Codex itself, so new ones show up when you update it) (both on your subscription, never API credits), and opencode or a local model the models your Ollama or LM Studio has. The model you pick is remembered as that AI's default; **Default** leaves the choice to the tool. To change the Claude or Codex list, add for example `"models": { "codex": ["gpt-5"] }` to `.ouc/ai.json`.
+Press **🤖 Ask AI** at the bottom right of any page. Pick an action (Make notes, Quiz me, Make a quiz, Plan my week, Research a topic, Find material, Assignment help, Sync eClass) or just type a question. The app runs the AI you chose with `ouc ai setup` on your own computer, with your own login, and shows its reply as it works. Notes and plans it writes appear as links, and new notes show up in the app straight away. Shortcuts open the panel with the right action filled in: **Plan my week** on Today, **Make notes** and **Quiz me** on a course week, **Quiz me on this** on a note, **Help me with this** on an assignment. For a longer conversation, press **⤢** in the panel's header: the chat opens as a full page with your past chats on the side (bookmark it or open it in a new tab), and **⤡ Pop-up** puts it back. **History** lists your saved chats: delete one with 🗑 or all of them with **Delete all chats**, and on the full page **Hide history** folds the list away (the app remembers). When the AI explains a flow or a process, it draws a diagram (Mermaid) right in the chat. Next to **Send** you pick which AI answers and its model: Claude Code offers `sonnet`, `opus` and `haiku`, Codex the models your installed Codex lists for your ChatGPT plan (read from Codex itself, so new ones show up when you update it) (both on your subscription, never API credits), and opencode or a local model the models your Ollama or LM Studio has. The model you pick is remembered as that AI's default; **Default** leaves the choice to the tool. To change the Claude or Codex list, add for example `"models": { "codex": ["gpt-5"] }` to `.ouc/ai.json`.
 
 - Every skill in `ai/skills/` becomes an action automatically.
 - The AI edits files in this folder without asking each time (like `ouc notes`), with the same limits as the command line. Claude Code and opencode are blocked from reading your eClass key, and every AI is told never to touch it.
 - With "a local model directly" you can chat, quiz and make quizzes (the app gives it the material and saves the quiz it answers with); the other actions need Claude Code, Codex or opencode.
 - **Prep packs:** every assignment you haven't submitted (including ones not open yet) gets a `PREP.md` in its folder (what it asks, key ideas, hints, course material, extra reading, a plan), shown on the assignment page. The app makes them on its own when it starts and after each sync. On the assignment page you can ask another AI to **Review & improve** it, **Add more**, or **Start over**. To turn the automatic part off, add `"autoPrep": false` to `.ouc/ai.json`.
 - **Review before submitting:** on the assignment page, upload your solution as a Word `.docx`. Your AI reviews it against the brief, the marking criteria, that week's material and your notes, and says what to fix and why (it never rewrites your answers). Discuss it in Ask AI, upload the fixed version for another round (every round is kept), and when you're happy press **Approve**: your `.docx` becomes a PDF, unchanged, ready to upload on eClass. Making the PDF uses [LibreOffice](https://www.libreoffice.org/download/) (free; on a Mac `brew install --cask libreoffice`). Your drafts stay in the assignment's `review/` folder, never shared.
-- **Sync now** (Updates page) also downloads new course files, then has your AI make every missing note (all weeks with files, started or not) and prep pack. A bar under the top menu shows the progress; click a running item to watch it. Up to 3 run at once; set `"parallel": 5` (1–8) in `.ouc/ai.json` to change that.
+- **Sync now** (under the 🔔 bell, on Notifications or in Settings) also downloads new course files, then has your AI make every missing note (all weeks with files, started or not) and prep pack. A bar under the top menu shows the progress; click a running item to watch it. Up to 3 run at once; set `"parallel": 5` (1–8) in `.ouc/ai.json` to change that.
 - Chats are saved on your computer in `.ouc/chats/` (never committed). **History** in the panel reopens them.
 - It only works in the app running on your computer (`ouc open` or `npm run dev`), and only pages from that app can use it.
 
