@@ -5,6 +5,7 @@
 import { spawn, spawnSync, type ChildProcess, type SpawnOptions, type SpawnSyncOptions, type SpawnSyncReturns } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, win32 } from "node:path";
+import { homedir } from "node:os";
 
 /** The AI the student chose: an agent tool that reads the repo itself, or a plain local chat model. */
 export type Tool = "claude" | "codex" | "opencode" | "local";
@@ -28,6 +29,7 @@ export interface AiConfig {
   autoQuiz?: boolean;   // Sync now also makes a quiz for every class without one (default on)
   parallel?: number;    // background AI runs at once (default 3)
   models?: Partial<Record<"claude" | "codex", string[]>>;   // the models the app offers for these tools (default AGENT_MODELS)
+  defaultModels?: Partial<Record<Tool, string>>;            // the model each AI uses unless the chat picks another (Settings)
 }
 export interface ChatMessage { role: "system" | "user" | "assistant"; content: string }
 export interface LoginState { loggedIn: boolean; subscription: boolean; how: string; unknown?: boolean }
@@ -58,13 +60,45 @@ export const AGENT_MODELS: Record<"claude" | "codex", string[]> = {
   claude: ["sonnet", "opus", "haiku"],
   codex: ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"],
 };
-/** The models a tool can be asked to use, and the one it uses when none is picked (undefined: the tool's own default). */
-export function toolModels(cfg: Pick<AiConfig, "models" | "opencode" | "local"> | null, tool: string): { models: string[]; model?: string } {
-  if (tool === "codex" && !cfg?.models?.codex && codexCatalog?.length) return { models: codexCatalog };
-  if (tool === "claude" || tool === "codex") return { models: cfg?.models?.[tool]?.filter((m) => typeof m === "string" && m) ?? AGENT_MODELS[tool] };
-  const s = tool === "opencode" ? cfg?.opencode : tool === "local" ? cfg?.local : undefined;
-  return s ? { models: [...new Set([s.model, ...(s.models ?? [])])].filter(Boolean), model: s.model } : { models: [] };
+export interface ToolModels {
+  models: string[];
+  /** the model a new chat uses: the one set in Settings, else the tool's own (undefined: not known) */
+  model?: string;
+  /** the tool's own default: Claude Code's or Codex's settings, Codex's first model, or the model from `ouc ai setup` */
+  own?: string;
+  /** set in Settings (.ouc/ai.json defaultModels) */
+  setting?: string;
 }
+/** The models a tool can be asked to use, and which one it uses when the chat picks none. */
+export function toolModels(cfg: Pick<AiConfig, "models" | "opencode" | "local" | "defaultModels"> | null, tool: string, home = homedir()): ToolModels {
+  let models: string[], own: string | undefined;
+  if (tool === "claude" || tool === "codex") {
+    const listed = cfg?.models?.[tool]?.filter((m) => typeof m === "string" && m);
+    models = listed ?? (tool === "codex" && codexCatalog?.length ? codexCatalog : AGENT_MODELS[tool]);
+    own = ownDefault(tool, home) ?? (tool === "codex" ? models[0] : undefined);
+  } else {
+    const s = tool === "opencode" ? cfg?.opencode : tool === "local" ? cfg?.local : undefined;
+    if (!s) return { models: [] };
+    // what the server has now (read with the status), else what `ouc ai setup` saved
+    models = [...new Set([s.model, ...(serverModels[tool as "opencode" | "local"] ?? s.models ?? [])])].filter(Boolean);
+    own = s.model;
+  }
+  const set = cfg?.defaultModels?.[tool as Tool];
+  const setting = set && models.includes(set) ? set : undefined;
+  const model = setting ?? own;
+  return { models, ...(model && { model }), ...(own && { own }), ...(setting && { setting }) };
+}
+/** The model set in Claude Code's or Codex's own settings (~/.claude/settings.json, ~/.codex/config.toml), if any. */
+export function ownDefault(tool: "claude" | "codex", home = homedir()): string | undefined {
+  try {
+    if (tool === "claude") return JSON.parse(readFileSync(join(home, ".claude", "settings.json"), "utf8")).model || undefined;
+    // a top-level `model = "..."`, not one inside a [profiles.x] table
+    return readFileSync(join(home, ".codex", "config.toml"), "utf8").split(/^\s*\[/m)[0].match(/^\s*model\s*=\s*"([^"]+)"/m)?.[1];
+  } catch { return undefined; }
+}
+// the models the local servers had at the last status check (opencode and plain local models)
+const serverModels: Partial<Record<"opencode" | "local", string[]>> = {};
+export function setServerModels(tool: "opencode" | "local", models: string[] | undefined) { if (models?.length) serverModels[tool] = models; }
 
 // Older configs used Codex's --oss mode for local models; opencode replaces it.
 export const ALIASES: Record<string, Tool> = { "codex-oss": "opencode" };

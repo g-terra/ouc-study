@@ -1,19 +1,43 @@
 // Which models the Ask AI panel offers, and how a picked one reaches each tool's command line.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AGENT_MODELS, agentCommand, codexModelsAsync, parseCodexModels, toolModels, type AiConfig, type LocalModel } from "../src/providers.ts";
+import { AGENT_MODELS, agentCommand, codexModelsAsync, ownDefault, parseCodexModels, setServerModels, toolModels, type AiConfig, type LocalModel } from "../src/providers.ts";
 
+const noHome = mkdtempSync(join(tmpdir(), "ouc-home-"));   // no Claude Code or Codex settings
 const ollama: LocalModel = { kind: "ollama", baseUrl: "http://127.0.0.1:11434", model: "qwen3:8b", models: ["qwen3:8b", "llama3.2"] };
 
 test("each tool offers its models: subscription aliases, or what the local server has", () => {
-  assert.deepEqual(toolModels(null, "claude"), { models: AGENT_MODELS.claude });
-  assert.deepEqual(toolModels({ models: { codex: ["gpt-5"] } }, "codex"), { models: ["gpt-5"] });
-  assert.deepEqual(toolModels({ opencode: ollama }, "opencode"), { models: ["qwen3:8b", "llama3.2"], model: "qwen3:8b" });
-  assert.deepEqual(toolModels({ local: { ...ollama, models: undefined } }, "local"), { models: ["qwen3:8b"], model: "qwen3:8b" });
+  assert.deepEqual(toolModels(null, "claude", noHome), { models: AGENT_MODELS.claude });
+  assert.deepEqual(toolModels({ models: { codex: ["gpt-5", "gpt-4"] } }, "codex", noHome), { models: ["gpt-5", "gpt-4"], model: "gpt-5", own: "gpt-5" });
+  assert.deepEqual(toolModels({ opencode: ollama }, "opencode"), { models: ["qwen3:8b", "llama3.2"], model: "qwen3:8b", own: "qwen3:8b" });
+  assert.deepEqual(toolModels({ local: { ...ollama, models: undefined } }, "local"), { models: ["qwen3:8b"], model: "qwen3:8b", own: "qwen3:8b" });
   assert.deepEqual(toolModels({}, "opencode"), { models: [] });
+});
+
+test("the default model: the one set in Settings, else the tool's own", () => {
+  const home = mkdtempSync(join(tmpdir(), "ouc-home-"));
+  mkdirSync(join(home, ".claude")); mkdirSync(join(home, ".codex"));
+  writeFileSync(join(home, ".claude/settings.json"), JSON.stringify({ model: "opus" }));
+  writeFileSync(join(home, ".codex/config.toml"), 'approval_policy = "never"\nmodel = "gpt-5.5"\n\n[profiles.fast]\nmodel = "gpt-6-luna"\n');
+  assert.equal(ownDefault("claude", home), "opus");
+  assert.equal(ownDefault("codex", home), "gpt-5.5");   // not the profile's
+  assert.equal(ownDefault("claude", noHome), undefined);
+  assert.deepEqual(toolModels(null, "claude", home), { models: AGENT_MODELS.claude, model: "opus", own: "opus" });
+  assert.deepEqual(toolModels({ defaultModels: { claude: "haiku" } }, "claude", home), { models: AGENT_MODELS.claude, model: "haiku", own: "opus", setting: "haiku" });
+  // a saved default the tool no longer offers is ignored
+  assert.deepEqual(toolModels({ defaultModels: { claude: "gone" } }, "claude", noHome), { models: AGENT_MODELS.claude });
+  assert.equal(toolModels({ opencode: ollama, defaultModels: { opencode: "llama3.2" } }, "opencode").model, "llama3.2");
+});
+
+test("opencode offers every model the local server has right now", () => {
+  setServerModels("opencode", ["qwen3:8b", "gemma3:4b", "deepseek-r1:7b"]);
+  assert.deepEqual(toolModels({ opencode: ollama }, "opencode").models, ["qwen3:8b", "gemma3:4b", "deepseek-r1:7b"]);
+  setServerModels("opencode", []);   // the server didn't answer: keep the last list
+  assert.deepEqual(toolModels({ opencode: ollama }, "opencode").models, ["qwen3:8b", "gemma3:4b", "deepseek-r1:7b"]);
+  assert.deepEqual(toolModels({ local: ollama }, "local").models, ["qwen3:8b", "llama3.2"]);   // each tool its own list
 });
 
 test("a picked model is passed with each tool's own flag; none leaves the tool's default", () => {
