@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import type { ClassSession, Quiz, SemesterData, Week } from "@ouc/content/types";
+import { useEffect, useState, type ReactNode } from "react";
+import type { ClassSession, Quiz, SemesterData, Week, WeekItem } from "@ouc/content/types";
 import { Link, enc, useRouter } from "../lib/router";
 import { currentWeek, stateOf } from "../lib/data";
 import { at, day, fmtDay, fmtFull, fmtShort, fmtTime, relative } from "../lib/dates";
@@ -161,6 +161,32 @@ export function QuizLinks({ sem, quizzes, withScope = false }: { sem: string; qu
   );
 }
 
+/** The sections of an open week, in order. Each item on eClass lands in one of them. */
+const WEEK_GROUPS = [["watch", "Watch"], ["read", "Read"], ["notes", "My notes"], ["practice", "Practice"], ["work", "To hand in"], ["more", "More"]] as const;
+type WeekGroupKey = (typeof WEEK_GROUPS)[number][0];
+const groupOf = (it: WeekItem): WeekGroupKey =>
+  it.kind === "video" ? "watch" : it.kind === "note" ? "notes" : it.kind === "assignment" ? "work"
+    : it.kind === "file" || it.kind === "link" ? "read" : "more";
+
+function WeekGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section className="mt-3 first:mt-0">
+      <h4 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</h4>
+      {children}
+    </section>
+  );
+}
+
+function WeekItemRow({ it, base, code }: { it: WeekItem; base: string; code: string }) {
+  const href = it.kind === "note" ? `${base}/notes/${enc(code)}/${enc(it.noteSlug!)}`
+    : it.kind === "assignment" && it.assignmentId ? `${base}/assignments/${it.assignmentId.split("/").map(enc).join("/")}` : it.href;
+  const internal = it.kind === "note" || it.kind === "assignment";
+  const cls = cx("flex min-w-0 flex-1 items-start gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2", it.kind === "note" && "font-semibold");
+  const inner = <><span aria-hidden>{kindIcon(it.kind, it.ext)}</span><span className="leading-snug">{it.title}{it.external && <span className="text-muted"> ↗</span>}</span></>;
+  const link = !href ? <span className={cls}>{inner}</span> : internal ? <Link to={href} className={cls}>{inner}</Link> : <FileLink href={href} className={cls}>{inner}</FileLink>;
+  return <li className="flex items-start gap-2">{link}{it.transcript && <a href={it.transcript} target="_blank" rel="noreferrer" className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-muted underline hover:text-ink">Transcript</a>}</li>;
+}
+
 export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes, quizzes, data }: { w: Week; isOpen: boolean; isNow: boolean; color: string; onToggle: () => void; base: string; code: string; classes: ClassSession[]; quizzes: Quiz[]; data: SemesterData }) {
   const dates = w.start ? `${fmtShort(day(w.start))} – ${fmtShort(day(w.end!))}${w.estimated ? " (est.)" : ""}` : "";
   const counts = w.items.reduce<Record<string, number>>((m, i) => ((m[i.kind] = (m[i.kind] ?? 0) + 1), m), {});
@@ -198,26 +224,33 @@ export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes
               <JoinButton c={x} className="ml-auto" />
             </div>
           ))}
-          <ul className="grid gap-1">
-            {w.items.map((it, i) => {
-              const href = it.kind === "note" ? `${base}/notes/${enc(code)}/${enc(it.noteSlug!)}`
-                : it.kind === "assignment" && it.assignmentId ? `${base}/assignments/${it.assignmentId.split("/").map(enc).join("/")}` : it.href;
-              const internal = it.kind === "note" || it.kind === "assignment";
-              const cls = cx("flex items-start gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2", it.kind === "note" && "font-semibold");
-              const inner = <><span>{kindIcon(it.kind, it.ext)}</span><span className="leading-snug">{it.kind === "note" ? `My notes: ${it.title}` : it.title}{it.external && <span className="text-muted"> ↗</span>}</span></>;
-              const link = !href ? <span className={cls}>{inner}</span> : internal ? <Link to={href} className={cls}>{inner}</Link> : <FileLink href={href} className={cls}>{inner}</FileLink>;
-              return <li key={i} className={cx(it.transcript && "flex items-start gap-2")}>{link}{it.transcript && <a href={it.transcript} target="_blank" rel="noreferrer" className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-muted underline hover:text-ink">Transcript</a>}</li>;
-            })}
-          </ul>
-          {w.items.length === 0 && <p className="text-sm text-muted">Nothing posted for this week.</p>}
-          {quizzes.length > 0 && <div className="mt-2"><QuizLinks sem={data.id} quizzes={quizzes} /></div>}
-          {w.index > 0 && w.items.some(isMaterial) && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {!w.items.some((i) => i.kind === "note") && <AskAiButton action="make-notes" params={{ course: code, week: String(w.index) }}>Make notes</AskAiButton>}
-              <AskAiButton action="quiz-me" params={{ course: code, week: String(w.index) }}>Quiz me</AskAiButton>
-              <MakeQuizButton data={data} course={code} week={String(w.index)}>{quizzes.length ? "Make another quiz" : "Make a quiz"}</MakeQuizButton>
-            </div>
-          )}
+          {w.items.length === 0 && !quizzes.length && <p className="text-sm text-muted">Nothing posted for this week.</p>}
+          {WEEK_GROUPS.map(([key, label]) => {
+            const items = w.items.filter((it) => groupOf(it) === key);
+            const notesBtn = key === "notes" && !items.length && w.index > 0 && w.items.some(isMaterial);
+            if (key === "practice") {
+              const tools = w.index > 0 && w.items.some(isMaterial);
+              if (!quizzes.length && !tools) return null;
+              return (
+                <WeekGroup key={key} label={label}>
+                  {quizzes.length > 0 && <QuizLinks sem={data.id} quizzes={quizzes} />}
+                  {tools && (
+                    <div className="mt-1.5 flex flex-wrap gap-2 px-2">
+                      <AskAiButton action="quiz-me" params={{ course: code, week: String(w.index) }}>Quiz me</AskAiButton>
+                      <MakeQuizButton data={data} course={code} week={String(w.index)}>{quizzes.length ? "Make another quiz" : "Make a quiz"}</MakeQuizButton>
+                    </div>
+                  )}
+                </WeekGroup>
+              );
+            }
+            if (!items.length && !notesBtn) return null;
+            return (
+              <WeekGroup key={key} label={label}>
+                {items.length > 0 && <ul className="grid gap-0.5">{items.map((it, i) => <WeekItemRow key={i} it={it} base={base} code={code} />)}</ul>}
+                {notesBtn && <div className="px-2"><AskAiButton action="make-notes" params={{ course: code, week: String(w.index) }}>Make notes</AskAiButton></div>}
+              </WeekGroup>
+            );
+          })}
         </div>
       )}
     </div>
