@@ -6,6 +6,7 @@
 //   POST /api/ai/run           { sem, chatId?, action?, params?, message } → Server-Sent Events
 //   POST /api/ai/stop          { chatId }
 //   GET  /api/ai/chats         saved chats (newest first);  GET /api/ai/chats/<id>   one chat
+//   DELETE /api/ai/chats/<id>  deletes a saved chat (not while it runs: 409);  DELETE /api/ai/chats  all of them but the running ones → { deleted, kept }
 //   GET  /api/ai/view?path=…  a visual the AI saved (HTML, SVG or image), sandboxed, for the chat to show inline
 //   POST /api/ai/plan/task     { sem, week, line, done } ticks a task in semesters/<sem>/plans/<week>.md
 //   POST /api/ai/quiz          { sem, course, week? } makes a quiz in the background (no chat on screen) → { jobs: [job] }
@@ -25,7 +26,7 @@
 // missing notes, for every week with files, and a quiz for every class with material and no quiz
 // ("autoQuiz": false turns the quizzes off). Up to "parallel" (default 3) runs at once.
 import { randomBytes, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
@@ -145,6 +146,18 @@ function listChats(root: string) {
   return readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => loadChat(root, f.slice(0, -5))).filter((c) => c !== null)
     .map(({ id, title, tool, action, sem, updatedAt }) => ({ id, title, tool, action, sem, updatedAt }))
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, 50);
+}
+/** Deletes saved chats (one, or all of them), never one that is still running. */
+function deleteChats(root: string, running: (id: string) => boolean, id?: string) {
+  const dir = chatDir(root);
+  const ids = id ? [id] : existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)) : [];
+  let deleted = 0, kept = 0;
+  for (const x of ids) {
+    if (running(x)) { kept++; continue; }
+    const f = join(dir, `${x}.json`);
+    if (existsSync(f)) { rmSync(f); deleted++; }
+  }
+  return { deleted, kept };
 }
 
 // ---------- assignment prep (PREP.md in each assignment folder) ----------
@@ -538,9 +551,15 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         return json(res, { jobs: quizJobs });
       }
       if (p === "/api/ai/actions") return json(res, { actions: listActions(root) });
+      if (p === "/api/ai/chats" && req.method === "DELETE") return json(res, deleteChats(root, (x) => runs.has(x)));
       if (p === "/api/ai/chats") return json(res, { chats: listChats(root) });
       if (p.startsWith("/api/ai/chats/")) {
         const id = p.split("/").pop() ?? "";
+        if (req.method === "DELETE") {
+          if (!safeId(id) || !loadChat(root, id)) return json(res, { error: "Not found" }, 404);
+          if (runs.has(id)) return json(res, { error: "This chat is still working. Stop it first." }, 409);
+          return json(res, deleteChats(root, () => false, id));
+        }
         const chat = safeId(id) && (runs.get(id)?.chat ?? loadChat(root, id));
         return chat ? json(res, { ...chat, running: runs.has(id) }) : json(res, { error: "Not found" }, 404);
       }
