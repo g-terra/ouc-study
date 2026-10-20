@@ -50,12 +50,17 @@ export const INSTALL_HINT: Record<AgentTool, string> = {
   codex: "npm i -g @openai/codex",
   opencode: "npm i -g opencode-ai",
 };
-// The models the Ask AI panel offers. Claude Code takes these aliases with any Claude plan; Codex runs
-// these with a ChatGPT sign-in. Both stay on the subscription (no API credits); "models" in .ouc/ai.json
-// replaces a list. opencode and plain local models offer what their server has (set up by `ouc ai setup`).
-export const AGENT_MODELS: Record<"claude" | "codex", string[]> = { claude: ["sonnet", "opus", "haiku"], codex: ["gpt-5-codex", "gpt-5"] };
+// The models the Ask AI panel offers. Claude Code takes these aliases with any Claude plan. Codex's list
+// comes from the installed Codex itself (`codex debug models`: the catalog for your ChatGPT sign-in), with
+// the one bundled in Codex 0.163 as a fallback. Both stay on the subscription (no API credits); "models"
+// in .ouc/ai.json replaces a list. opencode and plain local models offer what their server has (`ouc ai setup`).
+export const AGENT_MODELS: Record<"claude" | "codex", string[]> = {
+  claude: ["sonnet", "opus", "haiku"],
+  codex: ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"],
+};
 /** The models a tool can be asked to use, and the one it uses when none is picked (undefined: the tool's own default). */
 export function toolModels(cfg: Pick<AiConfig, "models" | "opencode" | "local"> | null, tool: string): { models: string[]; model?: string } {
+  if (tool === "codex" && !cfg?.models?.codex && codexCatalog?.length) return { models: codexCatalog };
   if (tool === "claude" || tool === "codex") return { models: cfg?.models?.[tool]?.filter((m) => typeof m === "string" && m) ?? AGENT_MODELS[tool] };
   const s = tool === "opencode" ? cfg?.opencode : tool === "local" ? cfg?.local : undefined;
   return s ? { models: [...new Set([s.model, ...(s.models ?? [])])].filter(Boolean), model: s.model } : { models: [] };
@@ -214,6 +219,35 @@ export function loginStatusAsync(tool: string, ms = 8000): Promise<LoginState | 
     p.on("exit", (status) => { clearTimeout(t); done(parseLogin(tool, { status, stdout, stderr })); });
   });
 }
+/** The models Codex lists in its picker (`codex debug models`), best first; hidden and internal ones are left out. */
+export function parseCodexModels(out: string): string[] {
+  try {
+    const j = JSON.parse(out.slice(out.indexOf("{")));
+    return (Array.isArray(j?.models) ? j.models : [])
+      .filter((m: { slug?: unknown; visibility?: unknown }) => typeof m?.slug === "string" && /^\w[\w.:-]*$/.test(m.slug) && m.visibility === "list")
+      .sort((a: { priority?: number }, b: { priority?: number }) => (a.priority ?? 99) - (b.priority ?? 99))
+      .map((m: { slug: string }) => m.slug);
+  } catch { return []; }
+}
+// the last list read from Codex (toolModels uses it, so the app accepts exactly what the picker showed)
+let codexCatalog: string[] | null = null;
+/** Reads Codex's model catalog for this sign-in; keeps the last good list when Codex can't answer. */
+export function codexModelsAsync(ms = 10000, bin = "codex"): Promise<string[] | null> {
+  return new Promise((done) => {
+    let stdout = "";
+    const p = spawnCli(bin, ["debug", "models"], { env: agentEnv("codex") });
+    const t = setTimeout(() => { p.kill(); done(codexCatalog); }, ms);
+    p.stdout?.on("data", (d) => (stdout += d));
+    p.on("error", () => { clearTimeout(t); done(codexCatalog); });
+    p.on("exit", () => {
+      clearTimeout(t);
+      const found = parseCodexModels(stdout);
+      if (found.length) codexCatalog = found;
+      done(codexCatalog);
+    });
+  });
+}
+
 /** Runs the tool's own browser sign-in (Claude account / ChatGPT account). */
 export function login(tool: AgentTool): boolean {
   const [bin, args]: [string, string[]] = tool === "claude" ? ["claude", ["auth", "login"]] : ["codex", ["login"]];

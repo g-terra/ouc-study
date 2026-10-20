@@ -32,7 +32,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
-import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, loginStatusAsync, serverUp, toolModels, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
+import { AGENTIC, ALIASES, INSTALL_HINT, TOOL_LABEL, describe, detect, isAgentic, loadConfig, codexModelsAsync, loginStatusAsync, serverUp, toolModels, type AiConfig, type LocalModel, type LoginState } from "./providers.ts";
 import { buildPrompt, chatSystem, listActions, prepPath, quizPath, quizScope, weeksWithoutNotes, weeksWithoutQuiz, type Params } from "./actions.ts";
 import { parseQuiz } from "../../content/src/quiz.ts";
 import { currentSemesterId, loadData, read } from "./context.ts";
@@ -101,7 +101,8 @@ export async function aiStatus(root: string): Promise<AiStatus> {
   const chosen = cfg?.tool ? (ALIASES[cfg.tool] ?? cfg.tool) : null;
   const d = await detect();
   const login = async (t: "claude" | "codex") => (d[t] ? loginStatusAsync(t) : null);
-  const [claude, codex] = await Promise.all([login("claude"), login("codex")]);
+  // Codex's model list is read from Codex itself (toolModels then offers it)
+  const [claude, codex] = await Promise.all([login("claude"), login("codex"), d.codex ? codexModelsAsync() : null]);
   const signed = (t: "claude" | "codex", st: LoginState | null): ToolState => {
     if (!d[t]) return { state: "missing", fix: INSTALL_HINT[t] };
     if (!st || st.unknown) return { state: "unknown", detail: "Installed; couldn't read the sign-in status", fix: LOGIN_FIX[t] };
