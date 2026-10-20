@@ -143,3 +143,12 @@ test("v2: the profile menu opens Settings, with eClass, AI tools, transcripts, a
   await expect(page.getByRole("radiogroup", { name: "Colour theme" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sync now" })).toBeVisible();
 });
+
+test("v2: an open week groups its items under Watch, Read, My notes and Practice", async ({ page }) => {
+  await page.goto(`/v2${SEM}/courses/DEMO101`);
+  await page.getByRole("button", { name: /Getting started/ }).first().click();
+  const week = page.locator("#w1");
+  for (const name of ["Watch", "Read", "My notes", "Practice"]) await expect(week.getByRole("heading", { name, exact: true })).toBeVisible();
+  await expect(week.getByRole("heading", { name: "Watch" }).locator("..")).toContainText("Transcript");
+  await expect(week.getByRole("heading", { name: "Practice" }).locator("..").getByRole("button", { name: /Quiz me/ })).toBeVisible();
+});
