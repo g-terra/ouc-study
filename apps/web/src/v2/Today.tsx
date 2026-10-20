@@ -1,30 +1,36 @@
 import type { SemesterData } from "@ouc/content/types";
 import { Link, enc } from "../lib/router";
-import { courseMap } from "../lib/data";
+import { courseMap, currentWeek } from "../lib/data";
 import { at, daysBetween, fmtFull, relative } from "../lib/dates";
-import { Card, CourseBadge, SectionTitle } from "../components/ui";
+import { Card, CourseBadge, FileLink, SectionTitle, kindIcon } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
 import { ClassCard, upcomingClasses } from "../components/Classes";
 import { PlanCard, currentPlan } from "../pages/Plan";
 import { ORDER, UpdateRow } from "../pages/Updates";
-import { DayGroups, agenda, assignmentHref } from "./agenda";
+import { DayGroups, EvRow, agenda, assignmentHref } from "./agenda";
 import { unreadItems } from "./Notifications";
 import { GraduationCap, INLINE, PartyPopper } from "../components/icons";
+import { DoneBox, DoneCount } from "../components/Progress";
+import { useProgress } from "../lib/progress";
+import { openItems, weekProgress } from "@ouc/content/progress";
 
 /**
- * Today: what to do next and nothing else. The next deadline and class, this week's plan, the next 7 days,
+ * Today: what to do next and nothing else. Overdue work first (only when there is some), then the next deadline and class, this week's plan, the next 7 days,
  * and what's new on eClass only when something is. Everything else is one tap away (Courses, Calendar, the bell).
  */
 export function Today({ data }: { data: SemesterData }) {
   const now = new Date();
   const base = `/v2/${enc(data.id)}`;
   const C = courseMap(data);
-  const next = data.assignments.find((a) => !a.submitted && a.due && at(a.due) > new Date(now.getTime() - 86_400_000));
+  const next = data.assignments.find((a) => !a.submitted && a.due && at(a.due) > now);
   // the soonest class of any course (data.classes is ordered course by course)
   const nextClass = upcomingClasses(data, now).filter((c) => c.status !== "cancelled").sort((a, b) => at(a.at).getTime() - at(b.at).getTime())[0];
   const exam = data.exams.find((e) => e.kind === "Final exam" && at(e.at) >= now);
   const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
-  const week = agenda(data, now).filter((e) => !e.done && e.t >= new Date(now.getTime() - 3_600_000) && e.t < weekEnd);
+  const all = agenda(data, now).filter((e) => !e.done);
+  // past due and not handed in: first on Today, as on the Calendar
+  const overdue = all.filter((e) => e.kind === "due" && e.t < now);
+  const week = all.filter((e) => !(e.kind === "due" && e.t < now) && e.t >= new Date(now.getTime() - 3_600_000) && e.t < weekEnd);
   const fresh = unreadItems(data).sort((a, b) => ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
   const hour = now.getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -43,6 +49,13 @@ export function Today({ data }: { data: SemesterData }) {
           )}
         </div>
       </header>
+
+      {overdue.length > 0 && (
+        <section className="mb-4" aria-label="Overdue">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-bad">Overdue · {overdue.length}</h2>
+          <Card className="grid grid-cols-1 gap-0.5 border-bad/40 p-2">{overdue.map((e, i) => <EvRow key={i} e={e} course={C[e.code]} now={now} />)}</Card>
+        </section>
+      )}
 
       <div className="grid gap-3 md:grid-cols-2">
         {next ? (
@@ -67,6 +80,8 @@ export function Today({ data }: { data: SemesterData }) {
 
       <PlanCard data={data} className="mt-3" />
 
+      <ThisWeek data={data} now={now} />
+
       <SectionTitle right={<Link to={`${base}/calendar`} className="text-sm text-muted hover:text-ink">Calendar →</Link>}>Next 7 days</SectionTitle>
       <Card className="p-2 sm:p-3">
         {week.length ? <DayGroups events={week} data={data} now={now} /> : <p className="p-4 text-center text-muted">A quiet week: nothing due and no live classes.</p>}
@@ -80,6 +95,49 @@ export function Today({ data }: { data: SemesterData }) {
           </div>
         </>
       )}
+    </>
+  );
+}
+
+const SHOW = 4;
+
+/** What's still to watch and read in the current week of each course, with tick boxes. Hidden until something can be ticked. */
+function ThisWeek({ data, now }: { data: SemesterData; now: Date }) {
+  const progress = useProgress(data.id);
+  if (progress.state !== "ok") return null;
+  const rows = data.courses.flatMap((c) => {
+    const w = currentWeek(c, now);
+    const count = w && weekProgress(c.code, w, progress.done);
+    return w && count?.total ? [{ c, w, count, open: openItems(c.code, w, progress.done) }] : [];
+  });
+  if (!rows.length) return null;
+  return (
+    <>
+      <SectionTitle>This week</SectionTitle>
+      <div data-testid="this-week"><Card className="divide-y divide-line">
+        {rows.map(({ c, w, count, open }) => (
+          <div key={c.code} className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <CourseBadge course={c} />
+              <Link to={`/v2/${enc(data.id)}/courses/${enc(c.code)}#w${w.index}`} className="min-w-0 flex-1 truncate font-semibold hover:underline">{w.label}</Link>
+              <DoneCount count={count} long className="text-xs" />
+            </div>
+            {open.length ? (
+              <ul className="mt-1.5 grid gap-0.5">
+                {open.slice(0, SHOW).map((it, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <DoneBox sem={data.id} code={c.code} w={w} it={it} />
+                    <FileLink href={it.href} className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-1 py-1 text-sm hover:bg-surface-2">
+                      <span aria-hidden>{kindIcon(it.kind, it.ext)}</span><span className="leading-snug">{it.title}{it.external && <span className="text-muted"> ↗</span>}</span>
+                    </FileLink>
+                  </li>
+                ))}
+                {open.length > SHOW && <li className="pl-6 text-xs text-muted">and {open.length - SHOW} more in the week</li>}
+              </ul>
+            ) : <p className="mt-1 text-sm text-ok">All watched and read.</p>}
+          </div>
+        ))}
+      </Card></div>
     </>
   );
 }

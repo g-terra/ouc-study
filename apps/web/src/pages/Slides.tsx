@@ -11,6 +11,8 @@ import { Link, enc } from "../lib/router";
 import { Card, CourseBadge, cx } from "../components/ui";
 import { parseTranscript, type Transcript } from "../lib/transcript";
 import { FileText, INLINE, Maximize, Presentation, Volume2 } from "../components/icons";
+import { markDone } from "../lib/progress";
+import { findItem } from "@ouc/content/progress";
 
 type Info =
   | { ok: true; pdf: string; download: string; slides: { n: number; audio: string[] }[] }
@@ -76,6 +78,12 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
 
   // the deck's transcript (made from its narration), if it has one
   const href = `/files/${encodeURIComponent(data.id)}/${file.split("/").map(encodeURIComponent).join("/")}`;
+  // reaching the last slide ticks the deck off as read
+  useEffect(() => {
+    if (!pages || page < pages) return;
+    const f = findItem(data.courses, href);
+    if (f) void markDone(data.id, f.course.code, f.week, f.item, true, "viewed");
+  }, [page, pages, href, data.id, data.courses]);
   const transcriptHref = data.courses.flatMap((c) => c.weeks.flatMap((w) => w.items)).find((it) => it.href === href)?.transcript;
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   useEffect(() => {

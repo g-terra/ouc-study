@@ -7,7 +7,8 @@
   "exports": {
     "./types": "./src/types.ts",
     "./quiz": "./src/quiz.ts",
-    "./yaml-blocks": "./src/yaml-blocks.ts"
+    "./yaml-blocks": "./src/yaml-blocks.ts",
+    "./progress": "./src/progress.ts"
   },
   "scripts": {
     "content": "tsx src/build.ts",

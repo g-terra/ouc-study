@@ -11,6 +11,8 @@ import { Link, enc } from "../lib/router";
 import { Card, CourseBadge, cx } from "../components/ui";
 import { lineAt, parseTranscript, stamp, type Transcript, type TranscriptLine } from "../lib/transcript";
 import { Maximize } from "../components/icons";
+import { markDone } from "../lib/progress";
+import { findItem } from "@ouc/content/progress";
 
 const FOLLOW = "ouc-video-follow";
 const readFollow = () => { try { return localStorage.getItem(FOLLOW) !== "0"; } catch { return true; } };
@@ -80,6 +82,7 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
             <>
               <video ref={video} src={videoSrc} controls playsInline preload="metadata" data-testid="class-video"
                 onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} onSeeked={(e) => setNow(e.currentTarget.currentTime)}
+                onEnded={() => { const f = findItem(data.courses, href); if (f) void markDone(data.id, f.course.code, f.week, f.item, true, "watched"); }}
                 className="aspect-video w-full rounded-2xl border border-line bg-black" />
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                 <button type="button" onClick={() => video.current?.requestFullscreen?.()} className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 hover:border-muted"><Maximize aria-hidden className="size-3.5" />Full screen</button>

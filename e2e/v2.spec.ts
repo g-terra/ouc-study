@@ -48,6 +48,8 @@ test("v2 calendar lists the overdue assignment; a course keeps its notes and qui
   // the shared note page opens inside v2
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/notes\/DEMO101\/week-01-getting-started$/);
   await expect(page.getByText("Smoke tests open every page")).toBeVisible();
+  // the demo note leaves out the ">" on the Big idea's second line; it still goes in the box
+  await expect(page.getByRole("complementary").filter({ hasText: "Big idea" })).toContainText("Smoke tests open every page");
   await expect(page.getByRole("navigation", { name: "Main" }).first().getByRole("link", { name: "Courses", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
@@ -163,6 +165,37 @@ test("v2: an open week groups its items under Watch, Read, My notes and Practice
   for (const name of ["Watch", "Read", "My notes", "Practice"]) await expect(week.getByRole("heading", { name, exact: true })).toBeVisible();
   await expect(week.getByRole("heading", { name: "Watch" }).locator("..")).toContainText("transcript");
   await expect(week.getByRole("heading", { name: "Practice" }).locator("..").getByRole("button", { name: /Quiz me/ })).toBeVisible();
+});
+
+test("v2: Today lists overdue work first, the same as the Calendar", async ({ page }) => {
+  await page.goto(`/v2${SEM}`);
+  const overdue = page.getByRole("region", { name: "Overdue" });
+  await expect(overdue.getByRole("heading", { name: /Overdue · 1/ })).toBeVisible();
+  await expect(overdue.getByText("Assignment 1")).toBeVisible();
+  await expect(page.getByText("Next deadline")).toBeHidden();
+});
+
+test("v2: a grade update opens its assignment, with the grade and the tutor's feedback at the top", async ({ page }) => {
+  // made-up: the demo assignment graded, with written feedback
+  await page.route("**/data/2026-Demo.json", async (route) => {
+    const data = await (await route.fetch()).json();
+    const a = data.assignments.find((x: { title: string }) => x.title === "Assignment 1");
+    Object.assign(a, { submitted: true, grade: "8.00", feedback: "Clear argument.\nCite the reading next time." });
+    await route.fulfill({ json: data });
+  });
+  await page.goto(`/v2${SEM}`);
+  await page.getByRole("button", { name: /^Notifications/ }).click();
+  await page.getByRole("dialog", { name: "Notifications" }).getByRole("link", { name: "New grade: Assignment 1" }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/assignments\/DEMO101\//);
+  await expect(page.getByRole("dialog", { name: "Notifications" })).toBeHidden();
+  const box = page.getByTestId("assignment-grade");
+  await expect(box).toContainText("8.00");
+  await expect(box).toContainText("Cite the reading next time.");
+  await expect(page.getByText("Graded 8.00").first()).toBeVisible();
+  // the course's assignment list says Graded too
+  await page.goto(`/v2${SEM}/courses/DEMO101`);
+  await page.getByRole("tab", { name: /Assignments/ }).click();
+  await expect(page.getByText("Graded 8.00")).toBeVisible();
 });
 
 test("v2: course cards count in the singular, and the bell's drop-down fits on a phone", async ({ page }) => {

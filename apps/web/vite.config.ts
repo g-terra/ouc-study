@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { createAiApi } from "../../packages/ai/src/api.ts";
 import { addAttempt, readAttempts, removeQuiz, resetAttempts } from "../../packages/content/src/quiz-store.ts";
+import { readProgress, setDone } from "../../packages/content/src/progress-store.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { checkForUpdate, restartDetached } from "../../packages/cli/src/update.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
@@ -139,6 +140,14 @@ function updateApi(): Plugin {
   return { name: "update-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
 }
 
+// the quiz and progress APIs: only pages from this app on this computer may save
+const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+const send = (res: any, body: any, status = 200) => { res.statusCode = status; res.setHeader("Content-Type", "application/json"); res.setHeader("Cache-Control", "no-store"); res.end(JSON.stringify(body)); };
+const semDir = (sem: unknown) => {
+  const id = String(sem ?? "");
+  return /^\w[\w.-]*$/.test(id) && existsSync(resolve(SEMESTERS, id, "semester.json")) ? resolve(SEMESTERS, id) : null;
+};
+
 /**
  * /api/quiz/attempts?sem=… (GET): the quiz scores saved on this computer.
  * /api/quiz/attempts (POST { sem, quiz, title, results }): saves a finished quiz (points worked out on the server).
@@ -147,12 +156,6 @@ function updateApi(): Plugin {
  * Stored in semesters/<sem>/quizzes/attempts.json, see packages/content/src/quiz-store.ts.
  */
 function quizApi(): Plugin {
-  const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
-  const send = (res: any, body: any, status = 200) => { res.statusCode = status; res.setHeader("Content-Type", "application/json"); res.setHeader("Cache-Control", "no-store"); res.end(JSON.stringify(body)); };
-  const semDir = (sem: unknown) => {
-    const id = String(sem ?? "");
-    return /^\w[\w.-]*$/.test(id) && existsSync(resolve(SEMESTERS, id, "semester.json")) ? resolve(SEMESTERS, id) : null;
-  };
   const handler: Connect.NextHandleFunction = (req, res, next) => {
     if (!/^\/api\/quiz(\/|\?|$)/.test(req.url ?? "")) return next();
     // only pages from this app on this computer may save scores
@@ -188,6 +191,35 @@ function quizApi(): Plugin {
     });
   };
   return { name: "quiz-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
+}
+
+/**
+ * /api/progress?sem=… (GET): what's been ticked off as watched or read, on this computer.
+ * /api/progress (POST { sem, key, done, course, week, title, kind, how? }): ticks an item, or unticks it (done: false).
+ * Stored in semesters/<sem>/progress.json, see packages/content/src/progress-store.ts.
+ */
+function progressApi(): Plugin {
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    if (!/^\/api\/progress(\?|$)/.test(req.url ?? "")) return next();
+    const origin = req.headers.origin;
+    if (!LOCAL.test(req.headers.host ?? "") || (origin && !LOCAL.test(origin.replace(/^https?:\/\//, "")))) return send(res, { error: "Forbidden" }, 403);
+    if (req.method === "GET") {
+      const dir = semDir(new URL(req.url!, "http://x").searchParams.get("sem"));
+      return dir ? send(res, { done: readProgress(dir) }) : send(res, { error: "No such semester." }, 404);
+    }
+    if (req.method !== "POST") return send(res, { error: "Not found" }, 404);
+    let raw = "";
+    req.on("data", (d) => { raw += d; if (raw.length > 20_000) req.destroy(); });
+    req.on("end", () => {
+      try {
+        const body = JSON.parse(raw || "{}");
+        const dir = semDir(body.sem);
+        if (!dir) return send(res, { error: "No such semester." }, 404);
+        send(res, { done: setDone(dir, body) });
+      } catch (e) { send(res, { error: (e as Error).message }, 400); }
+    });
+  };
+  return { name: "progress-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
 }
 
 /** Serves the course files from ../../semesters at /files/<semester>/<path> (dev + preview). */
@@ -243,7 +275,7 @@ function slidesApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), quizApi()],
+  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), quizApi(), progressApi()],
   server: { port: 5173 },
   ...(process.env.OUC_PUBLIC ? { publicDir: resolve(process.env.OUC_PUBLIC) } : {}),
 });
