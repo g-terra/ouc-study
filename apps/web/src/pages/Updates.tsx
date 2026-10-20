@@ -120,8 +120,8 @@ function ConnectionCard() {
     setMsg(undefined);
     const r = await syncNow();
     if (r.ok) {
-      const ai = r.ai && (r.ai.notes || r.ai.prep)
-        ? ` Your AI is now making ${[r.ai.notes && `${r.ai.notes} missing note${r.ai.notes > 1 ? "s" : ""}`, r.ai.prep && `${r.ai.prep} prep pack${r.ai.prep > 1 ? "s" : ""}`].filter(Boolean).join(" and ")}: see the progress bar at the top.`
+      const ai = r.ai && (r.ai.notes || r.ai.prep || r.ai.quizzes)
+        ? ` Your AI is now making ${[r.ai.notes && `${r.ai.notes} missing note${r.ai.notes > 1 ? "s" : ""}`, r.ai.prep && `${r.ai.prep} prep pack${r.ai.prep > 1 ? "s" : ""}`, r.ai.quizzes && `${r.ai.quizzes} quiz${r.ai.quizzes > 1 ? "zes" : ""}`].filter(Boolean).join(", ")}: see the progress bar at the top.`
         : "";
       setMsg(`${r.found ? `Found ${r.found} new update${r.found > 1 ? "s" : ""}.` : "All up to date. Nothing new on eClass."}${ai}`);
       refreshData(); refreshPrep();

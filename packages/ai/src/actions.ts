@@ -118,6 +118,15 @@ export function quizMaterial(data: Pick<SemesterData, "notes">, course: Course, 
     notes: data.notes.filter((n) => n.code === course.code && (!week || n.weekIndex === week.index)).map((n) => `notes/${n.code}/${n.slug}.md`),
   };
 }
+/** The classes of a course with material and no lecture quiz yet: what "Every class" makes quizzes for. */
+export function weeksWithoutQuiz(root: string, semId: string, data: Pick<SemesterData, "notes" | "quizzes">, course: Course): Week[] {
+  return course.weeks.filter((w) => {
+    const m = quizMaterial(data, course, w);
+    return (m.files.length > 0 || m.notes.length > 0)
+      && !(data.quizzes ?? []).some((q) => q.code === course.code && q.scope === "lecture" && q.section === w.index)
+      && !existsSync(join(root, `semesters/${semId}/quizzes/${course.code}/${noteFileName(course, w).replace(/\.md$/, "")}.json`));
+  });
+}
 /** The prompt for an agent tool that makes a quiz and saves it at `rel`. */
 export function quizPrompt(root: string, semId: string, data: SemesterData, course: Course, week: Week | null): { rel: string; prompt: string } {
   const rel = quizPath(root, semId, course, week);

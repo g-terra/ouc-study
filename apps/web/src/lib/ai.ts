@@ -90,6 +90,12 @@ export const refreshPrep = () => fetch("/api/ai/prep").then((r) => (r.ok ? r.jso
   .then((j) => { prepNow = j; prepListeners.forEach((l) => l(j)); });
 /** "Notes · Short name" or "Prep · CODE title" for a background job id. */
 export function workLabel(id: string, data?: SemesterData | null): string {
+  if (id.startsWith("quiz:")) {
+    const [code, week] = id.slice(5).split("/");
+    const c = data?.courses.find((x) => x.code === code);
+    const w = c?.weeks.find((x) => String(x.index) === week);
+    return `Quiz · ${c?.short ?? code}${w ? ` ${w.index === 0 ? "General" : w.label}` : ""}`;
+  }
   if (id.startsWith("notes:")) { const c = data?.courses.find((x) => x.code === id.slice(6)); return `Notes · ${c?.short ?? id.slice(6)}`; }
   const a = data?.assignments.find((x) => x.id === id);
   return `Prep · ${a ? `${a.code} ${a.title}` : id.split("/").pop()}`;
