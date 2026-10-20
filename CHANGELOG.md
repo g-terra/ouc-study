@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.3](https://github.com/g-terra/ouc-study/compare/v0.18.2...v0.18.3) (2026-10-20)
+
+
+### Bug Fixes
+
+* **web:** a callout keeps a next line written without "&gt;" ([#109](https://github.com/g-terra/ouc-study/issues/109)) ([989fd9f](https://github.com/g-terra/ouc-study/commit/989fd9fdca30953dfceca5189ebbcf7ca095232b))
+
 ## [0.18.2](https://github.com/g-terra/ouc-study/compare/v0.18.1...v0.18.2) (2026-10-20)
 
 
