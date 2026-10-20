@@ -187,3 +187,13 @@ test("v2: a grade update opens its assignment, with the grade and the tutor's fe
   await page.getByRole("tab", { name: /Assignments/ }).click();
   await expect(page.getByText("Graded 8.00")).toBeVisible();
 });
+
+test("v2: course cards count in the singular, and the bell's drop-down fits on a phone", async ({ page }) => {
+  await page.goto(`/v2${SEM}/courses`);
+  await expect(page.getByText(/1 note · .*1 quiz$/)).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: /^Notifications/ }).click();
+  const box = await page.getByRole("dialog", { name: "Notifications" }).boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+});
