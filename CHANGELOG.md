@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.1](https://github.com/g-terra/ouc-study/compare/v0.18.0...v0.18.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **ci:** find the release pr right after release-please opens it ([#95](https://github.com/g-terra/ouc-study/issues/95)) ([662e114](https://github.com/g-terra/ouc-study/commit/662e114e599492ef46fc9e8e00d518debebec575))
+
 ## [0.18.0](https://github.com/g-terra/ouc-study/compare/v0.17.0...v0.18.0) (2026-10-20)
 
 
