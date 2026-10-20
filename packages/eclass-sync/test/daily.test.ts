@@ -1,7 +1,8 @@
 // The daily sync's change detection (src/daily.ts diff), on small made-up snapshots.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { diff, paragraphs, type Snapshot } from "../src/daily.ts";
+import { backfill, diff, paragraphs, type Snapshot } from "../src/daily.ts";
+import type { UpdateItem } from "../../content/src/types.ts";
 
 const snap = (s: Partial<Snapshot> = {}): Snapshot => ({ userid: 1, user: "Test Student", grades: {}, assignments: {}, modules: {}, files: {}, discussions: {}, notifications: {}, events: {}, courses: {}, ...s });
 const kinds = (items: { type: string; title: string }[]) => items.map((i) => `${i.type}: ${i.title}`);
@@ -73,4 +74,33 @@ test("forum HTML becomes plain text with its paragraphs and line breaks", () => 
   assert.equal(paragraphs("<p>Dear all,</p><p>The exam is on <b>12&nbsp;January</b>.<br>Room&nbsp;2.</p><ul><li>Bring ID</li><li>Pens</li></ul>"),
     "Dear all,\n\nThe exam is on 12 January .\nRoom 2.\n\n• Bring ID\n\n• Pens");
   assert.equal(paragraphs("<div><p>One</p></div>\n\n<p></p><p>Two</p>"), "One\n\nTwo");
+});
+
+test("updates saved cut short get their whole text from the snapshot, or for older threads from eClass", async () => {
+  const whole = `Dear all,\n\n${"The exam is on 12 January. ".repeat(12).trim()}`;
+  const cut = (t: string) => `${t.replace(/\s+/g, " ").slice(0, 219)}…`;
+  const item = (type: UpdateItem["type"], title: string, detail: string, url = ""): UpdateItem => ({ type, code: "ABC101", title, detail, url, at: "" });
+  const items = [
+    item("announcement", "Announcement: Exam", cut(`Tutor: ${whole}`), "https://eclass.ouc.ac.cy/mod/forum/discuss.php?d=10"),
+    item("forum", "New post: Old thread", cut(`Student: ${whole}`), "https://eclass.ouc.ac.cy/mod/forum/discuss.php?d=3"),
+    item("feedback", "Tutor feedback on Essay 1", cut(whole.replace(/\n/g, " "))),
+    item("forum", "New post: Changed since", "Tutor: Something else entirely and long enough to have been cut…", "https://x/discuss.php?d=10"),
+    item("grade", "New grade: Essay 1", "8.00"),
+  ];
+  const cur = snap({
+    discussions: { 10: { code: "ABC101", forum: "News", subject: "Exam", by: "Tutor", text: whole, url: "d10", announcement: true } },
+    assignments: { 70: { code: "ABC101", id: 7, cmid: 70, name: "Essay 1", url: "a", feedback: whole.replace(/\n/g, " ") } },
+  });
+  const asked: number[] = [];
+  const n = await backfill(items, cur, async (id) => { asked.push(id); return { by: "Student", text: whole }; });
+  assert.equal(n, 3);
+  assert.equal(items[0]!.detail, `Tutor: ${whole}`);
+  assert.equal(items[1]!.detail, `Student: ${whole}`);
+  assert.deepEqual(asked, [3]);   // thread 10 came from the snapshot
+  assert.equal(items[2]!.detail, whole.replace(/\n/g, " "));
+  // a different message isn't pasted over the cut one, and whole items stay as they are
+  assert.ok(items[3]!.detail.endsWith("…"));
+  assert.equal(items[4]!.detail, "8.00");
+  // already whole: nothing to do
+  assert.equal(await backfill(items, cur), 0);
 });

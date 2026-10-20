@@ -147,7 +147,6 @@ const strip = (h = "") => h.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").rep
 export const paragraphs = (h = "") => strip(h.replace(/<br\s*\/?>/gi, "\u0001").replace(/<\/(p|div|li|h\d|blockquote|tr)>/gi, "\u0002").replace(/<li[^>]*>/gi, "• "))
   .replace(/ ?\u0001 ?/g, "\n").replace(/( ?\u0002 ?)+/g, "\n\n").replace(/\n{3,}/g, "\n\n").trim();
 const FULL = 20_000; // a forum post longer than this is surely not text worth keeping whole
-const short = (s: string, n = 220) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const iso = (sec?: number | null) => (sec ? new Date(sec * 1000).toISOString() : undefined);
 const localIso = (sec?: number) => {
   if (!sec) return undefined;
@@ -265,7 +264,7 @@ async function gather(sem: SemesterConfig, prev: Partial<Snapshot> | null): Prom
   await soft("notifications", async () => {
     const n = await call("message_popup_get_popup_notifications", { useridto: userid, newestfirst: 1, limit: 30, offset: 0 });
     for (const x of n.notifications ?? []) {
-      snap.notifications[x.id] = { subject: strip(x.subject ?? ""), text: short(strip(x.smallmessage ?? x.fullmessage ?? "")), at: iso(x.timecreated), url: x.contexturl };
+      snap.notifications[x.id] = { subject: strip(x.subject ?? ""), text: strip(x.smallmessage ?? x.fullmessage ?? ""), at: iso(x.timecreated), url: x.contexturl };
     }
   });
   // upcoming calendar events (quizzes, sessions, deadlines)
@@ -286,7 +285,7 @@ export function diff(prev: Partial<Snapshot>, cur: Snapshot): UpdateItem[] {
   for (const [k, g] of Object.entries(cur.grades)) {
     const p = prev.grades?.[k];
     if (g.grade && (!p || p.grade !== g.grade)) add("grade", g.code, `New grade: ${g.item}`, `${g.grade}${p?.grade ? ` (was ${p.grade})` : ""}`, g.cmid ? `${SITE}/mod/assign/view.php?id=${g.cmid}` : "");
-    else if (g.feedback && p && p.feedback !== g.feedback) add("feedback", g.code, `Feedback on ${g.item}`, short(g.feedback));
+    else if (g.feedback && p && p.feedback !== g.feedback) add("feedback", g.code, `Feedback on ${g.item}`, g.feedback);
   }
   for (const [k, a] of Object.entries(cur.assignments)) {
     const p = prev.assignments?.[k];
@@ -294,7 +293,7 @@ export function diff(prev: Partial<Snapshot>, cur: Snapshot): UpdateItem[] {
     if (p.due !== a.due && a.due) add("deadline", a.code, `Deadline changed: ${a.name}`, `${(p.due ?? "none").replace("T", " ").slice(0, 16)} → ${a.due.replace("T", " ").slice(0, 16)}`, a.url);
     if (a.status && p.status !== a.status) add("submission", a.code, `${a.name}: ${a.status === "submitted" ? "submitted ✓" : a.status}`, a.submittedAt ? `at ${a.submittedAt.slice(0, 16).replace("T", " ")}` : "", a.url);
     if (a.grade && p.grade !== a.grade && !Object.values(cur.grades).some((g) => g.cmid === a.cmid && g.grade === a.grade)) add("grade", a.code, `New grade: ${a.name}`, a.grade, a.url);
-    if (a.feedback && p.feedback !== a.feedback) add("feedback", a.code, `Tutor feedback on ${a.name}`, short(a.feedback), a.url);
+    if (a.feedback && p.feedback !== a.feedback) add("feedback", a.code, `Tutor feedback on ${a.name}`, a.feedback, a.url);
   }
   for (const [k, m] of Object.entries(cur.modules)) if (!prev.modules?.[k] && m.type !== "assign") add("material", m.code, `New ${m.type === "resource" ? "file" : m.type}: ${m.name}`, m.section, m.url);
   for (const [k, f] of Object.entries(cur.files)) {
@@ -314,6 +313,38 @@ export function diff(prev: Partial<Snapshot>, cur: Snapshot): UpdateItem[] {
     add("event", e.code, `Upcoming: ${e.name}`, e.at ? e.at.replace("T", " ").slice(0, 16) : "", e.url);
   }
   return out;
+}
+
+// ---------- fill in updates saved cut short ----------
+/** The first post of a forum thread (for threads older than the newest 15 the snapshot keeps). */
+export type FirstPost = (discussion: number) => Promise<{ by?: string; text: string } | undefined>;
+const flat = (t: string) => t.replace(/• /g, "").replace(/\s+/g, " ").trim();
+
+/**
+ * Updates saved before whole messages were kept (forum posts, announcements, feedback, notifications) end in "…".
+ * Fill each in from this snapshot, or for an older forum thread from eClass, when the whole text starts like the cut one.
+ * Changes the items in place; the number filled in.
+ */
+export async function backfill(items: UpdateItem[], snap: Snapshot, firstPost?: FirstPost): Promise<number> {
+  let n = 0;
+  for (const i of items) {
+    if (!i.detail.endsWith("…")) continue;
+    let full: string | undefined;
+    if (i.type === "announcement" || (i.type === "forum" && i.title.startsWith("New post: "))) {
+      const id = /[?&]d=(\d+)/.exec(i.url)?.[1];
+      const d = id ? snap.discussions[id] : undefined;
+      const post = d ? { by: d.by, text: d.text } : id && firstPost ? await firstPost(Number(id)).catch(() => undefined) : undefined;
+      if (post?.text) full = `${post.by ? `${post.by}: ` : ""}${post.text}`;
+    } else if (i.type === "feedback") {
+      const name = i.title.replace(/^(Tutor feedback on|Feedback on) /, "");
+      full = Object.values(snap.assignments).find((a) => a.code === i.code && a.name === name)?.feedback
+        || Object.values(snap.grades).find((g) => g.code === i.code && g.item === name)?.feedback;
+    } else if (i.type === "notification") {
+      full = Object.values(snap.notifications).find((x) => (x.subject || "eClass notification") === i.title)?.text;
+    }
+    if (full && full.length >= i.detail.length && flat(full).startsWith(flat(i.detail.slice(0, -1)))) { i.detail = full; n++; }
+  }
+  return n;
 }
 
 // ---------- main ----------
@@ -354,6 +385,20 @@ export async function main(args: string[]): Promise<void> {
         detail: `Saved a baseline of ${Object.keys(snap.grades).length} grade items, ${Object.keys(snap.assignments).length} assignments, ${Object.keys(snap.modules).length} activities and ${Object.keys(snap.discussions).length} forum threads. From now on, changes appear here.`,
         url: "",
       }];
+    }
+    // updates saved cut short before (forum posts, announcements, feedback) get their whole text
+    let fetched = 0;
+    const firstPost: FirstPost = async (discussionid) => {
+      if (++fetched > 40) return undefined;   // a few per run is plenty; the rest on the next one
+      const r = await call("mod_forum_get_discussion_posts", { discussionid, sortby: "created", sortdirection: "ASC" });
+      const p = r.posts?.[0];
+      return p?.message ? { by: p.author?.fullname, text: paragraphs(p.message).slice(0, FULL) } : undefined;
+    };
+    for (const f of readdirSync(UPD).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f))) {
+      try {
+        const file: DayFile = JSON.parse(readFileSync(join(UPD, f), "utf8"));
+        if (await backfill(file.items, snap, firstPost)) writeFileSync(join(UPD, f), JSON.stringify(file, null, 1));
+      } catch {}
     }
     // append to today's file, without duplicating identical items from an earlier run today
     const dayFile = join(UPD, `${today}.json`);
