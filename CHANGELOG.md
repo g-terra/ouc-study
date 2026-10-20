@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.0](https://github.com/g-terra/ouc-study/compare/v0.22.0...v0.23.0) (2026-10-20)
+
+
+### Features
+
+* **web:** a toggle switch for on/off settings ([#124](https://github.com/g-terra/ouc-study/issues/124)) ([d13acc7](https://github.com/g-terra/ouc-study/commit/d13acc71d2c5f8bae368fc5e0bc0b23b19a26961))
+
 ## [0.22.0](https://github.com/g-terra/ouc-study/compare/v0.21.0...v0.22.0) (2026-10-20)
 
 
