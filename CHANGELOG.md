@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/g-terra/ouc-study/compare/v0.10.0...v0.11.0) (2026-10-20)
+
+
+### Features
+
+* **web:** make a quiz for every class at once, and on sync ([#67](https://github.com/g-terra/ouc-study/issues/67)) ([ea51a1e](https://github.com/g-terra/ouc-study/commit/ea51a1e249239540bbf082a80be4a1c7e7d36f71))
+
 ## [0.10.0](https://github.com/g-terra/ouc-study/compare/v0.9.2...v0.10.0) (2026-10-20)
 
 
