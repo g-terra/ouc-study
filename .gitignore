@@ -17,12 +17,17 @@ semesters/*
 memory/
 STUDENT.md
 CLAUDE.local.md
-# local state: installer reports, installed copies of ai/
+# local state: installer reports, installed copies of ai/ and dev/skills/
 .ouc/
-.claude/
+.claude/*
 .agents/
+# ...except the contributors' Claude Code settings (permissions, cloud SessionStart hook; see dev/README.md)
+!.claude/settings.json
 # generated opencode agents and your local model choice (opencode.json in the root is shared)
 .opencode/
+
+# Superpowers' design specs and plans stay local (summarise them in the PR)
+docs/superpowers/
 
 # session handover notes (mention personal details)
 HANDOVER.md

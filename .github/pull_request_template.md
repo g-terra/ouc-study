@@ -20,7 +20,7 @@ Closes #
 - [ ] `npm run check` passes (lint, tests, typecheck, public check) and `npm run build` works
 - [ ] Tests added or updated for changed behaviour
 - [ ] Docs updated where people will look (README, AGENTS.md, CONTRIBUTING.md, docs/)
-- [ ] Skills and agents edited in `ai/` only (not the generated `.claude/`, `.agents/`, `.opencode/` copies)
+- [ ] Study skills and agents edited in `ai/`, contributor tooling in `dev/` (not the generated `.claude/`, `.agents/`, `.opencode/` copies)
 - [ ] Nothing personal: no eClass key, course materials, submissions, grades, notes, `STUDENT.md` or `memory/`
 
 ## AI assistance
