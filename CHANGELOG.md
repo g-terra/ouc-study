@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.21.0](https://github.com/g-terra/ouc-study/compare/v0.20.0...v0.21.0) (2026-10-20)
+
+
+### Features
+
+* **web:** search notes, slides, transcripts, assignments and eclass posts ([#117](https://github.com/g-terra/ouc-study/issues/117)) ([038f090](https://github.com/g-terra/ouc-study/commit/038f09036e242c01f43611cc810bfd8396041759))
+
+
+### Bug Fixes
+
+* **web:** going back from slides, a video or an assignment keeps the course week open ([#115](https://github.com/g-terra/ouc-study/issues/115)) ([83ec4e7](https://github.com/g-terra/ouc-study/commit/83ec4e700bbf736c12fcf22a0773f4eea671cabe))
+
 ## [0.20.0](https://github.com/g-terra/ouc-study/compare/v0.19.0...v0.20.0) (2026-10-20)
 
 
