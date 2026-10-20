@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.22.0](https://github.com/g-terra/ouc-study/compare/v0.21.0...v0.22.0) (2026-10-20)
+
+
+### Features
+
+* **ai:** set each ai's default model in settings and pick opencode's local models ([#89](https://github.com/g-terra/ouc-study/issues/89)) ([2ff5cc2](https://github.com/g-terra/ouc-study/commit/2ff5cc2232f825d6fab9d087e03036a5d1e8c789))
+
+
+### Bug Fixes
+
+* **ai:** tell whisper the course's language instead of letting it guess ([#123](https://github.com/g-terra/ouc-study/issues/123)) ([439d098](https://github.com/g-terra/ouc-study/commit/439d09813861b27045a593166f0b0acf6f0a021c))
+* **web:** search shows notes as readable text and opens in the middle of the screen ([#121](https://github.com/g-terra/ouc-study/issues/121)) ([a3bca65](https://github.com/g-terra/ouc-study/commit/a3bca65b1b2698c581d921d90b46a7a5de129988))
+
 ## [0.21.0](https://github.com/g-terra/ouc-study/compare/v0.20.0...v0.21.0) (2026-10-20)
 
 
