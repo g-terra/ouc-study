@@ -200,7 +200,7 @@ test("v2: a grade update opens its assignment, with the grade and the tutor's fe
 
 test("v2: course cards count in the singular, and the bell's drop-down fits on a phone", async ({ page }) => {
   await page.goto(`/v2${SEM}/courses`);
-  await expect(page.getByText(/1 note · .*1 quiz$/)).toBeVisible();
+  await expect(page.getByText(/1 note · .*1 quiz\b/).first()).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: /^Notifications/ }).click();
   const box = await page.getByRole("dialog", { name: "Notifications" }).boundingBox();
@@ -257,4 +257,16 @@ test("v2 settings: each AI's default model is picked and saved", async ({ page }
   await expect(pick).toHaveValue("gemma3:4b");
   expect(posted).toEqual([{ tool: "opencode", model: "gemma3:4b" }]);
   await expect(page.getByTestId("default-models").getByRole("combobox")).toHaveCount(1);   // not for AIs that aren't installed
+});
+
+test("a formula's symbol list is one aligned row per symbol", async ({ page }) => {
+  await page.goto(`/v2${SEM}/notes/DEMO101/week-01-getting-started`);
+  const where = page.getByTestId("formula-where").filter({ hasText: "candidate class" });
+  await expect(where.locator("dt")).toHaveCount(3);
+  const xs = await where.locator("dd").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
+  const ys = await where.locator("dd").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(xs).size).toBe(1);          // every meaning starts at the same place
+  expect(ys[0]).toBeLessThan(ys[1]);           // and each symbol has its own row
+  expect(ys[1]).toBeLessThan(ys[2]);
+  await expect(page.locator(".katex-error")).toHaveCount(0);
 });

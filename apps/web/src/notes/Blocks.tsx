@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import katex from "katex";
 import { mdInline, mdToHtml } from "../lib/markdown";
 import { cx } from "../components/ui";
@@ -61,12 +61,13 @@ function Formula({ data }: { data: any }) {
             {f.title && <div className="border-b border-line bg-surface-2 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted">∑ {f.title}</div>}
             <div className="px-4 py-3 text-lg" dangerouslySetInnerHTML={{ __html: tex(String(f.tex ?? "")) }} />
             {where.length > 0 && (
-              <dl className="grid gap-x-4 gap-y-1.5 border-t border-line px-4 py-3 text-sm sm:grid-cols-2">
+              // one row per symbol: the symbols share one column as wide as the widest, so every meaning starts at the same place
+              <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1.5 border-t border-line px-4 py-3 text-sm" data-testid="formula-where">
                 {where.map(([s, d], j) => (
-                  <div key={j} className="flex items-baseline gap-2">
-                    <dt className="min-w-12 shrink-0" dangerouslySetInnerHTML={{ __html: tex(String(s), false) }} />
+                  <Fragment key={j}>
+                    <dt dangerouslySetInnerHTML={{ __html: tex(String(s), false) }} />
                     <dd className="text-muted"><Inline text={d} /></dd>
-                  </div>
+                  </Fragment>
                 ))}
               </dl>
             )}
