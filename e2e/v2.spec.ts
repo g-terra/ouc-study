@@ -232,3 +232,15 @@ test("v2: going back from a video or an assignment keeps the course week open an
   await page.getByRole("link", { name: /^← Demo Studies/ }).click();
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses\/DEMO101(#w\d+)?$/);
 });
+
+test("a formula's symbol list is one aligned row per symbol", async ({ page }) => {
+  await page.goto(`/v2${SEM}/notes/DEMO101/week-01-getting-started`);
+  const where = page.getByTestId("formula-where");
+  await expect(where.locator("dt")).toHaveCount(3);
+  const xs = await where.locator("dd").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
+  const ys = await where.locator("dd").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(xs).size).toBe(1);          // every meaning starts at the same place
+  expect(ys[0]).toBeLessThan(ys[1]);           // and each symbol has its own row
+  expect(ys[1]).toBeLessThan(ys[2]);
+  await expect(page.locator(".katex-error")).toHaveCount(0);
+});

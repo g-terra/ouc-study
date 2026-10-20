@@ -20,3 +20,13 @@ flowchart LR
 ## Math
 
 The demo formula: $E = mc^2$.
+
+```formula
+title: Naive Bayes decision rule
+tex: '\hat{c} = \arg\max_{c} P(c) \prod_{i=1}^{n} P(w_i \mid c)'
+where:
+  - ['c', candidate class]
+  - ['P(c)', class prior]
+  - ['P(w_i \mid c)', word likelihood under that class]
+note: The evidence term is the same for every class, so it is left out.
+```
