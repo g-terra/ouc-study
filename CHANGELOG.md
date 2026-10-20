@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.0](https://github.com/g-terra/ouc-study/compare/v0.24.1...v0.25.0) (2026-10-20)
+
+
+### Features
+
+* **ai:** warm up the default ai when the app starts and show thinking while it works ([#143](https://github.com/g-terra/ouc-study/issues/143)) ([82de9f6](https://github.com/g-terra/ouc-study/commit/82de9f6b694de2416ec1251421ea2dfbb726a0f6))
+
 ## [0.24.1](https://github.com/g-terra/ouc-study/compare/v0.24.0...v0.24.1) (2026-10-20)
 
 
