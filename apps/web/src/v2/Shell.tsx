@@ -52,7 +52,7 @@ function Menu({ sem }: { sem: string }) {
           <AppVersion />
           <div className={head}>Look</div>
           <div className="space-y-1 px-2">
-            <p className="text-muted">You're trying the new, simpler look.</p>
+            <p className="text-muted">This is the new look. The classic one is still here for now.</p>
             <button type="button" className="font-semibold underline" onClick={() => { rememberLook("classic"); navigate(toClassic(path), { raw: true }); }}>
               Back to the classic look
             </button>

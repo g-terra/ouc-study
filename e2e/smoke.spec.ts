@@ -10,6 +10,8 @@ const PAGES: [path: string, name: string][] = [
 // what went wrong in the browser during the current test (tests in a worker run one at a time)
 let errors: string[] = [];
 test.beforeEach(async ({ page }) => {
+  // these tests cover the classic look (the new look, the default, is in v2.spec.ts)
+  await page.addInitScript(() => { try { localStorage.setItem("ouc-ui", "classic"); } catch {} });
   errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
