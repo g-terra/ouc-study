@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import type { SemesterData } from "@ouc/content/types";
-import { Link, enc, useRouter } from "../lib/router";
+import { Link, enc, useRouter, cameFrom } from "../lib/router";
 import { useIndex } from "../lib/data";
 import { refreshAi } from "../lib/ai";
 import { cx } from "../components/ui";
@@ -59,7 +59,7 @@ export function Shell({ sem, data, children }: { sem: string; data?: SemesterDat
   const { path, navigate } = useRouter();
   const index = useIndex();
   const base = `/v2/${enc(sem)}`;
-  const section = v2Section(path);
+  const section = v2Section(path, cameFrom());
   useEffect(() => { rememberLook("v2"); }, []);
   return (
     <div className="flex min-h-screen flex-col" data-look="v2">

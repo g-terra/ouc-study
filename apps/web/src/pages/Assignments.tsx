@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Assignment, SemesterData } from "@ouc/content/types";
-import { Link, enc } from "../lib/router";
+import { Link, cameFrom, enc } from "../lib/router";
 import { courseMap, stateOf, type State } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { Card, CourseBadge, CourseDot, Empty, FileCard, PageHeader, SectionTitle, StatePill, cx } from "../components/ui";
@@ -57,6 +57,9 @@ export function AssignmentsPage({ data }: { data: SemesterData }) {
   );
 }
 
+/** Opened from that course's page (a week's list): the way back is the course, not the assignments list. */
+export const fromCourse = (code: string) => new RegExp(`/courses/${enc(code)}(#|$)`).test(cameFrom() ?? "");
+
 export function AssignmentPage({ data, id }: { data: SemesterData; id: string }) {
   const base = `/${enc(data.id)}`;
   const a = data.assignments.find((x) => x.id === id);
@@ -71,7 +74,9 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
 
   return (
     <div className="max-w-4xl">
-      <Link to={`${base}/assignments`} className="text-sm text-muted hover:text-ink">← All assignments</Link>
+      {fromCourse(a.code) && course
+        ? <Link to={`${base}/courses/${enc(a.code)}${week ? `#w${week.index}` : ""}`} className="text-sm text-muted hover:text-ink">← {course.short}{week ? `, ${week.index === 0 ? "General" : week.label}` : ""}</Link>
+        : <Link to={`${base}/assignments`} className="text-sm text-muted hover:text-ink">← All assignments</Link>}
       <PageHeader title={a.title} eyebrow={<><CourseBadge course={course} size="md" /><StatePill state={st} grade={a.grade} /></>}>
         <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
           {a.due && <span>Due <b className="text-ink">{fmtFull(at(a.due))}</b> ({relative(at(a.due))})</span>}

@@ -33,8 +33,8 @@ export function RouterProvider({ children }: { children: ReactNode }) {
     const to = opts?.raw ? target : rewrite(target);
     if (to === window.location.pathname + window.location.hash) return;
     // replace: same page, a new address (no history entry, no scroll)
-    if (opts?.replace) { window.history.replaceState({}, "", to); setPath(to); return; }
-    window.history.pushState({}, "", to);
+    if (opts?.replace) { window.history.replaceState(window.history.state ?? {}, "", to); setPath(to); return; }
+    window.history.pushState({ from: window.location.pathname + window.location.hash }, "", to);
     setPath(to);
     if (!to.includes("#")) window.scrollTo({ top: 0 });
   };
@@ -84,3 +84,6 @@ export function Link({ to, children, ...rest }: { to: string } & AnchorHTMLAttri
 }
 
 export const enc = encodeURIComponent;
+
+/** The app page this one was opened from (kept by the browser through reloads and Back), e.g. to link back to it. */
+export const cameFrom = (): string | undefined => { try { return window.history.state?.from; } catch { return undefined; } };

@@ -34,6 +34,8 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
   const name = parts.at(-1)!.replace(/\.\w+$/, "").replace(/_/g, " ");
   const course = parts[0] === "courses" ? data.courses.find((c) => parts[1]?.startsWith(c.code)) : undefined;
   const week = course && parts.length > 3 ? parts[2].replace(/^\d+-/, "").replace(/[-.]+/g, " ").trim() : undefined;
+  // the course week these slides are in, for the way back
+  const weekIndex = course?.weeks.find((w) => w.items.some((i) => { try { return !!i.href && decodeURIComponent(i.href).endsWith(`/${file}`); } catch { return false; } }))?.index;
 
   const [info, setInfo] = useState<Info>();
   const [doc, setDoc] = useState<PDFDocumentProxy>();
@@ -99,7 +101,7 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted">
-        {course && <Link to={`${base}/courses/${enc(course.code)}`}><CourseBadge course={course} size="md" /></Link>}
+        {course && <Link to={`${base}/courses/${enc(course.code)}${weekIndex !== undefined ? `#w${weekIndex}` : ""}`} aria-label={`Back to ${course.short}${week ? `, ${week}` : ""}`}><CourseBadge course={course} size="md" /></Link>}
         {week && <span>{week}</span>}
         {info?.download && <a href={info.download} download className="ml-auto hover:text-ink">⬇ Download the .{file.split(".").pop()}</a>}
       </div>

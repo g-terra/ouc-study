@@ -207,3 +207,28 @@ test("v2: course cards count in the singular, and the bell's drop-down fits on a
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);
 });
+
+test("v2: going back from a video or an assignment keeps the course week open and Courses highlighted", async ({ page }) => {
+  const nav = () => page.getByRole("navigation", { name: "Main" }).first();
+  await page.goto(`/v2${SEM}/courses/DEMO101`);
+  await page.getByRole("button", { name: /Getting started/ }).first().click();
+  const week = page.locator("#w1");
+  await expect(week.getByRole("heading", { name: "Watch" })).toBeVisible();
+  // a class video, then the browser's Back
+  await week.getByRole("heading", { name: "Watch" }).locator("..").getByRole("link").first().click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/video\//);
+  await page.goBack();
+  await expect(week.getByRole("heading", { name: "Watch" })).toBeVisible();
+  // the video page's course chip goes back to the week
+  await week.getByRole("heading", { name: "Watch" }).locator("..").getByRole("link").first().click();
+  await page.getByRole("link", { name: /^Back to Demo Studies/ }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses\/DEMO101#w1$/);
+  await expect(week.getByRole("heading", { name: "Watch" })).toBeVisible();
+  // an assignment opened from the course: Courses stays highlighted, and its back link is the course week
+  await page.getByRole("tab", { name: /Assignments/ }).click();
+  await page.getByText("Assignment 1").first().click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/assignments\//);
+  await expect(nav().getByRole("link", { name: "Courses", exact: true })).toHaveAttribute("aria-current", "page");
+  await page.getByRole("link", { name: /^← Demo Studies/ }).click();
+  await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses\/DEMO101(#w\d+)?$/);
+});

@@ -26,10 +26,10 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
   const course = parts[0] === "courses" ? data.courses.find((c) => parts[1]?.startsWith(c.code)) : undefined;
   const href = fileHref(data.id, file);
   // the week item this is (for its title and, for Panopto, the link)
-  let item: WeekItem | undefined, weekLabel: string | undefined;
+  let item: WeekItem | undefined, weekLabel: string | undefined, weekIndex: number | undefined;
   for (const w of course?.weeks ?? []) {
     const it = w.items.find((x) => x.href === href || x.transcript === href);
-    if (it) { item = it; weekLabel = w.index === 0 ? "General" : w.label; break; }
+    if (it) { item = it; weekLabel = w.index === 0 ? "General" : w.label; weekIndex = w.index; break; }
   }
   const isTranscript = /\.transcript\.md$/i.test(file);
   const external = isTranscript && item?.external ? item.href : undefined;
@@ -70,7 +70,7 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
   return (
     <div className="mx-auto max-w-7xl">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted">
-        {course && <Link to={`${base}/courses/${enc(course.code)}`}><CourseBadge course={course} size="md" /></Link>}
+        {course && <Link to={`${base}/courses/${enc(course.code)}${weekIndex !== undefined ? `#w${weekIndex}` : ""}`} aria-label={`Back to ${course.short}${weekLabel ? `, ${weekLabel}` : ""}`}><CourseBadge course={course} size="md" /></Link>}
         {weekLabel && <span>{weekLabel}</span>}
         {videoSrc && <a href={videoSrc} download className="ml-auto hover:text-ink">⬇ Download the video</a>}
       </div>
