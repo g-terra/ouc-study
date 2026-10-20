@@ -8,7 +8,7 @@
  */
 export interface TranscriptLine { at: number | null; text: string }
 export interface TranscriptSection { heading?: string; slide?: number; lines: TranscriptLine[] }
-export interface Transcript { title?: string; by?: string; made?: string; note?: string; sections: TranscriptSection[] }
+export interface Transcript { title?: string; by?: string; made?: string; /** the language Whisper was told */ language?: string; note?: string; sections: TranscriptSection[] }
 
 /** "1:05" → 65, "1:02:05" → 3725; null when it isn't a time. */
 export function timeOf(s: string): number | null {
@@ -27,11 +27,11 @@ export function parseTranscript(md: string): Transcript {
   const fm = body.match(/^---\n([\s\S]*?)\n---\n/);
   if (fm) {
     for (const l of fm[1]!.split("\n")) {
-      const m = l.match(/^(title|by|made):\s*(.*)$/);
+      const m = l.match(/^(title|by|made|language):\s*(.*)$/);
       if (!m) continue;
       let v = m[2]!.trim();
       try { if (v.startsWith('"')) v = JSON.parse(v); } catch { /* keep as written */ }
-      out[m[1] as "title" | "by" | "made"] = v;
+      out[m[1] as "title" | "by" | "made" | "language"] = v;
     }
     body = body.slice(fm[0].length);
   }

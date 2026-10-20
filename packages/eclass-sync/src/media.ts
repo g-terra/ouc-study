@@ -8,7 +8,10 @@
 //   webconference recordings (LTI tool)       not reachable through the eClass web service
 //
 // A transcript is a Markdown file next to what it transcribes: "Lecture 3.mp4" → "Lecture 3.transcript.md".
-// Settings (all optional) in .ouc/media.json: { "videos": true, "transcribe": true, "model": "small" }.
+// Settings (all optional) in .ouc/media.json: { "videos": true, "transcribe": true, "model": "small", "language": "en" }.
+// The language spoken: a course's "language" in semester.json, else "language" here, else Greek for a
+// course with a Greek title and English for the rest ("auto" lets Whisper guess, which can go wrong:
+// English spoken with an accent came out as made-up Greek).
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -16,11 +19,23 @@ import { join } from "node:path";
 export const MEDIA_FILE = /\.(mp4|m4v|mov|webm|mkv|avi|mp3|m4a|wav|aac|ogg|oga|opus|flac)$/i;
 export const TRANSCRIPT_SUFFIX = ".transcript.md";
 
-export interface MediaConfig { videos: boolean; transcribe: boolean; model: string }
+export interface MediaConfig { videos: boolean; transcribe: boolean; model: string; /** "" (per course), "auto", or a language code */ language: string }
 export function loadMediaConfig(root: string): MediaConfig {
   let c: Partial<MediaConfig> = {};
   try { c = JSON.parse(readFileSync(join(root, ".ouc", "media.json"), "utf8")); } catch { /* defaults */ }
-  return { videos: c.videos !== false, transcribe: c.transcribe !== false, model: typeof c.model === "string" && /^[\w.-]+$/.test(c.model) ? c.model : "small" };
+  return { videos: c.videos !== false, transcribe: c.transcribe !== false, model: typeof c.model === "string" && /^[\w.-]+$/.test(c.model) ? c.model : "small", language: validLanguage(c.language) ?? "" };
+}
+
+const validLanguage = (l: unknown) => (typeof l === "string" && /^([a-z]{2,3}|auto)$/.test(l) ? l : null);
+const GREEK = /[\u0370-\u03ff\u1f00-\u1fff]/g;
+/** Share of the letters in `text` that are Greek (0 when there are none). */
+export function greekShare(text: string): number {
+  const letters = text.match(/\p{L}/gu)?.length ?? 0;
+  return letters ? (text.match(GREEK)?.length ?? 0) / letters : 0;
+}
+/** The language a course's recordings are in (see the top of this file). */
+export function courseLanguage(course: { title: string; short?: string; language?: string }, fallback = ""): string {
+  return validLanguage(course.language) ?? validLanguage(fallback) ?? (greekShare(`${course.title} ${course.short ?? ""}`) > 0.5 ? "el" : "en");
 }
 
 /** Changes some settings in .ouc/media.json, keeping the rest of the file. */
@@ -102,7 +117,7 @@ export function paragraphs(segs: Segment[], { every = 60, stamps = true } = {}):
   return out;
 }
 
-export interface TranscriptInfo { title: string; source: string; by: string; made?: Date }
+export interface TranscriptInfo { title: string; source: string; by: string; made?: Date; /** the language Whisper was told (absent: it guessed) */ language?: string }
 /**
  * The transcript file: front matter, then the text. `parts` with a heading each (a slide deck's
  * slides) or a single unnamed part (a video).
@@ -117,9 +132,26 @@ export function transcriptMarkdown(info: TranscriptInfo, parts: { heading?: stri
     return text.flatMap((t) => [t, ""]);
   });
   return [
-    "---", `title: ${q(info.title)}`, `source: ${q(info.source)}`, `by: ${q(info.by)}`, `made: ${made}`, "---", "",
+    "---", `title: ${q(info.title)}`, `source: ${q(info.source)}`, `by: ${q(info.by)}`, `made: ${made}`, ...(info.language ? [`language: ${info.language}`] : []), "---", "",
     `# Transcript: ${info.title}`, "",
     `_Made automatically from the ${parts.some((p) => p.heading) ? "slides' narration" : "recording's audio"}, so names and terms can be misheard.${parts.some((p) => p.heading) ? "" : " Times are [minutes:seconds] into the recording."}_`, "",
     ...(body.length ? body : ["_(no speech found)_", ""]),
   ].join("\n");
+}
+
+/**
+ * Whether a transcript Whisper made should be made again in `lang`: it was told another language, or
+ * (older ones, which let Whisper guess) its text is in the wrong script, Greek for an English course or
+ * the other way round. Panopto captions (and anything not made here) and "auto" are left alone.
+ */
+export function needsRedo(md: string, lang: string): boolean {
+  const fm = md.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
+  const by = fm.match(/^by:\s*(.*)$/m)?.[1] ?? "";
+  if (lang === "auto" || !by || /panopto/i.test(by)) return false;
+  const told = fm.match(/^language:\s*(\S+)/m)?.[1];
+  if (told) return told !== lang;
+  if (lang !== "en" && lang !== "el") return false;
+  const body = md.slice(md.indexOf("---", 4)).replace(/^#.*$|^_.*_$|\[[\d:]+\]/gm, "");
+  const greek = greekShare(body);
+  return lang === "en" ? greek > 0.3 : greek < 0.3;
 }
