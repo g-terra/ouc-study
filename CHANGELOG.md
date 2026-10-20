@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.0](https://github.com/g-terra/ouc-study/compare/v0.13.0...v0.14.0) (2026-10-20)
+
+
+### Features
+
+* **ai:** make whisper transcripts optional, with a setting in the app ([#76](https://github.com/g-terra/ouc-study/issues/76)) ([37cbef5](https://github.com/g-terra/ouc-study/commit/37cbef527cddda00ac989c9d61dd022d26fba40d))
+
+
+### Bug Fixes
+
+* **ai:** list the models the installed codex offers ([#75](https://github.com/g-terra/ouc-study/issues/75)) ([0e4691b](https://github.com/g-terra/ouc-study/commit/0e4691b41cea6045f6fc6f5c0d6ddbc76b524df4))
+
 ## [0.13.0](https://github.com/g-terra/ouc-study/compare/v0.12.0...v0.13.0) (2026-10-20)
 
 
