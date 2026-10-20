@@ -17,7 +17,7 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MEDIA_FILE, transcriptPath } from "../../eclass-sync/src/media.ts";
 import { buildClasses, detectClasses, type ClassesConfig } from "./classes.ts";
-import { findTimetableText, parseExamTimetable } from "./exams.ts";
+import { importantDates, readDates } from "./dates.ts";
 import { gradeFor } from "./grades.ts";
 import { parsePlan } from "./plan.ts";
 import { parseQuiz } from "./quiz.ts";
@@ -48,7 +48,6 @@ interface SemesterConfig {
   label: string;
   start: string;
   end: string;
-  examTimetable?: string;
   timezone?: string;                         // of the class times; default Europe/Nicosia
   courses: CourseConfig[];
 }
@@ -116,8 +115,6 @@ function buildSemester(id: string): SemesterData | undefined {
   const meta = readJson<any[]>(join(dir, "_meta/eclass-meta.json"), []);
   const subs = readJson<{ subs: any[] }>(join(dir, "_meta/submissions.json"), { subs: [] }).subs;
   const resources = readJson<Record<string, any>>(join(dir, "_meta/resources.json"), {});
-  const examsJson = readJson<any>(join(dir, "_meta/exams.json"), []);
-  const examsRaw: any[] = Array.isArray(examsJson) ? [...examsJson] : Array.isArray(examsJson?.exams) ? [...examsJson.exams] : [];
   const subByKey = new Map(subs.map((s) => [`${s.code}|${s.name}`, s]));
   // live data from the daily API sync (packages/eclass-sync), newer than the scrape
   const live = readJson<{ updated?: string; assignments?: Record<string, any>; grades?: any[]; courses?: Record<string, { joinUrl?: string; groups?: string[]; posts?: { at?: string; text: string }[] }> }>(join(dir, "_meta/live.json"), {});
@@ -313,19 +310,9 @@ function buildSemester(id: string): SemesterData | undefined {
   }
 
   assignments.sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
-  // no exams written down yet: read them from the exam timetable in the course files
-  let timetable = cfg.examTimetable;
-  if (!examsRaw.length) {
-    const t = findTimetableText(dir, cfg.examTimetable);
-    if (t) {
-      examsRaw.push(...parseExamTimetable(t.text, cfg.courses.map((c) => c.code), cfg.start, cfg.end));
-      if (!timetable || !existsSync(join(dir, timetable))) timetable = t.pdf;
-    }
-  }
-  const exams: Exam[] = examsRaw.filter((e) => e?.code && typeof e.at === "string").map((e) => ({
-    code: e.code, kind: e.kind ?? "Exam", at: e.at.length === 16 ? `${e.at}:00` : e.at, noTime: !!e.notime,
-    source: timetable ? fileHref(id, timetable) : undefined,
-  })).sort((a, b) => a.at.localeCompare(b.at));
+  // dates the student added (exams and others); the exams among them show wherever exams do
+  const dates = importantDates(readDates(dir));
+  const exams: Exam[] = dates.filter((d) => d.kind === "exam").map((d) => ({ code: d.code, kind: d.title, at: d.at, noTime: d.noTime }));
 
   // daily update feed
   const ud = join(dir, "updates");
@@ -344,7 +331,7 @@ function buildSemester(id: string): SemesterData | undefined {
 
   return {
     id, label: cfg.label, start: cfg.start, end: cfg.end, generated: new Date().toISOString(),
-    courses, assignments, exams, classes, notes, updates, plans, quizzes, timezone: cfg.timezone ?? "Europe/Nicosia",
+    courses, assignments, exams, dates, classes, notes, updates, plans, quizzes, timezone: cfg.timezone ?? "Europe/Nicosia",
   };
 }
 

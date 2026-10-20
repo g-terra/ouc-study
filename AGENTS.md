@@ -27,7 +27,7 @@ packages/cli/src/     the `ouc` command (ouc.ts, ai.ts), setup.ts (installer), s
 bin/                  small .mjs launchers (ouc.mjs, setup.mjs, server.mjs, ai.mjs) that start the TypeScript in packages/cli with tsx
 semesters/<id>/       ← personal, git-ignored
   semester.json       course registry
-  _meta/              eclass-meta.json (course structure), submissions.json, live.json, exams.json (when empty, read from the exam timetable in the course files), resources.json (study links)
+  _meta/              eclass-meta.json (course structure), submissions.json, live.json, dates.json (exams and other important dates the student adds; older exams.json is read until then), resources.json (study links)
   courses/<course>/NN-<week>/   original eClass files, class videos included; *.transcript.md next to a video or narrated .pptx = its transcript (base for notes)
   text/               plain-text copies of every PDF/PPTX/DOCX/notebook. **grep these**
   assignments/<CODE>/<MM-DD>_<name>/   brief files, my-submission/, README.md (working notes), PREP.md (AI prep pack), review/ (drafts uploaded for review: vN.docx, vN.md text, REVIEW-vN.md, approved PDF)
@@ -68,7 +68,7 @@ Never invent progress.
 
 ## Agents & skills
 
-Skills (`ai/skills/*/SKILL.md`, standard Agent Skills format): `sync-eclass`, `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `make-quiz`, `assignment-helper`, `assignment-prep`, `assignment-review`.
+Skills (`ai/skills/*/SKILL.md`, standard Agent Skills format): `sync-eclass`, `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `make-quiz`, `assignment-helper`, `assignment-prep`, `assignment-review`, `important-dates`.
 Agents (`ai/agents/*.md`): **note-taker**, **study-planner**, **researcher**, **tutor**, **assignment-reviewer**. Claude Code gets them as subagents in `.claude/agents/`, opencode in `.opencode/agents/`; Codex gets each one as a skill of the same name in `.agents/skills/` (where opencode also finds the skills).
 When a request matches a skill, follow its `SKILL.md`. If the installed copies are missing, run `ouc ai install` (or read them straight from `ai/`).
 **Edit skills in `ai/` only**; the copies in `.claude/`, `.agents/` and `.opencode/agents/` are regenerated.

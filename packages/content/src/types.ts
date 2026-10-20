@@ -111,12 +111,23 @@ export interface Prep {
   log: string[];          // "2026-10-18 · Claude Code · prepared", newest last
 }
 
+/** A date the student added to a course (_meta/dates.json, see dates.ts). */
+export interface ImportantDate {
+  id: string;
+  code: string;
+  title: string;          // "Final exam", "Project presentation"
+  kind: "exam" | "other";
+  at: string;             // ISO local datetime
+  noTime: boolean;        // only the day is known
+  topics?: string;        // what it covers
+}
+
+/** The exams among the important dates (kind is the date's title). */
 export interface Exam {
   code: string;
-  kind: string;           // "Final exam" | "Repeat exam"
+  kind: string;           // "Final exam", "Repeat exam"
   at: string;             // ISO local datetime
   noTime?: boolean;
-  source?: string;        // href to timetable
 }
 
 export interface Note {
@@ -199,6 +210,7 @@ export interface SemesterData extends SemesterSummary {
   courses: Course[];
   assignments: Assignment[];
   exams: Exam[];
+  dates: ImportantDate[];
   classes: ClassSession[];
   timezone: string;       // of the class times on eClass (semester.json "timezone", default Europe/Nicosia)
   notes: Note[];

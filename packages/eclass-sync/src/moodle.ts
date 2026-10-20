@@ -131,19 +131,6 @@ export function htmlToText(h: unknown = ""): string {
     .replace(/<[^>]+>/g, ""))
     .replace(/[ \t ]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
-/** The exam timetable PDFs a description links to on eClass (link text or file name about exams or a timetable): { url, filename }. */
-export function timetableLinks(h: unknown, site: string): { url: string; filename: string }[] {
-  const out: { url: string; filename: string }[] = [];
-  for (const m of String(h ?? "").matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
-    const url = decode(m[1]!);
-    if (!url.startsWith(`${site.replace(/\/+$/, "")}/`) || !/\/pluginfile\.php\//.test(url)) continue;
-    const filename = decodeURIComponent(url.split(/[?#]/)[0]!.split("/").pop() ?? "");
-    const text = decode(m[2]!.replace(/<[^>]+>/g, " "));
-    if (/\.pdf$/i.test(filename) && TIMETABLE.test(`${text} ${filename}`) && !out.some((x) => x.url === url)) out.push({ url, filename });
-  }
-  return out;
-}
-const TIMETABLE = /exam|timetable|εξετ/i;
 export const links = (h: unknown = "") => [...String(h).matchAll(/(?:href|src)=["']([^"']+)["']/gi)].map((m) => decode(m[1]!)).filter((u) => /^https?:/i.test(u));
 
 /** Same slug rule as packages/content (and the original importer). */

@@ -27,7 +27,7 @@ export function Timeline({ data }: { data: SemesterData }) {
       kind: "due" as const, code: a.code, t: at(a.due!), title: a.title, done: a.submitted, state: stateOf(a, now),
       href: `${base}/assignments/${a.id.split("/").map(enc).join("/")}`,
     })),
-    ...data.exams.map((e) => ({ kind: "exam" as const, code: e.code, t: at(e.at), title: e.kind, noTime: e.noTime, href: e.source })),
+    ...data.exams.map((e) => ({ kind: "exam" as const, code: e.code, t: at(e.at), title: e.kind, noTime: e.noTime })),
     ...(data.classes ?? []).map((c) => ({
       kind: "class" as const, code: c.code, t: at(c.at), session: c, done: new Date(c.end) < now,
       title: C[c.code]?.weeks.find((w) => w.index === c.weekIndex)?.label ?? "Live class",

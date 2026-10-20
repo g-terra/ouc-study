@@ -4,13 +4,13 @@ import { courseMap, stateOf, type State } from "../lib/data";
 import { at, fmtTime, relative } from "../lib/dates";
 import { JoinButton } from "../components/Classes";
 import { CourseDot, StatePill, cx } from "../components/ui";
-import { GraduationCap, INLINE } from "../components/icons";
+import { CalendarDays, GraduationCap, INLINE } from "../components/icons";
 
-/** One dated thing: a deadline, a live class or an exam. */
+/** One dated thing: a deadline, a live class, an exam or another important date. */
 export type Ev =
   | { kind: "due"; code: string; t: Date; title: string; href: string; done: boolean; state: State; grade?: string }
   | { kind: "class"; code: string; t: Date; title: string; href: string; done: boolean; session: ClassSession }
-  | { kind: "exam"; code: string; t: Date; title: string; href?: string; done: boolean; noTime?: boolean };
+  | { kind: "exam" | "date"; code: string; t: Date; title: string; href: string; done: boolean; noTime?: boolean };
 
 export const assignmentHref = (sem: string, id: string) => `/${enc(sem)}/assignments/${id.split("/").map(enc).join("/")}`;
 
@@ -28,21 +28,25 @@ export function agenda(data: SemesterData, now = new Date()): Ev[] {
       title: C[c.code]?.weeks.find((w) => w.index === c.weekIndex)?.label ?? "Live class",
       href: `${base}/courses/${enc(c.code)}${c.weekIndex !== undefined ? `#w${c.weekIndex}` : ""}`,
     })),
-    ...data.exams.map((e): Ev => ({ kind: "exam", code: e.code, t: at(e.at), title: e.kind, noTime: e.noTime, href: e.source, done: at(e.at) < now })),
+    ...(data.dates ?? []).map((d): Ev => ({
+      kind: d.kind === "exam" ? "exam" : "date", code: d.code, t: at(d.at), title: d.title, noTime: d.noTime, done: at(d.at) < now,
+      href: `${base}/courses/${enc(d.code)}#dates`,
+    })),
   ].sort((a, b) => a.t.getTime() - b.t.getTime());
 }
 
-const KIND = { due: "Due", class: "Live class", exam: "Exam" } as const;
+const KIND = { due: "Due", class: "Live class", exam: "Exam", date: "Important date" } as const;
+const isDate = (e: Ev): e is Extract<Ev, { kind: "exam" | "date" }> => e.kind === "exam" || e.kind === "date";
 
 /** One row of the agenda: time, course, what, and its state or join button. */
 export function EvRow({ e, course, now = new Date() }: { e: Ev; course?: Course; now?: Date }) {
   const body = (
     <>
-      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted">{e.kind === "exam" && e.noTime ? "" : fmtTime(e.t)}</span>
+      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted">{isDate(e) && e.noTime ? "" : fmtTime(e.t)}</span>
       <CourseDot color={course?.color ?? "#999"} />
       <span className="min-w-0 flex-1">
         <span className={cx("block truncate text-sm", e.kind !== "class" && "font-semibold", e.done && "text-muted line-through decoration-muted/50")}>
-          {e.kind === "exam" ? <><GraduationCap aria-hidden className={INLINE} /> {course?.short ?? e.code} · {e.title}</> : e.title}
+          {isDate(e) ? <>{e.kind === "exam" ? <GraduationCap aria-hidden className={INLINE} /> : <CalendarDays aria-hidden className={INLINE} />} {course?.short ?? e.code} · {e.title}</> : e.title}
         </span>
         <span className="block text-xs text-muted">{course?.short} · {KIND[e.kind]}{!e.done && ` · ${relative(e.t, now)}`}</span>
       </span>
@@ -50,11 +54,10 @@ export function EvRow({ e, course, now = new Date() }: { e: Ev; course?: Course;
     </>
   );
   const cls = cx("flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-surface-2",
-    e.kind === "due" && e.state === "soon" && "bg-warn-bg/60", e.kind === "due" && e.state === "late" && "bg-bad-bg/60", e.kind === "exam" && "bg-surface-2");
+    e.kind === "due" && e.state === "soon" && "bg-warn-bg/60", e.kind === "due" && e.state === "late" && "bg-bad-bg/60", isDate(e) && "bg-surface-2");
   return (
     <div className="flex min-w-0 items-center gap-2">
-      {e.href && e.kind === "exam" ? <a href={e.href} target="_blank" rel="noreferrer" className={cx(cls, "flex-1")}>{body}</a>
-        : e.href ? <Link to={e.href} className={cx(cls, "min-w-0 flex-1")}>{body}</Link>
+      {e.href ? <Link to={e.href} className={cx(cls, "min-w-0 flex-1")}>{body}</Link>
         : <div className={cx(cls, "flex-1")}>{body}</div>}
       {e.kind === "class" && !e.done && <JoinButton c={e.session} now={now} />}
     </div>

@@ -81,7 +81,7 @@ test("a dry run lists the video and asks Panopto nothing", async () => {
   assert.match(readFileSync(join(root, ".ouc/dry-run/T/report.md"), "utf8"), /Class videos to download: 1; Panopto recordings \(links only\): 1/);
 });
 
-test("an exam timetable linked from an activity's description downloads into its section", async () => {
+test("links in an activity's description, an exam timetable's too, are not downloaded (exam dates are added by hand)", async () => {
   const root = setup({ videos: false });
   const desc = `<p>Join the class here.</p><p><a href="https://e/pluginfile.php/9/mod_webconference/intro/Exam-Timetable-2026-2027.pdf">View the examination timetable</a>`
     + ` · <a href="https://e/pluginfile.php/9/mod_webconference/intro/Guide.pdf">How to join</a> · <a href="https://elsewhere.example/timetable.pdf">Other timetable</a></p>`;
@@ -96,12 +96,11 @@ test("an exam timetable linked from an activity's description downloads into its
     download: async (url: string, dest: string) => { downloads.push(url); mkdirSync(dirname(dest), { recursive: true }); writeFileSync(dest, "pdf"); return 3; },
   } as MoodleClient;
   await pull({ root, semId: "T", cfg, client, fetchImpl: answers("") });
-  // only the eClass PDF named as the exam timetable, not the other links
-  assert.deepEqual(downloads, ["https://e/pluginfile.php/9/mod_webconference/intro/Exam-Timetable-2026-2027.pdf"]);
-  assert.ok(existsSync(join(root, "semesters/T/courses/ABC101-Testing/00-General/Exam-Timetable-2026-2027.pdf")));
+  assert.deepEqual(downloads, []);
+  assert.ok(!existsSync(join(root, "semesters/T/courses/ABC101-Testing/00-General/Exam-Timetable-2026-2027.pdf")));
 });
 
-test("after new files, the text copies are made (the app reads exam dates from the timetable's)", () => {
+test("after new files, the text copies are made for the AI to read", () => {
   const calls: string[][] = [];
   const run = (cmd: string, args: string[]) => { calls.push([cmd, ...args]); return { status: 0 }; };
   assert.equal(textCopies("/r", "2026-Fall", { run, python: "python3" }), true);

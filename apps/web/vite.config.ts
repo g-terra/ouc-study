@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createAiApi } from "../../packages/ai/src/api.ts";
 import { addAttempt, readAttempts, removeCourseQuizzes, removeQuiz, resetAttempts } from "../../packages/content/src/quiz-store.ts";
 import { readProgress, setDone } from "../../packages/content/src/progress-store.ts";
+import { removeDate, saveDate } from "../../packages/content/src/dates.ts";
 import { search, semesterDocs } from "../../packages/content/src/search.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { checkForUpdate, restartDetached } from "../../packages/cli/src/update.ts";
@@ -229,6 +230,39 @@ function progressApi(): Plugin {
 }
 
 /**
+ * /api/dates (POST { sem, id?, code, title, kind, date, time?, topics? }): adds an important date to a course, or changes the one with that id.
+ * /api/dates?sem=…&id=… (DELETE): removes it.
+ * Stored in semesters/<sem>/_meta/dates.json (see packages/content/src/dates.ts); the app data rebuilds on its own.
+ */
+function datesApi(): Plugin {
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    if (!/^\/api\/dates(\?|$)/.test(req.url ?? "")) return next();
+    const origin = req.headers.origin;
+    if (!LOCAL.test(req.headers.host ?? "") || (origin && !LOCAL.test(origin.replace(/^https?:\/\//, "")))) return send(res, { error: "Forbidden" }, 403);
+    const fail = (e: unknown) => send(res, { error: (e as Error).message }, (e as { code?: number }).code === 404 ? 404 : 400);
+    if (req.method === "DELETE") {
+      const url = new URL(req.url!, "http://x");
+      const dir = semDir(url.searchParams.get("sem"));
+      if (!dir) return send(res, { error: "No such semester." }, 404);
+      try { return send(res, { dates: removeDate(dir, url.searchParams.get("id") ?? "") }); } catch (e) { return fail(e); }
+    }
+    if (req.method !== "POST") return send(res, { error: "Not found" }, 404);
+    let raw = "";
+    req.on("data", (d) => { raw += d; if (raw.length > 20_000) req.destroy(); });
+    req.on("end", () => {
+      try {
+        const body = JSON.parse(raw || "{}");
+        const dir = semDir(body.sem);
+        if (!dir) return send(res, { error: "No such semester." }, 404);
+        const codes = (JSON.parse(readFileSync(resolve(dir, "semester.json"), "utf8")).courses ?? []).map((c: { code: string }) => c.code);
+        send(res, { dates: saveDate(dir, body, codes) });
+      } catch (e) { fail(e); }
+    });
+  };
+  return { name: "dates-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
+}
+
+/**
  * /api/search?sem=…&q=… (GET): notes, slides and PDFs (their text copies), transcripts, assignments and
  * eClass posts that have every word of q, best first (packages/content/src/search.ts). Nothing leaves this computer.
  */
@@ -306,7 +340,7 @@ function slidesApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), quizApi(), progressApi(), searchApi()],
+  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), quizApi(), progressApi(), datesApi(), searchApi()],
   server: { port: 5173 },
   ...(process.env.OUC_PUBLIC ? { publicDir: resolve(process.env.OUC_PUBLIC) } : {}),
 });

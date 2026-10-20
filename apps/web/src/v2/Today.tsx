@@ -25,7 +25,7 @@ export function Today({ data }: { data: SemesterData }) {
   const next = data.assignments.find((a) => !a.submitted && a.due && at(a.due) > now);
   // the soonest class of any course (data.classes is ordered course by course)
   const nextClass = upcomingClasses(data, now).filter((c) => c.status !== "cancelled").sort((a, b) => at(a.at).getTime() - at(b.at).getTime())[0];
-  const exam = data.exams.find((e) => e.kind === "Final exam" && at(e.at) >= now);
+  const exam = data.exams.find((e) => at(e.at) >= now);
   const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
   const all = agenda(data, now).filter((e) => !e.done);
   // past due and not handed in: first on Today, as on the Calendar
@@ -44,7 +44,7 @@ export function Today({ data }: { data: SemesterData }) {
           <AskAiButton action="plan-week">{currentPlan(data) ? "Update my plan" : "Plan my week"}</AskAiButton>
           {exam && (
             <span className="rounded-full bg-surface-2 px-3 py-1.5 text-sm text-muted" title={fmtFull(at(exam.at))}>
-              <GraduationCap aria-hidden className={INLINE} /> First final in <b className="text-ink">{daysBetween(now, at(exam.at))} days</b> · {C[exam.code]?.short}
+              <GraduationCap aria-hidden className={INLINE} /> Next exam in <b className="text-ink">{daysBetween(now, at(exam.at))} days</b> · {C[exam.code]?.short}
             </span>
           )}
         </div>

@@ -16,7 +16,7 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import type { CourseConfig, MetaActivity, MetaCourse, MetaSection, SemesterConfig, SubmissionRecord } from "../../content/src/eclass.ts";
-import { createClient, eclassDate, htmlToText, isoDay, links, pad, readToken, safeName, slug, strip, timetableLinks, type MoodleAssignment, type MoodleClient, type MoodleError } from "./moodle.ts";
+import { createClient, eclassDate, htmlToText, isoDay, links, pad, readToken, safeName, slug, strip, type MoodleAssignment, type MoodleClient, type MoodleError } from "./moodle.ts";
 import { MEDIA_FILE, loadMediaConfig, panoptoCaptions, panoptoSession, srtToSegments, transcriptMarkdown } from "./media.ts";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -101,8 +101,6 @@ export async function pull({ root = ROOT, semId, cfg, client, dryRun = false, on
         if (m.uservisible === false || m.modname === "label") continue;
         const act: MetaActivity = { type: m.modname, name: strip(m.name), url: m.url ?? "", desc: htmlToText(m.description ?? "") };
         const files = (m.contents ?? []).filter((f) => f.type === "file" && f.fileurl);
-        // the exam timetable is often only a link in an activity's description: the app reads the exam dates from it
-        for (const t of timetableLinks(m.description, client.site)) { queue(t.url, `${secRel}/${safeName(t.filename)}`); nFiles++; }
         if (m.modname === "resource" && files.length && files.every((f) => INSTALLER.test(f.filename))) {
           act.desc = act.desc || "Installer: download it from eClass if you need it.";
         } else if (m.modname === "resource" && files.length) {
@@ -315,8 +313,8 @@ function currentSemesterId(root: string): string | null {
 
 const findPython = () => ["python3", "python"].find((p) => spawnSync(p, ["--version"], { stdio: "ignore" }).status === 0) ?? null;
 /**
- * Makes the text copies of new course files (tools/extract_text.py, only new or changed files): the AI reads
- * them, and the app reads the exam dates from the exam timetable's. False when there is no Python or it failed.
+ * Makes the text copies of new course files (tools/extract_text.py, only new or changed files) for the AI to read.
+ * False when there is no Python or it failed.
  */
 export function textCopies(root: string, semId: string, o: { run?: (cmd: string, args: string[]) => { status: number | null }; python?: string | null } = {}): boolean {
   const python = o.python === undefined ? findPython() : o.python;
