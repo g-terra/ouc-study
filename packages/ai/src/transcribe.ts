@@ -6,7 +6,8 @@
 //
 // Engines, the first one found is used:
 //   whisper.cpp   whisper-cli + ffmpeg (Mac: brew install whisper-cpp ffmpeg) and a model in .ouc/whisper/
-//   faster-whisper   Python (pip install faster-whisper), through tools/transcribe.py; it downloads its model itself
+//   faster-whisper   Python (pip install faster-whisper), through tools/transcribe.py; it downloads its model itself.
+//                    Windows and Linux use this; on Windows, --setup installs Python with winget first if needed
 //
 // What gets a transcript: every video or audio file under semesters/<sem>/courses/ and every .pptx
 // with narration (one section per slide). The transcript sits next to it ("Lecture 3.transcript.md",
@@ -16,7 +17,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, extname, join, posix, relative, resolve } from "node:path";
+import { basename, dirname, extname, join, posix, relative, resolve, win32 } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
@@ -33,6 +34,7 @@ const MAC = process.platform === "darwin", WIN = process.platform === "win32";
 const SLIDES = /\.(pptx|ppsx)$/i;
 export const NO_WHISPER = MAC
   ? "Transcripts need Whisper (free, runs on this computer). Run in Terminal: ouc transcribe --setup  (it runs: brew install whisper-cpp ffmpeg)"
+  : WIN ? "Transcripts need Whisper (free, runs on this computer). Run: ouc transcribe --setup  (it installs Python with winget if needed, then faster-whisper)"
   : "Transcripts need Whisper (free, runs on this computer). Run: ouc transcribe --setup  (it installs faster-whisper for Python)";
 
 /** Speech to text for a list of files; per file its segments, or null if that one failed. */
@@ -102,7 +104,21 @@ export function fasterWhisper(python: string, script: string, model: string): En
   };
 }
 
-const pythons = () => (WIN ? ["py", "python", "python3"] : ["python3", "python"]).map((p) => findBin(p)).filter((p): p is string => !!p);
+/**
+ * The Pythons to try, best first. On Windows: the py launcher and python on PATH, but not the
+ * Microsoft Store's stand-in (WindowsApps\python.exe, which only opens the Store), then the places
+ * the python.org / winget installer uses, so a Python installed a moment ago is found without a new window.
+ */
+export function pythonCandidates({ platform = process.platform, env = process.env, which = (b: string) => findBin(b), list = (d: string) => { try { return readdirSync(d); } catch { return []; } }, exists = existsSync }:
+  { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv; which?: (bin: string) => string | null; list?: (dir: string) => string[]; exists?: (p: string) => boolean } = {}): string[] {
+  if (platform !== "win32") return ["python3", "python"].map(which).filter((p): p is string => !!p);
+  const { join: wjoin } = win32;
+  const local = wjoin(env.LOCALAPPDATA ?? wjoin(env.USERPROFILE ?? "C:\\Users\\Default", "AppData", "Local"), "Programs", "Python");
+  const installed = list(local).filter((d) => /^Python3\d+$/i.test(d)).sort((a, b) => Number(b.slice(7)) - Number(a.slice(7))).map((d) => wjoin(local, d, "python.exe"));
+  const found = ["py", "python", "python3"].map(which).filter((p): p is string => !!p && !/\\WindowsApps\\/i.test(p));
+  return [...new Set([...found, wjoin(local, "Launcher", "py.exe"), ...installed])].filter((p) => found.includes(p) || exists(p));
+}
+const pythons = () => pythonCandidates();
 
 /** The engine to use, or null when none is installed. */
 export function findEngine(root: string, model = loadMediaConfig(root).model): Engine | null {
@@ -146,7 +162,13 @@ export async function installWhisper(root: string, { log = (_: string) => {}, pr
     return findEngine(root, model) ? { ok: true, message: "whisper.cpp" } : { ok: false, message: "whisper.cpp installed, but it couldn't be found. Open a new Terminal and run: ouc transcribe" };
   }
   if (findEngine(root, model)) return { ok: true, message: "already installed" };
-  const py = pythons()[0];
+  let py = pythons()[0];
+  // Windows without Python: winget installs it for this user (no admin), then faster-whisper goes on top
+  if (!py && WIN && findBin("winget")) {
+    log("winget install Python 3.12");
+    spawnSync("winget", ["install", "-e", "--id", "Python.Python.3.12", "--scope", "user", "--accept-package-agreements", "--accept-source-agreements"], { stdio: "ignore", windowsHide: true });
+    py = pythons()[0];
+  }
   if (!py) {
     return { ok: false, message: WIN ? "Install Python first (winget install -e --id Python.Python.3.12), then run: ouc transcribe --setup"
       : MAC ? "Install Homebrew (https://brew.sh), then run: ouc transcribe --setup" : "Install Python 3, then run: ouc transcribe --setup" };

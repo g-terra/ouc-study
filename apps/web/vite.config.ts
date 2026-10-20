@@ -55,22 +55,37 @@ const TSX = () => resolve(HERE, "../../node_modules/tsx/dist/cli.mjs");
 function eclassApi(): Plugin {
   let cache: { at: number; body: any } | undefined;
   let syncing: Promise<any> | undefined;
+  // what Sync now is doing, for the activity bar: { step: 1 check eClass, 2 download files, 3 build the app data; done/total/detail of the downloads }
+  let progress: { step: number; phase?: string; done?: number; total?: number; detail?: string } | undefined;
   const send = (res: any, body: any) => { res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify(body)); };
   const handler: Connect.NextHandleFunction = async (req, res, next) => {
     if (!req.url?.startsWith("/api/eclass/")) return next();
     const url = new URL(req.url, "http://x");
     if (url.pathname === "/api/eclass/status") {
-      if (!cache || Date.now() - cache.at > 5 * 60_000 || url.searchParams.has("fresh")) {
+      // while syncing, answer from the cache (the activity bar asks every few seconds)
+      if (!syncing && (!cache || Date.now() - cache.at > 5 * 60_000 || url.searchParams.has("fresh"))) {
         const body = await runJson([SYNC(), "--check", "--json"]);
         cache = { at: Date.now(), body: { ...body, checkedAt: new Date().toISOString(), syncing: !!syncing } };
       }
-      return send(res, { ...cache.body, syncing: !!syncing });
+      return send(res, { ...cache?.body, syncing: !!syncing, progress: syncing ? progress : undefined });
     }
     if (url.pathname === "/api/eclass/sync" && req.method === "POST") {
-      const node = (args: string[]) => new Promise((ok) => spawn(process.execPath, args, { cwd: resolve(HERE, "../..") }).on("exit", ok));
+      const node = (args: string[], onLine?: (l: string) => void) => new Promise((ok) => {
+        const p = spawn(process.execPath, args, { cwd: resolve(HERE, "../..") });
+        let buf = "";
+        p.stdout.on("data", (d) => { buf += d; const lines = buf.split("\n"); buf = lines.pop()!; if (onLine) lines.forEach(onLine); });
+        p.on("exit", ok);
+      });
+      if (!syncing) progress = { step: 1 };
       syncing ??= runJson([SYNC(), "--json", "--quiet"]).then(async (r) => {
         // new course files too (like `ouc sync`), for semesters whose structure comes from the eClass API
-        if (r.ok && apiSemester()) await node([resolve(HERE, "../../packages/eclass-sync/pull.mjs"), "--quiet"]);
+        if (r.ok && apiSemester()) {
+          progress = { step: 2 };
+          await node([resolve(HERE, "../../packages/eclass-sync/pull.mjs"), "--quiet", "--progress"], (l) => {
+            try { const p = JSON.parse(l).progress; if (p) progress = { step: 2, ...p }; } catch { /* not a progress line */ }
+          });
+        }
+        progress = { step: 3 };
         await node([TSX(), "packages/content/src/build.ts"]);
         cache = { at: Date.now(), body: { ok: r.ok, state: r.state, user: r.user ?? cache?.body?.user, error: r.error, checkedAt: new Date().toISOString() } };
         // then the AI makes whatever notes and prep packs are missing, in the background

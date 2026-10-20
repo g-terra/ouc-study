@@ -136,6 +136,19 @@ test("a class video on a course week plays from this computer, with its transcri
   expect(await res.text()).toContain("Welcome to the demo course.");
 });
 
+test("the activity bar shows background work, and Details opens each part", async ({ page }) => {
+  await page.route("**/api/ai/prep", (r) => r.fulfill({ json: {
+    enabled: true, busy: false, running: [], queue: [], finished: [], total: 0, done: 0, error: null,
+    transcribe: { enabled: true, busy: true, total: 3, done: 1, made: 1, failed: 0, current: "courses/DEMO101-Demo-Studies/01-Week-1-Getting-started/Video-Welcome-to-the-demo/Welcome.mp4", error: null },
+  } }));
+  await page.goto(SEM);
+  await expect(page.getByText("Transcribing class videos: 1 of 3")).toBeVisible();
+  await page.getByRole("button", { name: /Details/ }).click();
+  await expect(page.getByTestId("activity-details")).toContainText("now: Welcome.mp4");
+  await page.getByRole("button", { name: /Hide details/ }).click();
+  await expect(page.getByTestId("activity-details")).toHaveCount(0);
+});
+
 test("Ask AI expands to a full page and back to the pop-up, keeping what's typed", async ({ page }) => {
   await page.goto(`${SEM}/courses`);
   await page.getByRole("button", { name: "Ask AI" }).click();

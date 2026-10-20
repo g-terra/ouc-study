@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { NO_WHISPER, createTranscriber, fasterWhisper, findMedia, transcribeOne, type Engine } from "../src/transcribe.ts";
+import { NO_WHISPER, createTranscriber, fasterWhisper, findMedia, pythonCandidates, transcribeOne, type Engine } from "../src/transcribe.ts";
 import { zip } from "./helpers.ts";
 
 const R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -135,4 +135,17 @@ console.log(JSON.stringify({ file: 1, error: "bad audio" }));
 console.log(JSON.stringify({ file: 0, start: 3, end: 4, text: "second" }));`);
   const r = await fasterWhisper(process.execPath, script, "tiny").transcribe(["a.mp4", "b.m4a"]);
   assert.deepEqual(r, [[{ start: 0.5, end: 2, text: "first tiny" }, { start: 3, end: 4, text: "second" }], null]);
+});
+
+test("Windows: the py launcher and installed Pythons, never the Microsoft Store stand-in", () => {
+  const env = { LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local" };
+  const base = "C:\\Users\\me\\AppData\\Local\\Programs\\Python";
+  const onPath: Record<string, string> = { python: "C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe" };
+  // a fresh winget install: not on this window's PATH yet, only in its folder
+  const fresh = pythonCandidates({ platform: "win32", env, which: (b) => onPath[b] ?? null, list: () => ["Python311", "Python312", "Launcher"], exists: (p) => p !== `${base}\\Launcher\\py.exe` });
+  assert.deepEqual(fresh, [`${base}\\Python312\\python.exe`, `${base}\\Python311\\python.exe`]);
+  onPath.py = "C:\\Windows\\py.exe";
+  assert.equal(pythonCandidates({ platform: "win32", env, which: (b) => onPath[b] ?? null, list: () => [], exists: () => false })[0], "C:\\Windows\\py.exe");
+  assert.deepEqual(pythonCandidates({ platform: "win32", env, which: () => null, list: () => [], exists: () => false }), []);
+  assert.deepEqual(pythonCandidates({ platform: "darwin", which: (b) => (b === "python3" ? "/usr/bin/python3" : null) }), ["/usr/bin/python3"]);
 });

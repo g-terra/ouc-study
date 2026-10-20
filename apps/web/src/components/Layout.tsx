@@ -183,40 +183,95 @@ export function AskAiFab() {
   );
 }
 
-/** While the AI makes missing notes and prep packs in the background: a progress bar and what's running. */
+const SYNC_STEPS = ["Checking eClass for news", "Downloading new course files", "Building the app data"];
+
+/**
+ * Everything running in the background, as one bar: Sync now (its steps and downloads), transcripts of
+ * class videos, and the AI making notes and prep packs. One line with a progress bar; Details opens
+ * each part (remembered on this computer).
+ */
 export function AiWorkBar({ sem }: { sem: string }) {
   const st = usePrepStatus();
+  const conn = useConnection();
   const data = useSemester(sem);
   const { load, setOpen } = useAssistant();
+  const [open, setOpenDetails] = useState(() => { try { return localStorage.getItem("ouc-activity-open") === "1"; } catch { return false; } });
+  const toggle = () => { setOpenDetails(!open); try { localStorage.setItem("ouc-activity-open", open ? "0" : "1"); } catch { /* private window */ } };
   const tr = st?.transcribe;
-  const transcribing = tr?.busy && tr.total ? (
-    <div className="border-t border-line px-4 py-1.5 text-center text-xs text-muted">
-      🎧 Transcribing class videos and narrated slides on this computer: {tr.done} of {tr.total}{tr.current ? ` · ${tr.current.split("/").pop()}` : ""}
-    </div>
-  ) : null;
-  if (!st?.busy || !st.total) return transcribing ?? (st?.error && !st.busy && st.total ? (
-    <div className="border-t border-line bg-bad-bg px-4 py-1.5 text-center text-xs text-bad">The AI stopped making notes and prep packs: {st.error}</div>
-  ) : null);
+  const syncing = !!conn.syncing, transcribing = !!(tr?.busy && tr.total), ai = !!(st?.busy && st.total);
+  if (!syncing && !transcribing && !ai) {
+    return st?.error && !st.busy && st.total ? (
+      <div className="border-t border-line bg-bad-bg px-4 py-1.5 text-center text-xs text-bad">The AI stopped making notes and prep packs: {st.error}</div>
+    ) : null;
+  }
   const label = (id: string) => workLabel(id, data);
-  const pct = Math.round((st.done / st.total) * 100);
+  const p = conn.progress;
+  const downloading = p?.step === 2 && p.phase === "download" && p.total;
+  // the line and the bar follow the first part still running
+  const [title, pct] = syncing
+    ? [`🔄 ${SYNC_STEPS[(p?.step ?? 1) - 1] ?? "Syncing"}${downloading ? `: ${p.done} of ${p.total}` : "…"}`, downloading ? (p.done! / p.total!) * 100 : ((p?.step ?? 1) - 1) * 33]
+    : transcribing ? [`🎧 Transcribing class videos: ${tr!.done} of ${tr!.total}`, (tr!.done / tr!.total) * 100]
+    : [`✨ AI is making notes and prep packs: ${st!.done} of ${st!.total} done`, (st!.done / st!.total) * 100];
+  const row = "flex flex-wrap items-center gap-x-3 gap-y-1";
+  const mark = (state: "done" | "now" | "todo") => <span className={cx("w-4 shrink-0 text-center", state === "done" ? "text-ok" : state === "now" ? "text-accent" : "text-muted")}>{state === "done" ? "✓" : state === "now" ? "●" : "○"}</span>;
   return (
     <div className="border-t border-line">
-      {transcribing}
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs">
-        <span className="font-semibold">✨ AI is making notes and prep packs</span>
-        <span className="text-muted">{st.done} of {st.total} done{st.queue.length ? ` · ${st.queue.length} waiting` : ""}</span>
-        <span className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-          {st.running.map((r) => (
-            <button key={r.id} type="button" data-ask-ai onClick={() => { setOpen(true); load(r.chatId); }} title="Watch it work"
-              className="flex max-w-[16rem] items-center gap-1.5 rounded-full border border-line bg-surface px-2 py-0.5 hover:border-muted">
-              <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-accent" /><span className="truncate">{label(r.id)}</span>
-            </button>
-          ))}
-        </span>
-        <a href={`/${enc(sem)}/ai-work`} target="_blank" rel="noreferrer" title="See everything it's doing in a new window"
-          className="rounded-full border border-line bg-surface px-2.5 py-0.5 font-semibold hover:border-muted">Open ↗</a>
+        <span className="font-semibold">{title}</span>
+        {[syncing, transcribing, ai].filter(Boolean).length > 1 && <span className="text-muted">and {[syncing && "sync", transcribing && "transcripts", ai && "AI notes"].filter(Boolean).slice(1).join(", ")} too</span>}
+        <span className="flex-1" />
+        <button type="button" onClick={toggle} aria-expanded={open} className="rounded-full border border-line bg-surface px-2.5 py-0.5 font-semibold hover:border-muted">{open ? "Hide details ▴" : "Details ▾"}</button>
+        {ai && <a href={`/${enc(sem)}/ai-work`} target="_blank" rel="noreferrer" title="See everything the AI is doing in a new window"
+          className="rounded-full border border-line bg-surface px-2.5 py-0.5 font-semibold hover:border-muted">Open ↗</a>}
       </div>
-      <div className="h-1 bg-surface-2" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="AI progress">
+      {open && (
+        <div className="mx-auto grid max-w-6xl gap-3 px-4 pb-3 text-xs" data-testid="activity-details">
+          {syncing && (
+            <section>
+              <h3 className="mb-1 font-semibold">eClass sync</h3>
+              <ol className="grid gap-0.5">
+                {SYNC_STEPS.map((s, i) => {
+                  const n = i + 1, now = p?.step ?? 1;
+                  return (
+                    <li key={s} className={row}>
+                      {mark(n < now ? "done" : n === now ? "now" : "todo")}<span className={cx(n > now && "text-muted")}>{s}</span>
+                      {n === 2 && n === now && p?.detail && <span className="min-w-0 truncate text-muted">{downloading ? `${p.done} of ${p.total} · ` : "reading "}{p.detail}</span>}
+                    </li>
+                  );
+                })}
+                <li className={row}>{mark("todo")}<span className="text-muted">Then: transcripts and AI notes for anything new</span></li>
+              </ol>
+            </section>
+          )}
+          {tr && (transcribing || tr.made > 0 || tr.failed > 0 || (tr.error && syncing)) && (
+            <section>
+              <h3 className="mb-1 font-semibold">Transcripts of class videos and narrated slides <span className="font-normal text-muted">(made on this computer)</span></h3>
+              <div className={row}>
+                {mark(transcribing ? "now" : "done")}
+                <span>{tr.done} of {tr.total}{tr.made ? ` · ${tr.made} made` : ""}{tr.failed ? ` · ${tr.failed} failed (tried again tomorrow)` : ""}</span>
+                {tr.current && <span className="min-w-0 truncate text-muted">now: {tr.current.split("/").pop()}</span>}
+              </div>
+              {tr.error && <p className="mt-1 rounded-lg bg-bad-bg px-2 py-1 text-bad">{tr.error}</p>}
+            </section>
+          )}
+          {st && (ai || st.finished.length > 0) && (
+            <section>
+              <h3 className="mb-1 font-semibold">AI notes and prep packs <span className="font-normal text-muted">{st.done} of {st.total} done{st.queue.length ? ` · ${st.queue.length} waiting` : ""}</span></h3>
+              <div className="flex flex-wrap gap-1.5">
+                {st.running.map((r) => (
+                  <button key={r.id} type="button" data-ask-ai onClick={() => { setOpen(true); load(r.chatId); }} title="Watch it work"
+                    className="flex max-w-[16rem] items-center gap-1.5 rounded-full border border-line bg-surface px-2 py-0.5 hover:border-muted">
+                    <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-accent" /><span className="truncate">{label(r.id)}</span>
+                  </button>
+                ))}
+                {st.finished.map((f) => <span key={f.chatId} className="flex max-w-[16rem] items-center gap-1 rounded-full px-2 py-0.5 text-muted"><span className={f.ok ? "text-ok" : "text-bad"}>{f.ok ? "✓" : "✗"}</span><span className="truncate">{label(f.id)}</span></span>)}
+                {st.queue.map((id) => <span key={id} className="max-w-[16rem] truncate rounded-full border border-dashed border-line px-2 py-0.5 text-muted">{label(id)}</span>)}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+      <div className="h-1 bg-surface-2" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Background work progress">
         <div className="h-full bg-accent transition-[width] duration-500" style={{ width: `${Math.max(pct, 3)}%` }} />
       </div>
     </div>

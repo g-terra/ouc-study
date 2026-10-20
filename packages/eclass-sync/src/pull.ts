@@ -5,6 +5,7 @@
  *   node packages/eclass-sync/pull.mjs              download what's missing for the current semester
  *   node packages/eclass-sync/pull.mjs --dry-run    change nothing; write a report to .ouc/dry-run/
  *   node packages/eclass-sync/pull.mjs --semester 2026-Fall
+ *   node packages/eclass-sync/pull.mjs --progress   progress as JSON lines ({"progress":{phase,done,total,detail}}), for the app
  *
  * Never overwrites or deletes a file that already exists. When eClass has a newer version of a
  * file you already have, it is saved next to it as "name (updated YYYY-MM-DD).ext".
@@ -313,6 +314,7 @@ function currentSemesterId(root: string): string | null {
 export async function main(args: string[]): Promise<void> {
   const dryRun = args.includes("--dry-run");
   const quiet = args.includes("--quiet");
+  const progress = args.includes("--progress");
   const semId = args.includes("--semester") ? args[args.indexOf("--semester") + 1] : currentSemesterId(ROOT);
   const token = readToken(ROOT);
   if (!token) { console.error("✗ No valid eClass key in .eclass-token. Run: ouc setup"); process.exit(2); }
@@ -320,6 +322,7 @@ export async function main(args: string[]): Promise<void> {
   const cfg: SemesterConfig = JSON.parse(readFileSync(join(ROOT, "semesters", semId, "semester.json"), "utf8"));
   const tty = process.stdout.isTTY && !quiet;
   await pull({ semId, cfg, client: createClient(token), dryRun, on: (e) => {
+    if (progress) console.log(JSON.stringify({ progress: { ...e, course: undefined, detail: e.course ? `${e.course} ${e.detail ?? ""}`.trim() : e.detail } }));
     if (!tty) return;
     if (e.phase === "list") process.stdout.write(`\r\x1b[2K  … reading ${e.detail ?? ""}`);
     if (e.phase === "download" && e.total) process.stdout.write(`\r\x1b[2K  ↓ ${e.done}/${e.total} ${e.detail ?? ""}`.slice(0, 100));
