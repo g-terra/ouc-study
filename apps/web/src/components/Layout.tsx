@@ -3,7 +3,7 @@ import { Link, linkHref, useRouter, enc } from "../lib/router";
 import { useIndex, useSemester } from "../lib/data";
 import { Switch, cx } from "./ui";
 import { CONN_LABEL, useConnection } from "../lib/connection";
-import { TOOL_STATE, getWhisper, refreshAi, setWhisper, useAiStatus, usePrepStatus, workLabel, type WhisperStatus } from "../lib/ai";
+import { TOOL_STATE, getWhisper, refreshAi, setDefaultModel, setWhisper, useAiStatus, usePrepStatus, workLabel, type WhisperStatus } from "../lib/ai";
 import { useAssistant } from "./Assistant";
 import { THEMES, setTheme, useTheme, type ThemeChoice } from "../lib/theme";
 import { releaseHighlights, useUpdate } from "../lib/update";
@@ -55,6 +55,39 @@ export function AiTools() {
       )}
       {aiKnown && !ai.chosen && <p className="mt-2 px-2 text-xs text-muted">Choose one in Terminal: <code>ouc ai setup</code></p>}
     </>
+  );
+}
+
+/** Settings: the model each AI uses unless a chat picks another (saved in .ouc/ai.json). */
+export function DefaultModels({ className }: { className?: string }) {
+  const ai = useAiStatus();
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const tools = ai.tools.filter((t) => t.state !== "missing" && t.models?.length);
+  if (ai.state !== "ok" || !tools.length) return null;
+  const save = async (tool: string, model: string) => {
+    setSaving(tool); setError(null);
+    setError(await setDefaultModel(tool, model));
+    setSaving(null);
+  };
+  return (
+    <div className={className} data-testid="default-models">
+      <div className="mb-1 px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Default models</div>
+      <p className="mb-2 px-2 text-xs text-muted">What each AI uses unless you pick another model next to Send.</p>
+      <ul className="flex flex-col">
+        {tools.map((t) => (
+          <li key={t.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+            <label htmlFor={`default-model-${t.id}`} className="flex-1 font-semibold">{t.label}</label>
+            <select id={`default-model-${t.id}`} value={t.setting ?? ""} disabled={saving === t.id} onChange={(e) => save(t.id, e.target.value)}
+              className="min-w-0 max-w-[14rem] truncate rounded-lg border border-line bg-surface py-1 pl-2 pr-1 text-xs disabled:opacity-60">
+              <option value="">{t.own ? `${t.label}'s own (${t.own})` : `${t.label}'s own`}</option>
+              {t.models!.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </li>
+        ))}
+      </ul>
+      {error && <p role="alert" className="mt-1 px-2 text-xs text-warn">{error}</p>}
+    </div>
   );
 }
 
@@ -135,6 +168,7 @@ function SettingsFab({ to }: { to: string }) {
           className="absolute bottom-full left-0 z-50 mb-2 max-h-[calc(100vh-8rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-line bg-surface p-3 text-sm shadow-xl">
           <div className="mb-2 px-2 font-serif text-lg font-semibold">Settings</div>
           <ConnectionDetails to={to} onNavigate={() => setOpen(false)} />
+          <DefaultModels className="mt-4 border-t border-line pt-3" />
           <div className="mt-4 mb-1 border-t border-line px-2 pt-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Colour theme</div>
           <ThemePicker />
           <VideoTranscripts head="mt-4 mb-1 border-t border-line px-2 pt-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted" />

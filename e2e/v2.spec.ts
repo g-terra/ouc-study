@@ -232,3 +232,29 @@ test("v2: going back from a video or an assignment keeps the course week open an
   await page.getByRole("link", { name: /^← Demo Studies/ }).click();
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses\/DEMO101(#w\d+)?$/);
 });
+
+test("v2 settings: each AI's default model is picked and saved", async ({ page }) => {
+  let setting: string | undefined;
+  const posted: unknown[] = [];
+  await page.route("**/api/ai/status**", (route) => route.fulfill({ json: {
+    chosen: "opencode", label: "opencode", agentic: true, ready: true, reason: "", token: "t",
+    tools: [
+      { id: "claude", label: "Claude Code", state: "missing" },
+      { id: "opencode", label: "opencode", state: "connected", chosen: true, models: ["qwen3:8b", "gemma3:4b"], own: "qwen3:8b", model: setting ?? "qwen3:8b", setting },
+    ],
+  } }));
+  await page.route("**/api/ai/defaults", (route) => {
+    const body = route.request().postDataJSON();
+    posted.push(body);
+    setting = body.model || undefined;
+    return route.fulfill({ json: { ok: true } });
+  });
+  await page.goto(`/v2${SEM}/settings`);
+  const pick = page.getByTestId("default-models").getByRole("combobox", { name: "opencode" });
+  await expect(pick.locator("option")).toHaveText(["opencode's own (qwen3:8b)", "qwen3:8b", "gemma3:4b"]);
+  await expect(pick).toHaveValue("");
+  await pick.selectOption("gemma3:4b");
+  await expect(pick).toHaveValue("gemma3:4b");
+  expect(posted).toEqual([{ tool: "opencode", model: "gemma3:4b" }]);
+  await expect(page.getByTestId("default-models").getByRole("combobox")).toHaveCount(1);   // not for AIs that aren't installed
+});

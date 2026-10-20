@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fold, marks, queryWords, snippet } from "../src/search-text.ts";
-import { plainMarkdown, search, semesterDocs, textCopyParts, transcriptParts } from "../src/search.ts";
+import { noteParts, plainMarkdown, plainTex, search, semesterDocs, textCopyParts, transcriptParts } from "../src/search.ts";
 import type { SemesterData } from "../src/types.ts";
 
 test("fold drops case and accents and keeps positions", () => {
@@ -29,6 +29,29 @@ test("marks highlights the query words", () => {
 
 test("Markdown shows as plain words in results", () => {
   assert.equal(plainMarkdown("> [!IDEA] Big idea\n> **Working** memory, see [the paper](https://x.org) and `code`\n## Heading"), "Big idea\nWorking memory, see the paper and code\nHeading");
+});
+
+test("LaTeX reads as symbols", () => {
+  assert.equal(plainTex("\\tau_m\\frac{dV}{dt}=-(V-E_L)+R_m I(t)"), "τ_mdV/dt=-(V-E_L)+R_m I(t)");
+  assert.equal(plainTex("$\\mathrm{Na}^+$ and \\alpha \\cdot x"), "Na^+ and α · x");
+});
+
+test("a note's blocks become the words they show, without YAML, LaTeX source or diagram code", () => {
+  const md = [
+    "> [!IDEA] Big idea", "> Spikes are **events**, inline $\\tau = RC$.", "",
+    "```formula", "title: Leaky integrate-and-fire model", "tex: '\\tau_m\\frac{dV}{dt}=-(V-E_L)+R_m I(t)'", "where:", "  - ['V', 'membrane voltage']", "  - ['E_L', 'leak or resting potential']", "note: Reset after a spike.", "```", "",
+    "```mermaid", "flowchart LR", '  A["Input"] --> B["Spike"]', "```", "",
+    "```cards", "- icon: 🧠", "  title: Threshold", "  text: Fires at $V_{th}$.", "- title: Reset", "  text: Back to rest.", "```", "",
+    "```links", "- title: Neuronal Dynamics", "  url: https://example.org/ch1", "```",
+    "```formula", "title: broken: [", "```",
+  ].join("\n");
+  assert.deepEqual(noteParts(md).map((p) => p.text), [
+    "Big idea Spikes are events, inline τ = RC.",
+    "Leaky integrate-and-fire model · V: membrane voltage · E_L: leak or resting potential · Reset after a spike.",
+    "Threshold · Fires at V_th.",
+    "Reset · Back to rest.",
+    "Neuronal Dynamics",
+  ]);
 });
 
 test("transcript parts carry times and slides", () => {
