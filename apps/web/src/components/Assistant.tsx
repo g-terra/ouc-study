@@ -6,7 +6,7 @@
  */
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { SemesterData } from "@ouc/content/types";
-import { Link, useRouter, enc } from "../lib/router";
+import { Link, linkHref, useRouter, enc } from "../lib/router";
 import { chatPathFor, isChatPath } from "../lib/chat-path";
 import { mdToHtml } from "../lib/markdown";
 import { linkLabel } from "../lib/links";
@@ -558,7 +558,7 @@ function RunningTasks({ sem }: { sem: string }) {
   const n = st?.busy ? st.running.length + st.queue.length : 0;
   if (!n) return null;
   return (
-    <a href={`/${enc(sem)}/ai-work`} target="_blank" rel="noreferrer" title="See the AI's background tasks in a new window"
+    <a href={linkHref(`/${enc(sem)}/ai-work`)} target="_blank" rel="noreferrer" title="See the AI's background tasks in a new window"
       className="flex items-center gap-2 border-b border-line bg-surface-2 px-4 py-1.5 text-xs hover:text-ink">
       <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-accent" />
       <span className="flex-1 font-semibold">{n} background {n === 1 ? "task" : "tasks"} running</span>

@@ -10,6 +10,8 @@ const RouterCtx = createContext<{ path: string; navigate: Navigate }>({ path: "/
 // Maps a link before it opens (the v2 preview keeps classic links inside v2, see v2/paths.ts); raw skips it.
 let rewrite = (to: string) => to;
 export function setLinkRewrite(fn: (to: string) => string) { rewrite = fn; }
+/** The address a link really goes to: use it as href for plain <a> app links (a new window opens it without the router). */
+export const linkHref = (to: string) => rewrite(to);
 
 export function RouterProvider({ children }: { children: ReactNode }) {
   const [path, setPath] = useState(() => window.location.pathname + window.location.hash);
@@ -67,7 +69,7 @@ export function Link({ to, children, ...rest }: { to: string } & AnchorHTMLAttri
   const { navigate } = useRouter();
   return (
     <a
-      href={to}
+      href={linkHref(to)}
       {...rest}
       onClick={(e) => {
         rest.onClick?.(e);
