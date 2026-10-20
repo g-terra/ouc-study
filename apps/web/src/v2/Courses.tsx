@@ -66,7 +66,14 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
   const c = data.courses.find((x) => x.code === code);
   const now = new Date();
   const cur = c && currentWeek(c, now);
-  const [open, setOpen] = useState<Set<number>>(() => new Set([Number.isFinite(hashWeek) ? hashWeek : cur?.index ?? -1]));
+  // the weeks you had open come back when you return (Back from slides, a video or an assignment)
+  const key = `ouc-open-weeks:${data.id}:${code}`;
+  const [open, setOpen] = useState<Set<number>>(() => {
+    let saved: number[] | undefined;
+    try { saved = JSON.parse(sessionStorage.getItem(key) ?? "null") ?? undefined; } catch { /* private mode */ }
+    return new Set([...(saved ?? [cur?.index ?? -1]), ...(Number.isFinite(hashWeek) ? [hashWeek] : [])]);
+  });
+  useEffect(() => { try { sessionStorage.setItem(key, JSON.stringify([...open])); } catch { /* private mode */ } }, [key, open]);
   useEffect(() => {
     if (!Number.isFinite(hashWeek)) return;
     setOpen((o) => new Set([...o, hashWeek]));
