@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.16.0](https://github.com/g-terra/ouc-study/compare/v0.15.0...v0.16.0) (2026-10-20)
+
+
+### Features
+
+* **ai:** stop estimating how long study tasks take ([#83](https://github.com/g-terra/ouc-study/issues/83)) ([64afc9d](https://github.com/g-terra/ouc-study/commit/64afc9dd966efd86c3be390e939dfdf76adc6c63))
+* **web:** add a guided tour of the app, opened once and from the profile menu ([#85](https://github.com/g-terra/ouc-study/issues/85)) ([f2b058b](https://github.com/g-terra/ouc-study/commit/f2b058b76ae2799bff5659241669293a36c97aa9))
+* **web:** group a course week's items under Watch, Read, My notes, Practice and To hand in ([#88](https://github.com/g-terra/ouc-study/issues/88)) ([d157437](https://github.com/g-terra/ouc-study/commit/d1574379e5bdec810301fcfcd8b7da4e9538cc34))
+
+
+### Bug Fixes
+
+* **sync:** fill in updates that were saved cut short ([#87](https://github.com/g-terra/ouc-study/issues/87)) ([fd33dcf](https://github.com/g-terra/ouc-study/commit/fd33dcf7d81f820364231f63b8c7d69a82a8e515))
+
+
+### Documentation
+
+* retake the readme screenshots in the new look ([#84](https://github.com/g-terra/ouc-study/issues/84)) ([0b1dca7](https://github.com/g-terra/ouc-study/commit/0b1dca73faa40497c12d7ecc650a2acef94d3f0d))
+
 ## [0.15.0](https://github.com/g-terra/ouc-study/compare/v0.14.0...v0.15.0) (2026-10-20)
 
 
