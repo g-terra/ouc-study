@@ -13,6 +13,8 @@ import { linkLabel } from "../lib/links";
 import { TOOL_STATE, deleteChats, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
 import { refreshData } from "../lib/data";
 import { cx } from "./ui";
+import { renderMermaid } from "../notes/Mermaid";
+import { useTheme } from "../lib/theme";
 
 interface Draft { action: string; params: Record<string, string> }
 /** One tab in the panel: a chat (or a draft action), with its own run. */
@@ -550,15 +552,36 @@ function RunningTasks({ sem }: { sem: string }) {
   );
 }
 
-/** A reply in Markdown; file paths in it link to the app's pages (notes, assignments) or open the file. */
-export function Markdown({ text, className, sem }: { text: string; className?: string; sem?: string }) {
+/** A reply in Markdown; file paths in it link to the app's pages (notes, assignments) or open the file; ```mermaid blocks become diagrams. */
+export function Markdown({ text, className, sem, diagrams = true }: { text: string; className?: string; sem?: string; diagrams?: boolean }) {
   const { setOpen } = useAssistant();
+  const box = useRef<HTMLDivElement>(null);
+  const html = mdToHtml(text, sem);
+  const { theme } = useTheme();
+  useEffect(() => { if (diagrams && box.current) drawDiagrams(box.current); }, [html, theme, diagrams]);
   return (
-    <div className={cx("text-sm leading-relaxed [&_a]:underline [&_a_code]:text-accent [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:break-all [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_pre_code]:break-normal [&_pre_code]:whitespace-pre [&_ul]:list-disc", className)}
+    <div ref={box} className={cx("text-sm leading-relaxed [&_a]:underline [&_a_code]:text-accent [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:break-all [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_pre_code]:break-normal [&_pre_code]:whitespace-pre [&_ul]:list-disc", className)}
       // file paths open their page (the router follows the link); on phones the chat covers the page, so close it
       onClick={(e) => { if ((e.target as HTMLElement).closest("a[data-internal]") && !window.matchMedia("(min-width: 640px)").matches) setOpen(false); }}
-      dangerouslySetInnerHTML={{ __html: mdToHtml(text, sem) }} />
+      dangerouslySetInnerHTML={{ __html: html }} />
   );
+}
+
+/** Swaps each ```mermaid code block for its diagram (again on a theme change); a block that isn't a valid diagram stays as code. */
+function drawDiagrams(root: HTMLElement) {
+  const blocks = [...root.querySelectorAll<HTMLElement>("pre > code.language-mermaid")].map((c) => ({ el: c.parentElement!, code: c.textContent ?? "" }))
+    .concat([...root.querySelectorAll<HTMLElement>("[data-mermaid]")].map((el) => ({ el, code: el.dataset.mermaid ?? "" })));
+  for (const { el, code } of blocks) {
+    renderMermaid(code).then((svg) => {
+      if (!el.isConnected) return;
+      const fig = document.createElement("figure");
+      fig.dataset.mermaid = code;
+      fig.dataset.diagram = "";
+      fig.className = "my-3 grid place-items-center overflow-x-auto rounded-xl border border-line bg-surface p-3 [&_svg]:max-w-full";
+      fig.innerHTML = svg;
+      el.replaceWith(fig);
+    }).catch(() => { /* not a valid diagram: the code stays */ });
+  }
 }
 
 const PREP_MODE: Record<string, string> = {
@@ -625,7 +648,7 @@ function Message({ msg, live, sem }: { msg: ChatMessage; live: boolean; sem?: st
           {!steps.length && !msg.text && <p className="pl-6">Reading your request and the study files to work out what to do.</p>}
           {steps.length > LIVE_STEPS && <div className="pl-6">… {steps.length - LIVE_STEPS} earlier</div>}
           <ul className="flex flex-col gap-0.5 pl-6">{steps.slice(-LIVE_STEPS).map((s, i, a) => <li key={steps.length - LIVE_STEPS + i} className={cx("truncate", i === a.length - 1 && "font-medium text-ink")}>{s}</li>)}</ul>
-          {msg.text && <div className="mt-2 flex max-h-36 flex-col justify-end overflow-hidden border-t border-line pt-1 [mask-image:linear-gradient(to_bottom,transparent,black_2.5rem)]"><Markdown text={msg.text} sem={sem} className="text-ink" /></div>}
+          {msg.text && <div className="mt-2 flex max-h-36 flex-col justify-end overflow-hidden border-t border-line pt-1 [mask-image:linear-gradient(to_bottom,transparent,black_2.5rem)]"><Markdown text={msg.text} sem={sem} className="text-ink" diagrams={false} /></div>}
         </div>
       ) : (
         <>

@@ -195,10 +195,14 @@ export function reviewPrompt(root: string, semId: string, data: SemesterData, a:
     `\n\nSave the review as \`${reviewFile(semId, a, ver.v)}\`. Give feedback and say what to fix and why, but never write replacement answers or text the student could paste in.`;
 }
 
+// The chat draws ```mermaid blocks as diagrams (apps/web/src/notes/Mermaid.tsx), so flows come out as pictures, not ASCII arrows.
+export const DIAGRAMS = "When you explain a flow, a process, a sequence of steps or how parts connect, draw it as a ```mermaid diagram " +
+  "(flowchart TD/LR, sequenceDiagram or stateDiagram-v2) instead of arrows in text; the app shows it as a picture. Keep node labels short and put labels with symbols or maths in quotes, e.g. A[\"V ≥ threshold?\"].";
+
 // Said once at the start of every chat from the app: nobody can answer a question mid-run.
 export const APP_PREAMBLE = "You are running from the OUC Study app, one turn at a time: the student reads your reply in the app and answers in the next message. " +
   "Don't wait for confirmation in the middle of a task; make sensible choices and finish it. Keep the reply short, use Markdown, and name the repo-relative path of every file you write or point to in `backticks` (the app turns them into links). " +
-  "Never read or print .eclass-token.";
+  `${DIAGRAMS} Never read or print .eclass-token.`;
 
 /**
  * The text sent for one turn. action/params come from the app's action picker (first turn only);
@@ -290,6 +294,6 @@ export function chatSystem({ root, semId, data, action, params = {} }: Omit<Prom
       "", "You can't save files or run commands. Reply with only the quiz JSON (no other text): the app checks it and saves it for the Quizzes page.");
     return parts.join("\n");
   }
-  parts.push("", "You have no tools in this chat. If a task needs files or the web, say it needs Claude Code, Codex or opencode (`ouc ai setup`), or the `ouc notes` / `ouc plan` commands.");
+  parts.push("", DIAGRAMS, "", "You have no tools in this chat. If a task needs files or the web, say it needs Claude Code, Codex or opencode (`ouc ai setup`), or the `ouc notes` / `ouc plan` commands.");
   return parts.join("\n");
 }

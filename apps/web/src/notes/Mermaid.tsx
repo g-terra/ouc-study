@@ -38,6 +38,15 @@ function themeConfig() {
   };
 }
 
+let seq = 0;
+/** Mermaid code → SVG in the current theme's colours; throws when the code isn't a valid diagram. */
+export async function renderMermaid(code: string): Promise<string> {
+  const m = await loadMermaid();
+  m.initialize(themeConfig());
+  await m.parse(code);   // throws on bad code before render() leaves an error picture on the page
+  return (await m.render(`mmd${++seq}`, code)).svg;
+}
+
 export function Mermaid({ code }: { code: string }) {
   const id = "m" + useId().replace(/[^a-zA-Z0-9]/g, "");
   const ref = useRef<HTMLDivElement>(null);

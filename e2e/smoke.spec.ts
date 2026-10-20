@@ -173,3 +173,14 @@ test("chat history can be hidden on the full page, and chats deleted one by one 
   await side.getByRole("button", { name: "Delete all chats" }).click();
   await expect(side.getByText("No chats yet.")).toBeVisible();
 });
+
+test("a flow in a chat reply shows as a Mermaid diagram; code that isn't a diagram stays as code", async ({ page }) => {
+  const text = "How a neuron fires:\n\n```mermaid\nflowchart TD\n  A[Input] --> B[\"V ≥ threshold?\"]\n  B -- yes --> C[Spike]\n```\n\nNot a diagram:\n\n```mermaid\nthis is not mermaid -->\n```";
+  const chat = { id: "chat-flow", title: "Flows", updatedAt: "2026-10-01T10:00:00Z", messages: [{ role: "user", text: "Explain it" }, { role: "assistant", text }] };
+  await page.route("**/api/ai/chats**", (route) => route.fulfill({ json: route.request().url().includes("chat-flow") ? chat : { chats: [chat] } }));
+  await page.goto(`${SEM}/chat/chat-flow`);
+  const diagram = page.locator("figure[data-diagram] svg");
+  await expect(diagram).toHaveCount(1);
+  await expect(diagram).toContainText("Spike");
+  await expect(page.getByText("this is not mermaid -->")).toBeVisible();
+});
