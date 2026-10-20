@@ -661,10 +661,9 @@ function Message({ msg, live, sem }: { msg: ChatMessage; live: boolean; sem?: st
         <div className="rounded-xl border border-line bg-surface p-3 text-xs text-muted">
           <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink">
             <span aria-hidden className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-            {!steps.length && !msg.text ? "Planning the answer…" : msg.text && !steps.length ? "Writing the answer…" : "Working on it…"}
+            {!steps.length && !msg.text ? "Thinking…" : msg.text && !steps.length ? "Writing the answer…" : "Working on it…"}
             <span className="ml-auto font-normal text-xs text-muted">{[steps.length && plural(steps.length, "step"), files.length && plural(files.length, "file")].filter(Boolean).join(" · ")}</span>
           </div>
-          {!steps.length && !msg.text && <p className="pl-6">Reading your request and the study files to work out what to do.</p>}
           {steps.length > LIVE_STEPS && <div className="pl-6">… {steps.length - LIVE_STEPS} earlier</div>}
           <ul className="flex flex-col gap-0.5 pl-6">{steps.slice(-LIVE_STEPS).map((s, i, a) => <li key={steps.length - LIVE_STEPS + i} className={cx("truncate", i === a.length - 1 && "font-medium text-ink")}>{s}</li>)}</ul>
           {msg.text && <div className="mt-2 flex max-h-36 flex-col justify-end overflow-hidden border-t border-line pt-1 [mask-image:linear-gradient(to_bottom,transparent,black_2.5rem)]"><Markdown text={msg.text} sem={sem} className="text-ink" diagrams={false} /></div>}

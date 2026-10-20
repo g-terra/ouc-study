@@ -110,6 +110,8 @@ function aiApi(): Plugin {
       use(s);
       // prepare open assignments that have no prep pack yet (again after each sync: see semesterFiles)
       setTimeout(() => aiHandler?.autoPrep(), 20_000).unref();
+      // load the default AI's model now, so the first message doesn't wait for it ("warmUp": false turns it off)
+      setTimeout(() => void aiHandler?.warmUp(), 3_000).unref();
     },
   };
 }

@@ -144,6 +144,16 @@ test("Settings: the default AI is chosen in the app and drives chats that pick n
   assert.equal(chat.tool, "codex");
 });
 
+test("the app warms up the default AI on start, and again when Settings change it", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude", warmUp: false }));
+  const mw = createAiApi(root, { bin: join(HERE, "fixtures/fake-agent.mjs") });
+  assert.equal(await mw.warmUp(), null);   // turned off
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  assert.equal((await fetch(`${base}/api/ai/tool`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify({ tool: "codex" }) })).status, 200);
+});
+
 test("a failing agent reports its error", async (t) => {
   const { server, base } = await setup();
   t.after(() => server.close());

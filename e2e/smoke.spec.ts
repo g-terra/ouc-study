@@ -306,3 +306,23 @@ test("the AI and its model are picked next to Send; the default is named and the
   await page.reload();
   await expect(page.getByRole("combobox", { name: "Model" })).toHaveValue("");
 });
+
+test("while the AI works on a message, the chat says it's thinking", async ({ page }) => {
+  await page.route("**/api/ai/status**", (route) => route.fulfill({ json: {
+    chosen: "claude", label: "Claude Code", agentic: true, ready: true, reason: "", token: "t",
+    tools: [{ id: "claude", label: "Claude Code", state: "connected", chosen: true }],
+  } }));
+  let answer = () => {};
+  const answered = new Promise<void>((ok) => { answer = ok; });
+  await page.route("**/api/ai/run", async (route) => {
+    await answered;
+    return route.fulfill({ contentType: "text/event-stream", body: 'data: {"type":"chat","id":"c1","title":"Hello"}\n\ndata: {"type":"text","text":"Hi! How can I help?"}\n\ndata: {"type":"done","ok":true}\n\n' });
+  });
+  await page.goto(`${SEM}/chat`);
+  await page.getByRole("textbox", { name: "Message" }).fill("hi");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Thinking…")).toBeVisible();
+  await expect(page.getByText(/Planning the answer/)).toHaveCount(0);
+  answer();
+  await expect(page.getByText("Hi! How can I help?")).toBeVisible();
+});
