@@ -10,7 +10,7 @@ import { releaseHighlights, useUpdate } from "../lib/update";
 import { rememberLook } from "../v2/look";
 import { toV2 } from "../v2/paths";
 import { isChatPath } from "../lib/chat-path";
-import { Bot, Headphones, RefreshCw, Sparkles, X } from "./icons";
+import { ArrowUpCircle, Bot, Headphones, INLINE, RefreshCw, Sparkles, X } from "./icons";
 
 /** eClass and the AI coding tools: one summary dot, plus the details shown in Settings. */
 export function useConnectionSummary() {
@@ -383,7 +383,7 @@ export function UpdateBar() {
   return (
     <div className="border-t border-line bg-surface-2">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs">
-        <span className="font-semibold">⬆️ Update available: v{info.latest}</span>
+        <span className="font-semibold"><ArrowUpCircle aria-hidden className={INLINE} /> Update available: v{info.latest}</span>
         <span className="text-muted">you have v{info.current}</span>
         {items.length > 0 && <button type="button" className="text-muted underline hover:text-ink" onClick={() => setOpen(!open)}>{open ? "Hide" : "What's new"}</button>}
         {info.url && <a href={info.url} target="_blank" rel="noreferrer" className="text-muted underline hover:text-ink">Release notes ↗</a>}
