@@ -1,7 +1,7 @@
 import type { SemesterData } from "@ouc/content/types";
 import { Link, enc } from "../lib/router";
 import { courseMap, currentWeek, stateOf } from "../lib/data";
-import { at, daysBetween, fmtFull, relative } from "../lib/dates";
+import { at, daysBetween, fmtFull, plural, relative } from "../lib/dates";
 import { ORDER, SyncStatus, UpdateRow } from "./Updates";
 import { Card, CourseBadge, CourseDot, PageHeader, ProgressRing, SectionTitle, StatePill, cx } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
@@ -165,7 +165,7 @@ export function Dashboard({ data }: { data: SemesterData }) {
                     <div><dt className="text-[11px] font-semibold uppercase tracking-wider text-muted">This week</dt><dd className="leading-snug">{wk?.label ?? "No class this week"}</dd></div>
                     <div><dt className="text-[11px] font-semibold uppercase tracking-wider text-muted">Next due</dt><dd>{nd ? `${nd.title}, ${relative(at(nd.due!), now)}` : "Nothing open"}</dd></div>
                   </dl>
-                  <div className="mt-4 text-xs text-muted">📒 {notes} notes · {c.weeks.filter((w) => w.items.length).length} weeks of material</div>
+                  <div className="mt-4 text-xs text-muted">📒 {plural(notes, "note")} · {c.weeks.filter((w) => w.items.length).length} weeks of material</div>
                 </div>
               </Card>
             </Link>
