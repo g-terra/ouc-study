@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/g-terra/ouc-study/compare/v0.16.0...v0.17.0) (2026-10-20)
+
+
+### Features
+
+* **web:** open class videos on a page with the transcript beside them ([#90](https://github.com/g-terra/ouc-study/issues/90)) ([1d6cb6f](https://github.com/g-terra/ouc-study/commit/1d6cb6f5ca303494e97b5914331aada4c62b5054))
+
 ## [0.16.0](https://github.com/g-terra/ouc-study/compare/v0.15.0...v0.16.0) (2026-10-20)
 
 
