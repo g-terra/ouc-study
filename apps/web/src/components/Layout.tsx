@@ -9,6 +9,7 @@ import { THEMES, setTheme, useTheme, type ThemeChoice } from "../lib/theme";
 import { releaseHighlights, useUpdate } from "../lib/update";
 import { rememberLook } from "../v2/look";
 import { toV2 } from "../v2/paths";
+import { isChatPath } from "../lib/chat-path";
 
 /** eClass and the AI coding tools: one summary dot, plus the details shown in Settings. */
 export function useConnectionSummary() {
@@ -166,9 +167,11 @@ export function AppVersion() {
 /** Ask AI: a round robot button at the bottom right; it opens the chat as a popup over the page. */
 export function AskAiFab() {
   const { open, setOpen, sessions } = useAssistant();
+  const { path } = useRouter();
   const busy = sessions.some((x) => x.busy);
   const ai = useAiStatus();
-  if (ai.state === "unavailable") return null;
+  // the full-page chat is already open
+  if (ai.state === "unavailable" || isChatPath(path)) return null;
   return (
     <button type="button" data-ask-ai onClick={() => setOpen(!open)} aria-pressed={open} aria-label={open ? "Close Ask AI" : "Ask AI"} title="Ask AI"
       className={cx("fixed bottom-20 right-4 z-40 flex items-center gap-2 rounded-full bg-ink py-3 pl-3.5 pr-4 text-sm font-semibold text-bg shadow-xl transition hover:scale-105 sm:bottom-6 sm:right-6",

@@ -124,3 +124,19 @@ test("a course's slides open in the slide viewer", async ({ page }) => {
   }
   await expect(page.getByRole("link", { name: /Download/ }).first()).toHaveAttribute("href", /Demo%20lecture\.pptx$/);
 });
+
+test("Ask AI expands to a full page and back to the pop-up, keeping what's typed", async ({ page }) => {
+  await page.goto(`${SEM}/courses`);
+  await page.getByRole("button", { name: "Ask AI" }).click();
+  const popup = page.getByRole("dialog", { name: "Ask AI" });
+  await popup.getByRole("textbox", { name: "Message" }).fill("Explain week 1 in depth");
+  await popup.getByRole("button", { name: "Open as a full page" }).click();
+  await expect(page).toHaveURL(/\/2026-Demo\/chat$/);
+  await expect(popup).toBeHidden();
+  await expect(page.getByRole("heading", { level: 1, name: "Ask AI" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Chat history" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue("Explain week 1 in depth");
+  await page.getByRole("button", { name: "Back to the pop-up" }).click();
+  await expect(page).toHaveURL(/\/2026-Demo\/courses$/);
+  await expect(popup.getByRole("textbox", { name: "Message" })).toHaveValue("Explain week 1 in depth");
+});
