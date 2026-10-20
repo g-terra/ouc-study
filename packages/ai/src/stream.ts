@@ -19,7 +19,7 @@ export type AgentEvent =
   | { type: "done"; ok: boolean };
 /** A run in progress, handed to onStart so the caller can stop it. */
 export interface RunHandle { stop(): void }
-export interface TurnOptions { resume?: string; onEvent?: (e: AgentEvent) => void; onStart?: (h: RunHandle) => void; bin?: string }
+export interface TurnOptions { resume?: string; model?: string; onEvent?: (e: AgentEvent) => void; onStart?: (h: RunHandle) => void; bin?: string }
 /** One line of a tool's JSON output: each tool has its own shape, read field by field. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ToolJson = any;
@@ -116,8 +116,8 @@ const PARSER: Record<string, (j: ToolJson, root: string) => AgentEvent[]> = { cl
  * One turn with an agent tool. onEvent gets the events above; resolves when the tool exits.
  * Returns { stop } synchronously through opts.onStart so the caller can cancel the run.
  */
-export function runAgentTurn(root: string, cfg: Pick<AiConfig, "tool">, prompt: string, { resume, onEvent, onStart, bin }: TurnOptions = {}): Promise<{ ok: boolean }> {
-  const [cmd, args] = agentCommand(cfg, prompt, { json: true, resume });
+export function runAgentTurn(root: string, cfg: Pick<AiConfig, "tool" | "opencode">, prompt: string, { resume, model, onEvent, onStart, bin }: TurnOptions = {}): Promise<{ ok: boolean }> {
+  const [cmd, args] = agentCommand(cfg, prompt, { json: true, resume, model });
   const parse = PARSER[cfg.tool ?? ""] ?? (() => []);
   return new Promise((done) => {
     let buf = "", err = "", sawError = false, finished = false;

@@ -72,6 +72,13 @@ test("actions, guard, run and follow-up", async (t) => {
   const { chats } = await json(fetch(`${base}/api/ai/chats`));
   assert.equal(chats[0].id, chatId);
 
+  // a model the panel offers is passed on; anything else is refused before the agent starts
+  const { tools } = await json(fetch(`${base}/api/ai/status`));
+  assert.deepEqual(tools.find((x: { id: string }) => x.id === "claude").models, ["sonnet", "opus", "haiku"]);
+  const withModel = await sse(await post("/api/ai/run", { chatId, message: "again", model: "opus" }));
+  assert.equal(withModel.filter((e) => e.type === "text").map((e) => e.text).join(""), "Second turn. [opus]");
+  assert.equal((await post("/api/ai/run", { chatId, message: "again", model: "--dangerously-skip-permissions" })).status, 400);
+
   // deleting: needs the app's token; one chat, then all of them
   const del = (path: string, t = token) => fetch(`${base}${path}`, { method: "DELETE", headers: { "X-OUC-AI": t } });
   assert.equal((await del(`/api/ai/chats/${chatId}`, "nope")).status, 403);

@@ -10,7 +10,7 @@ import { Link, useRouter, enc } from "../lib/router";
 import { chatPathFor, isChatPath } from "../lib/chat-path";
 import { mdToHtml } from "../lib/markdown";
 import { linkLabel } from "../lib/links";
-import { TOOL_STATE, deleteChats, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
+import { TOOL_STATE, deleteChats, pickedModels, rememberModel, fileLink, viewUrl, visualsOf, getChat, listChats, refreshAi, runTurn, stopRun, useActions, useAiStatus, usePrepStatus, type AiAction, type Chat, type ChatMessage, type ChatSummary } from "../lib/ai";
 import { refreshData } from "../lib/data";
 import { cx } from "./ui";
 import { renderMermaid } from "../notes/Mermaid";
@@ -27,7 +27,7 @@ interface Ctx {
   chat: Chat | null; busy: boolean; error?: string; draft: Draft | null; setDraft: (d: Draft | null) => void;
   /** Opens the panel with an action picked (and its inputs filled in), in a free tab; `tool` picks the AI for that tab only. */
   start: (action: string, params?: Record<string, string>, tool?: string) => void;
-  send: (sem: string, message: string, title?: string) => Promise<void>;
+  send: (sem: string, message: string, title?: string, model?: string) => Promise<void>;
   /** The coding tool for the active tab: its own, else the one picked in the panel (null = the one from `ouc ai setup`). */
   tool: string | null; setTool: (t: string | null) => void;
   stop: () => void; reset: () => void; load: (id: string) => Promise<void>;
@@ -143,12 +143,12 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     store.set({ chats: withChat.map((x) => x.chat?.id ?? x.loading!), active: Math.max(0, withChat.findIndex((x) => x.key === activeKey)), open });
   }, [sessions.map((x) => x.chat?.id ?? x.loading).join(), activeKey, open]);
 
-  const send = async (sem: string, message: string, title?: string) => {
+  const send = async (sem: string, message: string, title?: string, model?: string) => {
     const key = active.key;
     const { chat, draft } = active;
     const useTool = active.tool ?? tool ?? undefined;
     if (active.busy) return;
-    const body = { ...(chat ? { sem, chatId: chat.id, message } : { sem, action: draft?.action, params: draft?.params, message }), ...(useTool ? { tool: useTool } : {}) };
+    const body = { ...(chat ? { sem, chatId: chat.id, message } : { sem, action: draft?.action, params: draft?.params, message }), ...(useTool ? { tool: useTool } : {}), ...(model ? { model } : {}) };
     const user = message.trim() || null;
     let id = chat?.id, wrote = false;
     // show the message straight away; the reply fills in as events arrive
@@ -233,6 +233,7 @@ export function AskAiButton({ action, params, children, className }: { action: s
 // where "Back to the pop-up" returns to: the page the chat was expanded from
 let expandedFrom: string | null = null;
 const SIDE_KEY = "ouc-ai-history";
+const PICK = "min-w-0 truncate rounded-lg border border-line bg-surface py-1 pl-2 pr-1 text-xs text-muted hover:text-ink disabled:opacity-60";
 const BTN = "rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-ink";
 
 /** The chat as a popup over the page; it stays out of the way while the full-page chat is open. */
@@ -318,13 +319,17 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
     : ai.state !== "ok" ? undefined
     : !picked ? (ai.reason || "No AI chosen yet. In Terminal, run: ouc ai setup")
     : !ready ? `${picked.label}: ${picked.detail ?? "not ready"}${picked.fix ? `. Fix: ${picked.fix}` : ""}` : undefined;
+  // the model for the picked AI: the one picked for it last (if it still has it), else its default
+  const [models, setModels] = useState(pickedModels);
+  const model = picked && picked.models?.includes(models[picked.id]) ? models[picked.id] : "";
+  const pickModel = (m: string) => { if (!picked) return; rememberModel(picked.id, m); setModels(pickedModels()); };
   const needsAgent = meta?.agentOnly && ai.state === "ok" && !agentic ? `"${meta.title}" needs Claude Code, Codex or opencode.` : undefined;
   const canSend = !a.busy && !blocked && !needsAgent && (a.chat ? !!input.trim() : !!a.draft || !!input.trim());
   const submit = async () => {
     if (!canSend) return;
     const msg = input;
     setInput("");
-    await a.send(data.id, msg, meta?.title);
+    await a.send(data.id, msg, meta?.title, model || undefined);
   };
   const pick = async (id: string) => { setHistory(null); await a.load(id); };
   // on the full page's wide layout, History shows or hides the side list; otherwise it opens the list in place
@@ -368,19 +373,6 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
       <header className={cx("flex items-center gap-2 border-b border-line", page ? "pb-3" : "px-4 py-3")}>
         <div className="min-w-0 flex-1">
           {page ? <h1 className="font-serif text-2xl font-semibold leading-tight">Ask AI</h1> : <div className="font-serif text-lg font-semibold leading-tight">Ask AI</div>}
-          <div className="flex items-center gap-1.5 truncate text-xs text-muted">
-            <span className={cx("inline-block size-2 shrink-0 rounded-full", ai.state === "checking" ? "animate-pulse bg-muted" : ready ? "bg-ok" : "bg-warn")} />
-            {ai.state === "ok" && ai.tools.some((t) => t.state !== "missing") ? (
-              <select aria-label="Which AI answers" value={picked?.id ?? ""} disabled={a.busy}
-                onChange={(e) => a.setTool(ai.tools.find((t) => t.id === e.target.value)?.chosen ? null : e.target.value)}
-                className="-ml-1 min-w-0 truncate rounded bg-transparent py-0.5 pr-1 text-xs text-muted hover:text-ink">
-                {!picked && <option value="">Choose an AI</option>}
-                {ai.tools.filter((t) => t.state !== "missing").map((t) => (
-                  <option key={t.id} value={t.id}>{t.id === "opencode" || t.id === "local" ? `${t.label}${t.detail && t.state === "connected" ? ` · ${t.detail}` : ""}` : t.label}{t.state === "connected" ? "" : ` (${TOOL_STATE[t.state].text.toLowerCase()})`}</option>
-                ))}
-              </select>
-            ) : ai.state === "checking" ? "Checking your AI…" : ai.label ?? "No AI chosen"}
-          </div>
         </div>
         <button type="button" className={BTN} aria-pressed={page ? undefined : !!history}
           onClick={async () => (wide() ? showSide(!sideOn) : setHistory(history ? null : await listChats()))}>
@@ -409,11 +401,34 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
           </p>
         )}
         {(meta?.id === "assignment-helper" || meta?.id === "assignment-prep") && <p className="mb-2 text-xs text-muted">The AI explains, hints and reviews; it won't write answers for you to submit.</p>}
-        <div className="flex items-end gap-2">
-          <textarea ref={field} value={input} onChange={(e) => setInput(e.target.value)} rows={4} aria-label="Message"
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-            placeholder={a.chat ? "Reply…" : a.draft ? "Anything to add? (optional)" : "Ask anything about your courses…"}
-            className="max-h-64 min-h-[6.5rem] flex-1 resize-none rounded-xl border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-muted" />
+        <textarea ref={field} value={input} onChange={(e) => setInput(e.target.value)} rows={4} aria-label="Message"
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
+          placeholder={a.chat ? "Reply…" : a.draft ? "Anything to add? (optional)" : "Ask anything about your courses…"}
+          className="block max-h-64 min-h-[6.5rem] w-full resize-none rounded-xl border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-muted" />
+        {/* which AI answers (and its model), next to Send */}
+        <div className="mt-2 flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted">
+            <span className={cx("inline-block size-2 shrink-0 rounded-full", ai.state === "checking" ? "animate-pulse bg-muted" : ready ? "bg-ok" : "bg-warn")} />
+            {ai.state === "ok" && ai.tools.some((t) => t.state !== "missing") ? (
+              <>
+                <select aria-label="Which AI answers" value={picked?.id ?? ""} disabled={a.busy}
+                  onChange={(e) => a.setTool(ai.tools.find((t) => t.id === e.target.value)?.chosen ? null : e.target.value)}
+                  className={cx(PICK, "max-w-[11rem]")}>
+                  {!picked && <option value="">Choose an AI</option>}
+                  {ai.tools.filter((t) => t.state !== "missing").map((t) => (
+                    <option key={t.id} value={t.id}>{t.id === "opencode" || t.id === "local" ? `${t.label}${t.detail && t.state === "connected" ? ` · ${t.detail}` : ""}` : t.label}{t.state === "connected" ? "" : ` (${TOOL_STATE[t.state].text.toLowerCase()})`}</option>
+                  ))}
+                </select>
+                {!!picked?.models?.length && (
+                  <select aria-label="Model" title="The model for this AI (remembered as its default)" value={model} disabled={a.busy}
+                    onChange={(e) => pickModel(e.target.value)} className={cx(PICK, "max-w-[9rem]")}>
+                    <option value="">{picked.model ? `Default (${picked.model})` : "Default model"}</option>
+                    {picked.models.filter((m) => m !== picked.model).map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                )}
+              </>
+            ) : <span className="truncate">{ai.state === "checking" ? "Checking your AI…" : ai.label ?? "No AI chosen"}</span>}
+          </div>
           {a.busy
             ? <button type="button" onClick={a.stop} className="rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold">Stop</button>
             : <button type="button" onClick={submit} disabled={!canSend} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-bg disabled:opacity-40">{!a.chat && a.draft ? "Start" : "Send"}</button>}

@@ -27,6 +27,7 @@ export interface AiConfig {
   autoPrep?: boolean;   // prepare assignment prep packs in the background (default on)
   autoQuiz?: boolean;   // Sync now also makes a quiz for every class without one (default on)
   parallel?: number;    // background AI runs at once (default 3)
+  models?: Partial<Record<"claude" | "codex", string[]>>;   // the models the app offers for these tools (default AGENT_MODELS)
 }
 export interface ChatMessage { role: "system" | "user" | "assistant"; content: string }
 export interface LoginState { loggedIn: boolean; subscription: boolean; how: string; unknown?: boolean }
@@ -49,6 +50,17 @@ export const INSTALL_HINT: Record<AgentTool, string> = {
   codex: "npm i -g @openai/codex",
   opencode: "npm i -g opencode-ai",
 };
+// The models the Ask AI panel offers. Claude Code takes these aliases with any Claude plan; Codex runs
+// these with a ChatGPT sign-in. Both stay on the subscription (no API credits); "models" in .ouc/ai.json
+// replaces a list. opencode and plain local models offer what their server has (set up by `ouc ai setup`).
+export const AGENT_MODELS: Record<"claude" | "codex", string[]> = { claude: ["sonnet", "opus", "haiku"], codex: ["gpt-5-codex", "gpt-5"] };
+/** The models a tool can be asked to use, and the one it uses when none is picked (undefined: the tool's own default). */
+export function toolModels(cfg: Pick<AiConfig, "models" | "opencode" | "local"> | null, tool: string): { models: string[]; model?: string } {
+  if (tool === "claude" || tool === "codex") return { models: cfg?.models?.[tool]?.filter((m) => typeof m === "string" && m) ?? AGENT_MODELS[tool] };
+  const s = tool === "opencode" ? cfg?.opencode : tool === "local" ? cfg?.local : undefined;
+  return s ? { models: [...new Set([s.model, ...(s.models ?? [])])].filter(Boolean), model: s.model } : { models: [] };
+}
+
 // Older configs used Codex's --oss mode for local models; opencode replaces it.
 export const ALIASES: Record<string, Tool> = { "codex-oss": "opencode" };
 
@@ -242,22 +254,23 @@ const CLAUDE_TOOLS = "Read,Write,Edit,Glob,Grep,Bash(node packages/ai/validate.m
  * json: one-shot run that prints machine-readable events (used by the study app), optionally
  * continuing an earlier conversation (resume = the tool's session/thread id).
  */
-export function agentCommand(cfg: Pick<AiConfig, "tool">, prompt: string, { interactive = false, json = false, resume }: { interactive?: boolean; json?: boolean; resume?: string } = {}): [bin: string, args: string[]] {
+export function agentCommand(cfg: Pick<AiConfig, "tool" | "opencode">, prompt: string, { interactive = false, json = false, resume, model }: { interactive?: boolean; json?: boolean; resume?: string; model?: string } = {}): [bin: string, args: string[]] {
   if (cfg.tool === "claude") {
     if (interactive) return ["claude", prompt ? [prompt] : []];
     const tools = json ? `${CLAUDE_TOOLS},WebSearch,WebFetch` : CLAUDE_TOOLS;
     return ["claude", ["-p", prompt, "--permission-mode", "acceptEdits", "--allowedTools", tools,
       ...(json ? ["--output-format", "stream-json", "--verbose", "--disallowedTools", "Read(.eclass-token),Read(./.eclass-token)"] : []),
-      ...(resume ? ["--resume", resume] : [])]];
+      ...(resume ? ["--resume", resume] : []), ...(model ? ["--model", model] : [])]];
   }
   if (cfg.tool === "opencode") {
     // .opencode/opencode.json sets the model; opencode.json in the root denies the eClass key and destructive commands
     if (interactive) return ["opencode", prompt ? ["--prompt", prompt] : []];
-    return ["opencode", ["run", "--auto", ...(json ? ["--format", "json"] : []), ...(resume ? ["--session", resume] : []), prompt]];
+    const m = model && cfg.opencode ? `${opencodeProvider(cfg.opencode).id}/${model}` : model;
+    return ["opencode", ["run", "--auto", ...(json ? ["--format", "json"] : []), ...(resume ? ["--session", resume] : []), ...(m ? ["--model", m] : []), prompt]];
   }
   // codex exec never asks for approval; workspace-write keeps it inside this folder
   if (interactive) return ["codex", prompt ? [prompt] : []];
-  const base = ["exec", ...(json ? ["--json"] : []), "--sandbox", "workspace-write", "--skip-git-repo-check"];
+  const base = ["exec", ...(json ? ["--json"] : []), "--sandbox", "workspace-write", "--skip-git-repo-check", ...(model ? ["--model", model] : [])];
   return ["codex", resume ? [...base, "resume", resume, prompt] : [...base, prompt]];
 }
 export function runAgent(root: string, cfg: AiConfig, prompt: string, opts: Parameters<typeof agentCommand>[2] = {}): Promise<number> {

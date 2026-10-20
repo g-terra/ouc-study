@@ -5,7 +5,16 @@ import { fileLink } from "./links";
 export { fileLink, linkPaths } from "./links";
 
 export type ToolState = "connected" | "signedout" | "apikey" | "missing" | "noserver" | "unknown";
-export interface AiTool { id: string; label: string; state: ToolState; detail?: string; fix?: string; chosen: boolean }
+export interface AiTool { id: string; label: string; state: ToolState; detail?: string; fix?: string; chosen: boolean; /** models the panel offers; model: the default (none: the tool's own) */ models?: string[]; model?: string }
+
+/** The model picked for each tool in the panel, remembered as that tool's default for new messages ("": its own default). */
+const MODEL_KEY = "ouc-ai-model";
+export function pickedModels(): Record<string, string> { try { return JSON.parse(localStorage.getItem(MODEL_KEY) ?? "{}") ?? {}; } catch { return {}; } }
+export function rememberModel(tool: string, model: string) {
+  const all = { ...pickedModels(), [tool]: model };
+  if (!model) delete all[tool];
+  try { localStorage.setItem(MODEL_KEY, JSON.stringify(all)); } catch { /* private mode */ }
+}
 export interface AiStatus {
   state: "checking" | "ok" | "unavailable";
   chosen?: string | null; label?: string; agentic?: boolean; ready?: boolean; reason?: string;
