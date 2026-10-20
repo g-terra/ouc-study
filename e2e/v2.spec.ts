@@ -48,6 +48,8 @@ test("v2 calendar lists the overdue assignment; a course keeps its notes and qui
   // the shared note page opens inside v2
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/notes\/DEMO101\/week-01-getting-started$/);
   await expect(page.getByText("Smoke tests open every page")).toBeVisible();
+  // the demo note leaves out the ">" on the Big idea's second line; it still goes in the box
+  await expect(page.getByRole("complementary").filter({ hasText: "Big idea" })).toContainText("Smoke tests open every page");
   await expect(page.getByRole("navigation", { name: "Main" }).first().getByRole("link", { name: "Courses", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
