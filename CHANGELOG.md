@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/g-terra/ouc-study/compare/v0.9.2...v0.10.0) (2026-10-20)
+
+
+### Features
+
+* **web:** open the ask ai chat as a full page ([#65](https://github.com/g-terra/ouc-study/issues/65)) ([9b9f7f3](https://github.com/g-terra/ouc-study/commit/9b9f7f334c101332f3291ccb9d5608efe0594bbc))
+
 ## [0.9.2](https://github.com/g-terra/ouc-study/compare/v0.9.1...v0.9.2) (2026-10-20)
 
 
