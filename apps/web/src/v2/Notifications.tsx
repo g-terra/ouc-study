@@ -81,7 +81,7 @@ export function NotificationsBell({ data }: { data?: SemesterData | null }) {
         )}
       </button>
       {open && data && (
-        <div role="dialog" aria-label="Notifications" className={cx(PANEL, "w-[min(26rem,calc(100vw-2rem))]")}>
+        <div role="dialog" aria-label="Notifications" className={cx(PANEL, "w-[min(26rem,calc(100vw-2rem))] max-sm:fixed max-sm:inset-x-4 max-sm:top-16 max-sm:w-auto")}>
           <div className="mb-1 flex items-baseline gap-2 px-1">
             <span className="flex-1 font-serif text-lg font-semibold">Notifications</span>
             {fresh.length > 0 && <span className="text-xs text-muted">{fresh.length} new</span>}

@@ -3,7 +3,7 @@ import type { ClassSession, Quiz, SemesterData, Week, WeekItem } from "@ouc/cont
 import { Link, enc, useRouter } from "../lib/router";
 import { transcriptPage } from "../lib/links";
 import { currentWeek, stateOf } from "../lib/data";
-import { at, day, fmtDay, fmtFull, fmtShort, fmtTime, relative } from "../lib/dates";
+import { at, day, fmtDay, fmtFull, fmtShort, fmtTime, fmtWhen, plural, relative } from "../lib/dates";
 import { Card, Empty, FileLink, PageHeader, ProgressRing, SectionTitle, StatePill, cx, isMaterial, kindIcon } from "../components/ui";
 import { AskAiButton } from "../components/Assistant";
 import { ClassCard, ClassTimeEditor, JoinButton, upcomingClasses } from "../components/Classes";
@@ -77,8 +77,8 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
         <h1 className="font-serif text-3xl font-semibold sm:text-4xl">{c.title}</h1>
         <div className="mt-4 flex flex-wrap gap-2 text-sm">
           <span className="rounded-full bg-white/20 px-3 py-1">{as.filter((a) => a.submitted).length}/{as.length} assignments submitted</span>
-          <span className="rounded-full bg-white/20 px-3 py-1"><NotebookPen aria-hidden className={INLINE} /> {notes.length} notes</span>
-          {exams.filter((e) => e.kind === "Final exam").map((e) => <span key={e.at} className="rounded-full bg-white/20 px-3 py-1"><GraduationCap aria-hidden className={INLINE} /> Final {fmtFull(at(e.at))}</span>)}
+          <span className="rounded-full bg-white/20 px-3 py-1"><NotebookPen aria-hidden className={INLINE} /> {plural(notes.length, "note")}</span>
+          {exams.filter((e) => e.kind === "Final exam").map((e) => <span key={e.at} className="rounded-full bg-white/20 px-3 py-1"><GraduationCap aria-hidden className={INLINE} /> Final {fmtWhen(at(e.at), e.noTime)}</span>)}
           {c.joinUrl && <a href={c.joinUrl} target="_blank" rel="noreferrer" className="rounded-full bg-white/20 px-3 py-1 hover:bg-white/30"><Video aria-hidden className={INLINE} /> Webconference ↗</a>}
           {c.eclassUrl && <a href={c.eclassUrl} target="_blank" rel="noreferrer" className="rounded-full bg-white px-3 py-1 font-semibold" style={{ color: c.color }}>Open on eClass ↗</a>}
         </div>

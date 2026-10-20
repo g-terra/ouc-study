@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { SemesterData } from "@ouc/content/types";
 import { Link, enc, useRouter } from "../lib/router";
 import { currentWeek, stateOf } from "../lib/data";
-import { at, fmtFull, fmtShort, relative } from "../lib/dates";
+import { at, fmtFull, fmtShort, fmtWhen, plural, relative } from "../lib/dates";
 import { useAttempts } from "../lib/quiz";
 import { Card, Empty, PageHeader, ProgressRing, StatePill, cx } from "../components/ui";
 import { ClassCard, ClassTimeEditor, upcomingClasses } from "../components/Classes";
@@ -43,7 +43,7 @@ export function CourseList({ data }: { data: SemesterData }) {
                   <div className="mt-1 text-sm"><span className="text-muted">This week:</span> {wk?.label ?? "between weeks"}{wk && progress.state === "ok" && <DoneCount count={weekProgress(c.code, wk, progress.done)} long className="ml-2 text-xs" />}</div>
                   <div className="text-sm"><span className="text-muted">Next due:</span> {nd ? `${nd.title}, ${relative(at(nd.due!), now)}` : "nothing open"}</div>
                   <div className="text-sm"><span className="text-muted">Exam:</span> {exam ? `${exam.kind}, ${exam.noTime ? fmtShort(at(exam.at)) : fmtFull(at(exam.at))} (${relative(at(exam.at), now)})` : "no date yet"}</div>
-                  <div className="mt-1.5 text-xs text-muted"><NotebookPen aria-hidden className={INLINE} /> {notes} notes · <Trophy aria-hidden className={INLINE} /> {quizzes} quizzes{progress.state === "ok" && (() => { const p = courseProgress(c, progress.done); return p.total > 0 && <> · {p.done} of {p.total} watched or read</>; })()}</div>
+                  <div className="mt-1.5 text-xs text-muted"><NotebookPen aria-hidden className={INLINE} /> {plural(notes, "note")} · <Trophy aria-hidden className={INLINE} /> {plural(quizzes, "quiz", "quizzes")}{progress.state === "ok" && (() => { const p = courseProgress(c, progress.done); return p.total > 0 && <> · {p.done} of {p.total} watched or read</>; })()}</div>
                 </div>
                 <div className="flex shrink-0 flex-col items-center" title={`${done} of ${as.length} assignments handed in`}>
                   <ProgressRing value={as.length ? done / as.length : 0} color={c.color} label={`${done}/${as.length}`} />
@@ -94,7 +94,7 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
       <Link to={`/v2/${enc(data.id)}/courses`} className="text-sm text-muted hover:text-ink">← Courses</Link>
       <header className="mt-2 mb-4 flex flex-wrap items-end gap-x-4 gap-y-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-sm text-muted"><span className="size-2.5 rounded-full" style={{ background: c.color }} />{c.code}{exam && <> · <GraduationCap aria-hidden className={INLINE} /> Final {fmtFull(at(exam.at))}</>}</div>
+          <div className="flex items-center gap-2 text-sm text-muted"><span className="size-2.5 rounded-full" style={{ background: c.color }} />{c.code}{exam && <> · <GraduationCap aria-hidden className={INLINE} /> Final {fmtWhen(at(exam.at), exam.noTime)}</>}</div>
           <h1 className="font-serif text-3xl font-semibold leading-tight tracking-tight">{c.title}</h1>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
