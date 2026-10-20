@@ -127,6 +127,23 @@ test("opencode can use any model the local server has: it's added to opencode's 
   assert.deepEqual(JSON.parse(readFileSync(join(root, ".ouc/ai.json"), "utf8")).opencode.models, ["qwen3:8b", "gemma3-32k:4b"]);
 });
 
+test("Settings: the default AI is chosen in the app and drives chats that pick none", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const use = (tool: string, tok = token) => fetch(`${base}/api/ai/tool`, { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": tok }, body: JSON.stringify({ tool }) });
+  assert.equal((await use("codex", "nope")).status, 403);
+  assert.equal((await use("gpt-9")).status, 400);
+  assert.match((await json(use("local"))).error, /ouc ai setup/);   // no local model set up
+  assert.equal((await use("codex")).status, 200);
+  assert.equal(JSON.parse(readFileSync(join(root, ".ouc/ai.json"), "utf8")).tool, "codex");
+  assert.equal((await json(fetch(`${base}/api/ai/status`))).chosen, "codex");
+  // a chat that picks no AI is answered by the default (the fake agent stands in for every CLI)
+  const ev = await sse(await fetch(`${base}/api/ai/run`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify({ message: "hi" }) }));
+  const chat = await json(fetch(`${base}/api/ai/chats/${ev.find((e) => e.type === "chat")?.id}`));
+  assert.equal(chat.tool, "codex");
+});
+
 test("a failing agent reports its error", async (t) => {
   const { server, base } = await setup();
   t.after(() => server.close());
