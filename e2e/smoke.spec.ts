@@ -87,6 +87,14 @@ test("a quiz's progress can be reset; Make a quiz opens a pop-up; Remove asks fi
   const dialog = page.getByRole("dialog", { name: "Make a quiz" });
   await dialog.getByText("One class").click();
   await expect(dialog.getByRole("combobox", { name: "Class", exact: true })).toHaveValue("1");
+  // a proposed name that follows the choice, until you type your own
+  const name = dialog.getByRole("textbox", { name: "Name" });
+  await expect(name).toHaveValue("Lecture 1 · Getting started");
+  await dialog.getByText("Whole course", { exact: true }).click();
+  await expect(name).toHaveValue("Demo Studies · Whole course");
+  await name.fill("My revision quiz");
+  await dialog.getByText("One class").click();
+  await expect(name).toHaveValue("My revision quiz");
   // "Every class" makes one quiz per class without one; the demo's only class already has a quiz
   await expect(dialog.getByRole("radio", { name: /Every class with material already has a quiz/ })).toBeDisabled();
   await dialog.getByRole("button", { name: "Cancel" }).click();

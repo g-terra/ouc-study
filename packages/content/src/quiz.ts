@@ -74,6 +74,14 @@ export function parseQuiz(src: string | Raw, where: { code: string; name: string
   };
 }
 
+/** The name the Make a quiz pop-up proposes: "Lecture 9 · <topic>" for one class, "<course> · Whole course" for the course. */
+export function proposedQuizName(course: { short: string }, week: { index: number; name: string; label: string } | null): string {
+  if (!week) return `${course.short} · Whole course`;
+  if (week.index === 0) return `${course.short} · General`;
+  const n = Number((`${week.name} ${week.label}`.match(/\b(?:week|lecture)\s*(\d+)/i) ?? [])[1] ?? week.index);
+  return `Lecture ${n} · ${week.label}`;
+}
+
 /** What the student picked: true/false, or the indexes of the options they ticked. */
 export type QuizAnswer = boolean | number[];
 

@@ -525,3 +525,20 @@ test("no second quiz for a class while one is being made, from the pop-up or fro
   for (let i = 0; i < 100 && (await json(fetch(`${base}/api/ai/quiz`))).jobs.some((j: Ev) => j.running); i++) await new Promise((ok) => setTimeout(ok, 20));
   assert.deepEqual(readdirSync(join(root, "semesters/S/quizzes/AAA")).sort(), ["week-01-intro.json", "week-02-more.json"]);
 });
+
+test("a quiz named in the pop-up is saved under that name, and a second named quiz for a class isn't a duplicate", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  quizSemester(root);
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const post = (body: object) => fetch(`${base}/api/ai/quiz`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
+  assert.equal((await post({ sem: "S", course: "AAA", week: 1, title: "Lecture 1 · Intro" })).status, 200);
+  const { jobs: [named] } = await json(post({ sem: "S", course: "AAA", week: 1, title: "My own quiz" }));   // a different name: on purpose
+  assert.equal(named.quiz, "semesters/S/quizzes/AAA/my-own-quiz.json");
+  assert.equal((await post({ sem: "S", course: "AAA", week: 1, title: "my own QUIZ" })).status, 409);   // the same name again
+  assert.equal((await post({ sem: "S", course: "AAA", week: 1 })).status, 409);   // no name: it would be a copy
+  let jobs: Ev[] = [];
+  for (let i = 0; i < 100 && (!jobs.length || jobs.some((j) => j.running)); i++) { await new Promise((ok) => setTimeout(ok, 20)); jobs = (await json(fetch(`${base}/api/ai/quiz`))).jobs; }
+  assert.equal(JSON.parse(readFileSync(join(root, named.quiz), "utf8")).title, "My own quiz");   // the agent wrote "Quiz"
+  assert.ok(existsSync(join(root, "semesters/S/quizzes/AAA/lecture-1-intro.json")));
+});

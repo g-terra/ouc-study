@@ -127,7 +127,7 @@ export function CoursePage({ data, code }: { data: SemesterData; code: string })
           <div>
             <SectionTitle right={<MakeQuizButton data={data} course={code}>Make a quiz</MakeQuizButton>}>Quizzes</SectionTitle>
             <QuizJobs data={data} course={code} />
-            {quizzes.length ? <QuizLinks sem={data.id} quizzes={quizzes} withScope removable /> : <Empty>No quizzes yet. Press “Make a quiz” to make one for one class or the whole course.</Empty>}
+            {quizzes.length ? <QuizLinks sem={data.id} quizzes={quizzes} withScope /> : <Empty>No quizzes yet. Press “Make a quiz” to make one for one class or the whole course.</Empty>}
           </div>
           <div>
             <SectionTitle>Notes</SectionTitle>

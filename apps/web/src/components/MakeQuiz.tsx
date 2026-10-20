@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { Course, SemesterData, Week } from "@ouc/content/types";
 import { useAiStatus } from "../lib/ai";
 import { dismissJob, makeQuiz, useQuizJobs, type QuizJob } from "../lib/quiz";
+import { proposedQuizName } from "@ouc/content/quiz";
 import { Link, enc } from "../lib/router";
 import { cx, isMaterial } from "./ui";
 import { Hourglass, Settings, TriangleAlert, Trophy, X } from "./icons";
@@ -25,6 +26,10 @@ function MakeQuizDialog({ data, course, week, onClose }: { data: SemesterData; c
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const sel = scope === "every" ? "every" : scope === "class" ? (weeks.some((w) => String(w.index) === pick) ? pick : String(weeks[0]?.index ?? "")) : undefined;
+  // the proposed name follows the choice until the student types their own
+  const [typed, setTyped] = useState<string>();
+  const proposed = c ? proposedQuizName(c, scope === "class" ? weeks.find((w) => String(w.index) === sel) ?? null : null) : "";
+  const name = typed ?? proposed;
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", esc);
@@ -32,7 +37,7 @@ function MakeQuizDialog({ data, course, week, onClose }: { data: SemesterData; c
   }, []);
   const submit = async () => {
     setBusy(true); setError(undefined);
-    try { await makeQuiz(data.id, code, sel); onClose(); }
+    try { await makeQuiz(data.id, code, sel, scope === "every" ? undefined : name.trim() || proposed); onClose(); }
     catch (e) { setError((e as Error).message); setBusy(false); }
   };
   const radio = (v: "course" | "class" | "every", label: string, hint: string, disabled = false) => (
@@ -63,6 +68,12 @@ function MakeQuizDialog({ data, course, week, onClose }: { data: SemesterData; c
             <select aria-label="Class" value={sel} onChange={(e) => setPick(e.target.value)} className="w-full rounded-lg border border-line bg-surface px-3 py-2">
               {weeks.map((w) => <option key={w.index} value={w.index}>{w.index === 0 ? "General" : w.label}</option>)}
             </select>
+          </label>
+        )}
+        {scope !== "every" && (
+          <label className="mb-4 block text-sm">
+            <span className="mb-1 block font-semibold">Name</span>
+            <input type="text" aria-label="Name" value={name} maxLength={120} onChange={(e) => setTyped(e.target.value)} className="w-full rounded-lg border border-line bg-surface px-3 py-2" />
           </label>
         )}
         {error && <p className="mb-4 rounded-lg bg-bad-bg px-3 py-2 text-sm text-bad" role="alert">{error}</p>}
@@ -140,7 +151,7 @@ function QuizJobList({ data, jobs }: { data: SemesterData; jobs: QuizJob[] }) {
         <div key={j.id} className={cx("flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm", j.running ? "border-line bg-surface" : "border-bad/40 bg-bad-bg")} role="status">
           {j.running ? <Settings aria-hidden className="size-4 shrink-0 animate-spin text-accent [animation-duration:2.5s]" /> : <TriangleAlert aria-hidden className="size-4 shrink-0 text-bad" />}
           <span className="min-w-0 flex-1">
-            {j.running ? <><b>{what(j.course, j.week)}</b>: {quizPhase(j)}</> : <>The quiz for <b>{what(j.course, j.week)}</b> wasn't made: {j.error}</>}
+            {j.running ? <><b>{(j.title ?? what(j.course, j.week))}</b>: {quizPhase(j)}</> : <>The quiz for <b>{(j.title ?? what(j.course, j.week))}</b> wasn't made: {j.error}</>}
           </span>
           {j.chatId && <WorkLink sem={data.id} running={j.running} />}
           {!j.running && <button type="button" aria-label="Dismiss" className="px-1 text-muted hover:text-ink" onClick={() => dismissJob(j.id)}><X aria-hidden className="size-4" /></button>}
@@ -149,7 +160,7 @@ function QuizJobList({ data, jobs }: { data: SemesterData; jobs: QuizJob[] }) {
       {waiting.length > 0 && (
         <div className="flex items-center gap-2 rounded-xl border border-dashed border-line px-3 py-2 text-sm text-muted" role="status">
           <Hourglass aria-hidden className="size-4 shrink-0" />
-          <span>Waiting their turn ({waiting.length}): {waiting.map((j) => what(j.course, j.week)).join(", ")}</span>
+          <span>Waiting their turn ({waiting.length}): {waiting.map((j) => (j.title ?? what(j.course, j.week))).join(", ")}</span>
         </div>
       )}
     </div>
