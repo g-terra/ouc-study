@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Course, Quiz, QuizQuestion, SemesterData } from "@ouc/content/types";
-import { isCorrect, pointsFor, shuffledOptions, type QuizAnswer } from "@ouc/content/quiz";
+import { isCorrect, pointsFor, seededRandom, shuffledOptions, type QuizAnswer } from "@ouc/content/quiz";
 import { Link, enc, useRouter } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { pct, removeQuiz, resetProgress, saveAttempt, useAttempts } from "../lib/quiz";
@@ -168,7 +168,10 @@ export function QuizPage({ data, code, name }: { data: SemesterData; code: strin
   const { stats } = useAttempts(data.id);
   const { navigate } = useRouter();
   const [round, setRound] = useState(0);
-  const orders = useMemo(() => quiz?.questions.map((q) => (q.type === "true-false" ? [] : shuffledOptions(q.options.length, q.options.map((o) => o.text)))) ?? [], [quiz, round]);
+  // shuffled once per visit and round: the app's data refreshes (sync, AI work) hand over a new quiz object, and the options must not move
+  const [salt] = useState(() => Math.random().toString(36).slice(2));
+  const orders = useMemo(() => quiz?.questions.map((q, j) => (q.type === "true-false" ? []
+    : shuffledOptions(q.options.length, q.options.map((o) => o.text), seededRandom(`${salt}:${round}:${j}:${q.question}`)))) ?? [], [quiz, round, salt]);
   const [i, setI] = useState(0);
   const [answers, setAnswers] = useState<(QuizAnswer | undefined)[]>([]);
   const [checked, setChecked] = useState(false);
