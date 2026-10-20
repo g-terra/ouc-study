@@ -3,7 +3,7 @@ import { Link, linkHref, useRouter, enc } from "../lib/router";
 import { useIndex, useSemester } from "../lib/data";
 import { Switch, cx } from "./ui";
 import { CONN_LABEL, useConnection } from "../lib/connection";
-import { TOOL_STATE, getWhisper, refreshAi, setDefaultModel, setDefaultTool, setWhisper, useAiStatus, usePrepStatus, workLabel, type WhisperStatus } from "../lib/ai";
+import { TOOL_STATE, getWhisper, refreshAi, setDefaultModel, setDefaultTool, setToolEnabled, setWhisper, useAiStatus, usePrepStatus, workLabel, type WhisperStatus } from "../lib/ai";
 import { useAssistant } from "./Assistant";
 import { dismissJob, useQuizJobs } from "../lib/quiz";
 import { quizJobLabel, quizPhase } from "./MakeQuiz";
@@ -32,6 +32,8 @@ export function useConnectionSummary() {
 /** Claude Code, Codex and opencode: installed, signed in, which one is in use. */
 export function AiTools() {
   const { ai, aiKnown } = useConnectionSummary();
+  const [error, setError] = useState<string | null>(null);
+  const toggle = async (tool: string, on: boolean) => { setError(null); setError(await setToolEnabled(tool, on)); };
   return (
     <>
       <div className="mb-1 flex items-center px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
@@ -48,6 +50,7 @@ export function AiTools() {
                 <span className={cx("size-2 shrink-0 rounded-full", TOOL_STATE[t.state].dot)} />
                 <span className="flex-1 font-semibold">{t.label}{t.chosen && <span className="ml-1.5 text-xs font-normal text-muted">in use</span>}</span>
                 <span className="text-xs text-muted">{TOOL_STATE[t.state].text}</span>
+                {t.state !== "missing" && <Switch checked={t.enabled !== false} disabled={t.chosen} label={`Use ${t.label}`} onChange={(on) => toggle(t.id, on)} />}
               </div>
               {(t.detail || t.fix) && t.state !== "missing" && <div className="ml-4 text-xs text-muted">{t.detail}</div>}
               {t.fix && t.state !== "connected" && <code className="ml-4 mt-0.5 block truncate text-[11px] text-muted" title={t.fix}>{t.fix}</code>}
@@ -55,6 +58,8 @@ export function AiTools() {
           ))}
         </ul>
       )}
+      {aiKnown && ai.tools.some((t) => t.state !== "missing") && <p className="mt-2 px-2 text-xs text-muted">Switch an AI off to hide it from the chat. The Default AI stays on.</p>}
+      {error && <p role="alert" className="mt-1 px-2 text-xs text-warn">{error}</p>}
       {aiKnown && !ai.chosen && <p className="mt-2 px-2 text-xs text-muted">Pick the Default AI below, or in Terminal: <code>ouc ai setup</code></p>}
     </>
   );
@@ -65,7 +70,7 @@ export function DefaultAi({ className }: { className?: string }) {
   const ai = useAiStatus();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const tools = ai.tools.filter((t) => t.state !== "missing");
+  const tools = ai.tools.filter((t) => t.state !== "missing" && t.enabled !== false);
   if (ai.state !== "ok" || !tools.length) return null;
   const save = async (tool: string) => {
     setSaving(true); setError(null);
@@ -93,7 +98,7 @@ export function DefaultModels({ className }: { className?: string }) {
   const ai = useAiStatus();
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const tools = ai.tools.filter((t) => t.state !== "missing" && t.models?.length);
+  const tools = ai.tools.filter((t) => t.state !== "missing" && t.enabled !== false && t.models?.length);
   if (ai.state !== "ok" || !tools.length) return null;
   const save = async (tool: string, model: string) => {
     setSaving(tool); setError(null);

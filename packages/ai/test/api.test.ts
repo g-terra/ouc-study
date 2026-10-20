@@ -154,6 +154,25 @@ test("the app warms up the default AI on start, and again when Settings change i
   assert.equal((await fetch(`${base}/api/ai/tool`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify({ tool: "codex" }) })).status, 200);
 });
 
+test("Settings: an AI switched off is hidden from the chat and can't answer; the default stays on", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const post = (path: string, body: object, tok = token) => fetch(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": tok }, body: JSON.stringify(body) });
+  assert.equal((await post("/api/ai/enabled", { tool: "codex", enabled: false }, "nope")).status, 403);
+  assert.equal((await post("/api/ai/enabled", { tool: "gpt-9", enabled: false })).status, 400);
+  assert.match((await json(post("/api/ai/enabled", { tool: "claude", enabled: false }))).error, /Default AI/);   // the default can't be switched off
+  assert.equal((await post("/api/ai/enabled", { tool: "codex", enabled: false })).status, 200);
+  assert.deepEqual(JSON.parse(readFileSync(join(root, ".ouc/ai.json"), "utf8")).off, ["codex"]);
+  const { tools } = await json(fetch(`${base}/api/ai/status`));
+  assert.equal(tools.find((x: { id: string }) => x.id === "codex").enabled, false);
+  assert.equal(tools.find((x: { id: string }) => x.id === "claude").enabled, true);
+  assert.match((await json(post("/api/ai/run", { tool: "codex", message: "hi" }))).error, /switched off/);
+  assert.match((await json(post("/api/ai/tool", { tool: "codex" }))).error, /switched off/);   // can't be the default either
+  assert.equal((await post("/api/ai/enabled", { tool: "codex", enabled: true })).status, 200);
+  assert.deepEqual(JSON.parse(readFileSync(join(root, ".ouc/ai.json"), "utf8")).off, undefined);
+});
+
 test("a failing agent reports its error", async (t) => {
   const { server, base } = await setup();
   t.after(() => server.close());

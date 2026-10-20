@@ -316,7 +316,7 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
 
   const meta = actions.find((x) => x.id === (a.draft?.action ?? a.chat?.action));
   // the tool picked in the panel, if it's still there; else the one from `ouc ai setup`
-  const picked = ai.tools.find((t) => t.id === a.tool && t.state !== "missing") ?? ai.tools.find((t) => t.chosen);
+  const picked = ai.tools.find((t) => t.id === a.tool && t.state !== "missing" && t.enabled !== false) ?? ai.tools.find((t) => t.chosen);
   const ready = picked?.state === "connected";
   const agentic = picked ? picked.id !== "local" : ai.agentic !== false;
   const blocked = ai.state === "unavailable" ? "The AI only works in the app on your computer (npm run dev or ouc open)."
@@ -419,7 +419,7 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
                   onChange={(e) => a.setTool(ai.tools.find((t) => t.id === e.target.value)?.chosen ? null : e.target.value)}
                   className={cx(PICK, "max-w-[11rem]")}>
                   {!picked && <option value="">Choose an AI</option>}
-                  {ai.tools.filter((t) => t.state !== "missing").map((t) => (
+                  {ai.tools.filter((t) => t.state !== "missing" && t.enabled !== false).map((t) => (
                     <option key={t.id} value={t.id}>{t.label}{t.state === "connected" ? "" : ` (${TOOL_STATE[t.state].text.toLowerCase()})`}</option>
                   ))}
                 </select>

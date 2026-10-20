@@ -31,6 +31,7 @@ export interface AiConfig {
   parallel?: number;    // background AI runs at once (default 3)
   models?: Partial<Record<"claude" | "codex", string[]>>;   // the models the app offers for these tools (default AGENT_MODELS)
   defaultModels?: Partial<Record<Tool, string>>;            // the model each AI uses unless the chat picks another (Settings)
+  off?: Tool[];        // AIs switched off in Settings: hidden from the chat, never used
   warmUp?: boolean;    // false: don't load the default AI's model when the app starts
 }
 export interface ChatMessage { role: "system" | "user" | "assistant"; content: string }
