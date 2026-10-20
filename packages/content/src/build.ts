@@ -15,6 +15,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { MEDIA_FILE, transcriptPath } from "../../eclass-sync/src/media.ts";
 import { buildClasses, detectClasses, type ClassesConfig } from "./classes.ts";
 import { parsePlan } from "./plan.ts";
 import { parseQuiz } from "./quiz.ts";
@@ -156,17 +157,24 @@ function buildSemester(id: string): SemesterData | undefined {
       for (const a of s.acts as any[]) {
         const title = String(a.name ?? "").trim();
         if (!title || a.type === "label") continue;
+        const inSec = (local: unknown) => `${secDir(s)}/${String(local).split("/").slice(2).join("/")}`;
+        // the transcript next to a video or narrated slides (made by `ouc transcribe`), if there is one
+        const transcript = (rel: string) => { const t = transcriptPath(rel); return existsSync(join(dir, t)) ? { transcript: fileHref(id, t) } : {}; };
         if (a.type === "resource") {
           if (a.local) {
-            const rel = `${secDir(s)}/${String(a.local).split("/").slice(2).join("/")}`;
-            items.push({ kind: "file", title, href: fileHref(id, rel), ext: extOf(rel) });
+            const rel = inSec(a.local);
+            items.push({ kind: MEDIA_FILE.test(rel) ? "video" : "file", title, href: fileHref(id, rel), ext: extOf(rel), ...transcript(rel) });
           } else items.push({ kind: "link", title: `${title} (on eClass)`, href: a.url, external: true });
+        } else if (a.type === "page" && a.local && existsSync(join(dir, inSec(a.local)))) {
+          const rel = inSec(a.local);   // a video on a page, downloaded
+          items.push({ kind: "video", title, href: fileHref(id, rel), ext: extOf(rel), ...transcript(rel) });
         } else if (a.type === "page") {
           const vid = (a.links ?? []).find((l: string) => /youtu|vimeo|panopto|video\.ouc|stream|kaltura/i.test(l));
           items.push({ kind: "video", title, href: vid ?? a.url, external: true });
         } else if (a.type === "url") {
           const target = a.target || a.url;
-          items.push({ kind: /video|panopto|youtu/i.test(target) ? "video" : "link", title, href: target, external: true });
+          const t = a.transcript ? inSec(a.transcript) : "";
+          items.push({ kind: /video|panopto|youtu/i.test(target) ? "video" : "link", title, href: target, external: true, ...(t && existsSync(join(dir, t)) ? { transcript: fileHref(id, t) } : {}) });
         } else if (a.type === "forum") items.push({ kind: "forum", title, href: a.url, external: true });
         else if (a.type === "assign") items.push({ kind: "assignment", title });
         else items.push({ kind: "tool", title, href: a.url, external: true });

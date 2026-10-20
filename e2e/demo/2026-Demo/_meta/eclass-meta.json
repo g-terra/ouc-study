@@ -5,6 +5,7 @@
       { "i": 0, "name": "General", "summary": "Made-up course for the smoke tests.", "acts": [] },
       { "i": 1, "name": "Week 1: Getting started", "summary": "", "acts": [
         { "type": "resource", "name": "Demo lecture (slides with narration)", "local": "DEMO101/01/Demo lecture.pptx" },
+        { "type": "page", "name": "Video: Welcome to the demo", "url": "https://example.org/mod/page/view.php?id=103", "local": "DEMO101/01/Video-Welcome-to-the-demo/Welcome.mp4" },
         { "type": "url", "name": "Course website", "url": "https://example.org/demo" },
         { "type": "assign", "name": "Assignment 1", "url": "https://example.org/mod/assign/view.php?id=101",
           "dates": ["Opened: Monday, 14 September 2026, 12:00 AM", "Due: Monday, 28 September 2026, 11:59 PM"],

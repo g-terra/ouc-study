@@ -99,8 +99,8 @@ The installer walks you through everything:
 1. **Checks your computer** and installs the app.
 2. **Connects to eClass** with your personal key. It shows you where to get it, and you paste it hidden (or it reads it from the clipboard).
 3. **Lists your enrolled courses**. The current ones are already ticked.
-4. **Downloads everything**: weekly slides and files, assignment briefs and questions, your submitted files, grades and feedback.
-5. **Finishes the setup**: searchable text copies for your AI assistant, daily updates, your preferences for the assistant.
+4. **Downloads everything**: weekly slides and files, class videos, assignment briefs and questions, your submitted files, grades and feedback.
+5. **Finishes the setup**: searchable text copies for your AI assistant, Whisper for video transcripts (optional), daily updates, your preferences for the assistant.
 6. **Starts the app**, automatically at every login on macOS and Windows. Open **http://localhost:5173**, or type `ouc open`.
 
 Want to see first what it would download? Run `npm run setup -- --dry-run`. It changes nothing.
@@ -120,7 +120,8 @@ The key is saved in `.eclass-token`, readable only by you and never committed. *
 |---|---|
 | `ouc open` | open the app in your browser (starts it if needed) |
 | `ouc sync` | check eClass **now**: grades, feedback, deadlines, announcements **and new files** |
-| `ouc pull` | download any new course files (`--dry-run` just lists them) |
+| `ouc pull` | download any new course files, class videos included (`--dry-run` just lists them) |
+| `ouc transcribe` | make the missing transcripts of class videos and narrated slides now (the app does it in the background; `--setup` installs Whisper) |
 | `ouc setup` | add courses, start a new semester, or replace your key |
 | `ouc status` | is the app running, is the daily sync scheduled, when was the last sync |
 | `ouc start` · `ouc stop` · `ouc restart` | control the background app |
@@ -138,6 +139,7 @@ How it runs in the background: on macOS two LaunchAgents (`~/Library/LaunchAgent
 - **Courses**: each course week by week (slides, videos, assignments, your notes, the week's live class) plus your grades.
 - **Slides**: click a PowerPoint on a course week and it opens right in the app, slide by slide (arrow keys, full screen), with no download. Slides with recorded narration have a 🔊 player under them; tick **Play as a lecture** to hear each slide and move on by itself. The app makes a PDF copy the first time you open a deck (a few seconds; kept in `.ouc/slides/`) using [LibreOffice](https://www.libreoffice.org/download/) (free; `ouc setup` offers to install it, or on a Mac `brew install --cask libreoffice`, on Windows `winget install TheDocumentFoundation.LibreOffice`). Animations and videos inside the slides don't play there: use **Download** for those.
 - **Notes**: visual notes with diagrams, LaTeX formulas, comparison tables and flip-card self-tests.
+- **Class videos and transcripts**: videos posted on eClass (for example on a week's page) download with the other course files and play in the app. Each one, and each PowerPoint with recorded narration, gets a transcript next to it (`Lecture 3.transcript.md`, a **Transcript** link on the course week), and your AI makes that week's notes from it. Transcripts are made on your computer with [Whisper](https://github.com/ggml-org/whisper.cpp), free and offline: `ouc setup` offers to install it (on a Mac `brew install whisper-cpp ffmpeg` plus a speech model of about 500 MB; on Windows Python from winget if you don't have it, then `pip install faster-whisper`, whose model downloads on the first transcript; on Linux `pip install faster-whisper`), or run `ouc transcribe --setup`. The app transcribes one file at a time in the background; **Sync now** does the weeks about to get notes first. The activity bar under the header shows what's running (sync steps and downloads, transcripts, AI notes); **Details** opens each part. Recordings on Panopto (video.ouc.ac.cy) need a Panopto sign-in, so they stay links; their captions are saved as the transcript when Panopto shares them publicly. Webconference recordings aren't reachable with the eClass key. To turn things off, put `{ "videos": false }` (no video downloads) or `{ "transcribe": false }` in `.ouc/media.json`; `"model": "base"` is faster, `"medium"` more accurate (default `"small"`).
 - **Quizzes**: scored quizzes your AI makes on the topics of the course material (the questions can go wider than the slides), for one lecture or the whole course: true/false, one answer, or select all that apply (including "All of the above"). After each answer you get a full explanation of why it is right, then your score at the end. Points (10 per right answer, 20 more for a perfect score), your best score per quiz and a daily streak 🔥 are kept on your computer in `semesters/<id>/quizzes/attempts.json`. **Make a quiz** (on the Quizzes page, a course page or a course week) opens a small pop-up: pick one class, **Every class** (one quiz for each class that doesn't have one yet, a few at a time) or the whole course, and your AI makes them in the background without opening the chat. **Sync now** also makes a quiz for every new class with material (add `"autoQuiz": false` to `.ouc/ai.json` to turn that off). Each quiz has **Reset progress** (start it over) and **Remove**; **Reset all progress** clears every score. The format is in [`docs/QUIZ_FORMAT.md`](docs/QUIZ_FORMAT.md).
 - **Assignments**: the question, files, PDF preview, study links, grade and feedback.
 - **Updates**: what changed on eClass each day, with a live 🟢 connection status, **Re-check** and **Sync now**.

@@ -5,7 +5,7 @@ import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { at, fmtDay, fmtTime, relative } from "../lib/dates";
 import { AskAiButton } from "./Assistant";
-import { Card, CourseBadge, FileLink, cx, kindIcon } from "./ui";
+import { Card, CourseBadge, FileLink, cx, isMaterial, kindIcon } from "./ui";
 
 /** Classes still to come (or running now), oldest first. */
 export function upcomingClasses(data: SemesterData, now = new Date()): ClassSession[] {
@@ -82,7 +82,7 @@ export function ClassCard({ c, data, now = new Date(), showCourse = true }: { c:
             )}
             {!notes.length && !material.length && !c.extras.length && <li className="px-1 text-xs text-muted">Nothing posted for this week yet.</li>}
           </ul>
-          {!notes.length && week.items.some((i) => i.kind === "file") && (
+          {!notes.length && week.items.some(isMaterial) && (
             <div className="mt-2"><AskAiButton action="make-notes" params={{ course: c.code, week: String(week.index) }}>Make notes</AskAiButton></div>
           )}
         </div>

@@ -9,7 +9,7 @@ _Paths: `<sem>` = the current semester folder (named in STUDENT.md; otherwise th
 You write study notes for an OUC student. Their courses are listed in `<sem>/semester.json`.
 
 Process:
-1. Locate the source. Use `<sem>/courses/<course>/README.md` to find the week, then read the plain-text copy under `<sem>/text/<course>/` (grep it). Only open the original file if the text copy is missing or garbled (e.g. heavy maths or images).
+1. Locate the source. Use `<sem>/courses/<course>/README.md` to find the week. If the week's folder has transcripts (`*.transcript.md` next to its videos and narrated slides), read them first and base the note on them: they are what the lecturer said. Then read the plain-text copy of the slides and readings under `<sem>/text/<course>/` (grep it) for definitions, figures and formulas. Only open the original file if the text copy is missing or garbled (e.g. heavy maths or images). Transcripts are made by speech recognition: check names and terms against the slides.
 2. Check `<sem>/notes/<course>/` for an existing note on the topic and extend it rather than duplicating it.
 3. Write `<sem>/notes/<COURSE>/week-NN-<slug>.md` (or `lecture-NN-<slug>.md`) in the **visual note format** described in `docs/NOTE_FORMAT.md`. Unless STUDENT.md says otherwise, assume a visual learner:
    - front matter (course, section = eClass section index, week, title, summary, source, tags)

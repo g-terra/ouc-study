@@ -3,11 +3,11 @@ import type { Course, SemesterData, Week } from "@ouc/content/types";
 import { useAiStatus } from "../lib/ai";
 import { dismissJob, makeQuiz, useQuizJobs } from "../lib/quiz";
 import { useAssistant } from "./Assistant";
-import { cx } from "./ui";
+import { cx, isMaterial } from "./ui";
 
 /** The classes a quiz can be made for: weeks with files or a note. */
 export const quizWeeks = (data: SemesterData, c: Course): Week[] =>
-  c.weeks.filter((w) => w.items.some((i) => i.kind === "file") || data.notes.some((n) => n.code === c.code && n.weekIndex === w.index));
+  c.weeks.filter((w) => w.items.some(isMaterial) || data.notes.some((n) => n.code === c.code && n.weekIndex === w.index));
 
 /** The classes that have material and no lecture quiz yet ("Every class" makes one quiz for each). */
 export const weeksWithoutQuiz = (data: SemesterData, c: Course): Week[] =>

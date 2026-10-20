@@ -31,8 +31,9 @@ export interface MetaActivity {
   ctype?: string;
   size?: number;
   fileurl?: string;
-  local?: string;          // "<CODE>/<NN>/<path in the section folder>"
+  local?: string;          // "<CODE>/<NN>/<path in the section folder>" (page: the video on it)
   target?: string;         // url: where it points
+  transcript?: string;     // url to a Panopto recording: where its transcript goes (same form as local)
   links?: string[];        // page: the links on it
   body?: string;
   dates?: string[];        // assign: "Opened: …", "Due: …"

@@ -98,6 +98,8 @@ export interface PrepStatus {
   enabled: boolean; busy: boolean; running: { id: string; chatId: string }[]; queue: string[];
   finished: { id: string; chatId: string; ok: boolean }[];
   total: number; done: number; error: string | null;
+  /** transcripts of class videos and narrated slides, made on this computer (packages/ai/src/transcribe.ts) */
+  transcribe?: { enabled: boolean; busy: boolean; total: number; done: number; made: number; failed: number; current: string | null; error: string | null };
 }
 let prepNow: PrepStatus | null = null;
 const prepListeners = new Set<(s: PrepStatus | null) => void>();

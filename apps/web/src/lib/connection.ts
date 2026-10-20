@@ -2,7 +2,9 @@
 import { useEffect, useState } from "react";
 
 export type ConnState = "checking" | "connected" | "nokey" | "badkey" | "invalid" | "offline" | "error" | "unavailable";
-export interface Connection { state: ConnState; ok?: boolean; user?: string; error?: string; checkedAt?: string; syncing?: boolean }
+/** What Sync now is doing: step 1 checking eClass, 2 downloading new files (done/total, the file), 3 building the app data. */
+export interface SyncProgress { step: number; phase?: "list" | "download"; done?: number; total?: number; detail?: string }
+export interface Connection { state: ConnState; ok?: boolean; user?: string; error?: string; checkedAt?: string; syncing?: boolean; progress?: SyncProgress }
 
 let current: Connection = { state: "checking" };
 const listeners = new Set<(c: Connection) => void>();
@@ -20,15 +22,19 @@ export function refreshConnection(fresh = false) {
 }
 
 export async function syncNow(): Promise<{ ok: boolean; found?: number; error?: string; ai?: { notes: number; prep: number; quizzes?: number } }> {
-  set({ ...current, syncing: true });
+  set({ ...current, syncing: true, progress: { step: 1 } });
+  // follow its steps while it runs (the status answer carries them)
+  const poll = window.setInterval(() => {
+    fetch("/api/eclass/status").then((x) => x.json()).then((j) => { if (current.syncing && j.progress) set({ ...current, progress: j.progress }); }).catch(() => {});
+  }, 1500);
   try {
     const r = await fetch("/api/eclass/sync", { method: "POST" }).then((x) => x.json());
-    set({ ...current, ...r, state: r.state ?? (r.ok ? "connected" : "error"), syncing: false, checkedAt: new Date().toISOString() });
+    set({ ...current, ...r, state: r.state ?? (r.ok ? "connected" : "error"), syncing: false, progress: undefined, checkedAt: new Date().toISOString() });
     return r;
   } catch (e) {
-    set({ ...current, syncing: false });
+    set({ ...current, syncing: false, progress: undefined });
     return { ok: false, error: "The app server isn't reachable." };
-  }
+  } finally { window.clearInterval(poll); }
 }
 
 let started = false;
