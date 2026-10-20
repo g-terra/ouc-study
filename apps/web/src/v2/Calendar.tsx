@@ -51,15 +51,20 @@ export function Calendar({ data }: { data: SemesterData }) {
         <Chip on={view === "upcoming"} onClick={() => setView("upcoming")}>Upcoming</Chip>
         <Chip on={view === "done"} onClick={() => setView("done")}>Submitted <span className="opacity-60">{data.assignments.length - open}</span></Chip>
       </div>
-      <div className="mb-6 flex flex-wrap gap-2">
-        {view === "upcoming" && (["all", "due", "class", "exam"] as const).map((k) => (
-          <Chip key={k} on={show === k} onClick={() => setShow(k)}>{{ all: "Everything", due: "📝 Deadlines", class: "🎥 Classes", exam: "🎓 Exams" }[k]}</Chip>
-        ))}
-        {view === "upcoming" && <span className="mx-1 h-5 w-px shrink-0 self-center bg-line" />}
+      {/* courses on one line of their own (scrolls sideways inside the page if they don't fit) */}
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Course">
         {[["all", "All courses"] as const, ...data.courses.map((c) => [c.code, c.short] as const)].map(([k, label]) => (
           <Chip key={k} on={course === k} onClick={() => setCourse(k)}>{k !== "all" && <CourseDot color={C[k].color} />}{label}</Chip>
         ))}
       </div>
+      {view === "upcoming" && (
+        <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Show">
+          {(["all", "due", "class", "exam"] as const).map((k) => (
+            <Chip key={k} on={show === k} onClick={() => setShow(k)}>{{ all: "Everything", due: "📝 Deadlines", class: "🎥 Classes", exam: "🎓 Exams" }[k]}</Chip>
+          ))}
+        </div>
+      )}
+      {view === "done" && <div className="mb-3" />}
 
       {view === "upcoming" ? (
         <div className="space-y-6">

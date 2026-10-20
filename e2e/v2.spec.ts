@@ -21,10 +21,11 @@ for (const [path, name, heading] of [["", "Today", /Good (morning|afternoon|even
 test("v2 calendar lists the overdue assignment; a course keeps its notes and quizzes in tabs", async ({ page }) => {
   await page.goto(`/v2${SEM}/calendar`);
   await expect(page.getByRole("heading", { name: "Overdue" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Course" }).getByRole("button", { name: "All courses" })).toBeVisible();
   await expect(page.getByText("Assignment 1").first()).toBeVisible();
   await page.getByRole("navigation", { name: "Main" }).first().getByRole("link", { name: "Courses", exact: true }).click();
   // the ring says what it counts
-  await expect(page.getByTitle("0 of 1 assignments handed in")).toContainText("handed in");
+  await expect(page.getByTitle("0 of 1 assignments handed in")).toContainText("assignments");
   await expect(page.getByText("Exam: no date yet")).toBeVisible();
   await page.getByText("Demo Studies").click();
   await expect(page).toHaveURL(/\/v2\/2026-Demo\/courses\/DEMO101$/);
