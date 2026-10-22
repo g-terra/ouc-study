@@ -7,7 +7,9 @@
   "exports": {
     "./select": "./src/select.ts",
     "./summary": "./src/summary.ts",
-    "./git": "./src/git.ts"
+    "./git": "./src/git.ts",
+    "./github": "./src/github.ts",
+    "./config": "./src/config.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
