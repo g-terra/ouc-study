@@ -123,6 +123,15 @@ Prompt that works well with any agent:
 
 > Read AGENTS.md (section "Changing the tool itself") and dev/CODING.md. Implement <the change / issue #N> test-first. Update the docs, run `npm run check`, `npm run build` and `npm run e2e`, and propose a Conventional Commits PR title.
 
+## Backup sign-in clients
+
+**Sign in with GitHub** and **Sign in with Google** in Settings → Backup need the app's own OAuth clients, whose ids live in `packages/backup/src/clients.ts` (both are public by design, so they're committed). While they're empty, GitHub offers only the pasted-token route and Google Drive isn't offered. To register them:
+
+- **GitHub**: Settings → Developer settings → OAuth Apps → New OAuth App (any homepage and callback URL, e.g. the repo's), then tick **Enable Device Flow**. Copy the Client ID into `GITHUB_CLIENT_ID`. No secret is needed.
+- **Google**: in Google Cloud, enable the Google Drive API, set up the OAuth consent screen with the `https://www.googleapis.com/auth/drive.file` scope and publish it (no verification is needed for that scope), then create an OAuth client of type **Desktop app**. Copy its id and secret into `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+To try other clients without editing the file, set `OUC_GITHUB_CLIENT_ID`, `OUC_GOOGLE_CLIENT_ID` and `OUC_GOOGLE_CLIENT_SECRET`.
+
 ## Releases
 
 Releases are automated with [release-please](https://github.com/googleapis/release-please):

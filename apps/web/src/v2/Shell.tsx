@@ -11,6 +11,7 @@ import { NotificationsBell } from "./Notifications";
 import { SearchButton } from "./Search";
 import { PANEL, usePopover } from "./popover";
 import { Tour, startTour } from "./Tour";
+import { BackupFailedBar, BackupPrompt } from "./Backup";
 import { CalendarDays, Compass, Library, Logo, MessagesSquare, Settings, Sparkles, Sun, User } from "../components/icons";
 
 const NAV = [
@@ -91,9 +92,11 @@ export function Shell({ sem, data, children }: { sem: string; data?: SemesterDat
           <ProfileMenu sem={sem} />
         </div>
         <UpdateBar />
+        <BackupFailedBar sem={sem} />
         <AiWorkBar sem={sem} />
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-6 sm:pt-8">{children}</main>
+      <BackupPrompt sem={sem} />
       <AskAiFab />
       <Tour data={data} />
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">

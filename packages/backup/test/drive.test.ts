@@ -176,3 +176,13 @@ test("an expired sign-in says so", async () => {
     await assert.rejects(driveBackup({ root, accessToken: "old", files: ["a.md"], api: d.base }), /Google sign-in expired/);
   } finally { d.close(); }
 });
+
+test("a file can go up from somewhere else under its backup name (a video's smaller copy)", async () => {
+  const d = await fakeDrive();
+  const { root, put } = study({ "semesters/S/class.mp4": "the big original" });
+  put(".ouc/backup-media/videos/k.mp4", "small");
+  try {
+    await driveBackup({ root, accessToken: "acc", files: ["semesters/S/class.mp4"], from: { "semesters/S/class.mp4": join(root, ".ouc/backup-media/videos/k.mp4") }, api: d.base });
+    assert.deepEqual(d.files(), { "semesters/S/class.mp4": "small" });
+  } finally { d.close(); }
+});

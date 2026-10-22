@@ -7,6 +7,7 @@ import { AiTools, AppVersion, DefaultAi, DefaultModels, ThemePicker, VideoTransc
 import { ConnectionCard, SetupCard } from "../pages/Updates";
 import { toClassic } from "./paths";
 import { rememberLook } from "./look";
+import { BackupSettings } from "./Backup";
 
 function Section({ title, id, children }: { title: string; id: string; children: ReactNode }) {
   return (
@@ -29,7 +30,7 @@ function DefaultsCard() {
   );
 }
 
-/** Settings (from the profile menu): eClass, AI tools, video transcripts, appearance and the app version, one section each. */
+/** Settings (from the profile menu): eClass, AI tools, video transcripts, backup, appearance and the app version, one section each. */
 export function SettingsPage({ data }: { data: SemesterData }) {
   const { path, navigate } = useRouter();
   useEffect(() => { refreshAi(); }, []);
@@ -48,6 +49,9 @@ export function SettingsPage({ data }: { data: SemesterData }) {
       </Section>
       <Section title="Video transcripts" id="settings-transcripts">
         <Card className="p-3 text-sm"><VideoTranscripts head="hidden" fallback={<p className="px-2 text-muted">Only shown when the app runs on your computer (ouc open).</p>} /></Card>
+      </Section>
+      <Section title="Backup" id="settings-backup">
+        <BackupSettings />
       </Section>
       <Section title="Appearance" id="settings-appearance">
         <Card className="p-3 text-sm">

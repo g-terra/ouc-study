@@ -57,7 +57,7 @@ function run(bin: string, args: string[], { ms = 3 * 3600_000, onLine }: { ms?: 
 }
 // the background app starts with a short PATH: also look where Homebrew puts things
 const EXTRA = MAC ? ["/opt/homebrew/bin", "/usr/local/bin"] : [];
-const findBin = (...names: string[]) => {
+export const findBin = (...names: string[]) => {
   for (const n of names) {
     const hit = whichAll(n)[0] ?? EXTRA.map((d) => join(d, n)).find(existsSync);
     if (hit) return hit;
