@@ -38,10 +38,11 @@ export function pdfFileName(title: string, name: string): string {
 
 /**
  * Chrome's flags for printing a page to a PDF. The time budget lets the page fetch the answers before it prints.
- * As root (containers, some CI) Chrome only starts without its sandbox; the page it opens is the app's own.
+ * As root (containers) Chrome only starts without its sandbox, and the smoke tests turn it off like Playwright does
+ * (OUC_PDF_NO_SANDBOX); the page it opens is the app's own.
  */
-export const printArgs = (url: string, out: string, { root = process.getuid?.() === 0 }: { root?: boolean } = {}) => [
-  "--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars", ...(root ? ["--no-sandbox"] : []),
+export const printArgs = (url: string, out: string, { noSandbox = process.getuid?.() === 0 || !!process.env.OUC_PDF_NO_SANDBOX }: { noSandbox?: boolean } = {}) => [
+  "--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars", ...(noSandbox ? ["--no-sandbox"] : []),
   `--print-to-pdf=${out}`, "--no-pdf-header-footer", "--virtual-time-budget=15000", url,
 ];
 

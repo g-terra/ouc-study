@@ -24,7 +24,7 @@ test("the PDF is named after the assignment and the student, with only safe char
 });
 
 test("the browser prints headless, without its own header and footer, after the page has loaded its data", () => {
-  const args = printArgs("http://127.0.0.1:5173/print/x", "/out/a.pdf", { root: false });
+  const args = printArgs("http://127.0.0.1:5173/print/x", "/out/a.pdf", { noSandbox: false });
   assert.ok(args.includes("--headless"));
   assert.ok(args.includes("--print-to-pdf=/out/a.pdf"));
   assert.ok(args.includes("--no-pdf-header-footer"));
@@ -32,7 +32,7 @@ test("the browser prints headless, without its own header and footer, after the 
   assert.equal(args.at(-1), "http://127.0.0.1:5173/print/x");
   assert.ok(!args.includes("--no-sandbox"));
   // Chrome refuses to start as root (containers, some CI) unless its sandbox is off
-  assert.ok(printArgs("http://x", "/o.pdf", { root: true }).includes("--no-sandbox"));
+  assert.ok(printArgs("http://x", "/o.pdf", { noSandbox: true }).includes("--no-sandbox"));
 });
 
 test("makeHomeworkPdf writes the PDF, and says why when the browser fails", async () => {
