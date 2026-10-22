@@ -36,9 +36,12 @@ export function pdfFileName(title: string, name: string): string {
   return `${n ? `${t} - ${n}` : t}.pdf`;
 }
 
-/** Chrome's flags for printing a page to a PDF. The time budget lets the page fetch the answers before it prints. */
-export const printArgs = (url: string, out: string) => [
-  "--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
+/**
+ * Chrome's flags for printing a page to a PDF. The time budget lets the page fetch the answers before it prints.
+ * As root (containers, some CI) Chrome only starts without its sandbox; the page it opens is the app's own.
+ */
+export const printArgs = (url: string, out: string, { root = process.getuid?.() === 0 }: { root?: boolean } = {}) => [
+  "--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars", ...(root ? ["--no-sandbox"] : []),
   `--print-to-pdf=${out}`, "--no-pdf-header-footer", "--virtual-time-budget=15000", url,
 ];
 

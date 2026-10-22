@@ -22,6 +22,7 @@ import { Calendar } from "./v2/Calendar";
 import { NotificationsPage } from "./v2/Notifications";
 import { SettingsPage } from "./v2/Settings";
 import { HomeworkPage } from "./v2/Homework";
+import { HomeworkPrint } from "./v2/HomeworkPrint";
 import { isV2, toV2 } from "./v2/paths";
 import type { SemesterData } from "@ouc/content/types";
 
@@ -74,6 +75,7 @@ export default function App() {
             routes={[
               ["/", () => <Home />],
               ["/v2", () => <Home v2 />],
+              ["/print/homework/:sem/:code/:folder", (p) => <HomeworkPrint sem={p.sem} id={`${p.code}/${p.folder}`} />],
               ["/v2/:sem", (p) => <V2Semester sem={p.sem} page={(d) => <Today data={d} />} />],
               ["/v2/:sem/courses", (p) => <V2Semester sem={p.sem} page={(d) => <CourseList data={d} />} />],
               ["/v2/:sem/courses/:code", (p) => <V2Semester sem={p.sem} page={(d) => <CourseView key={p.code} data={d} code={p.code} />} />],

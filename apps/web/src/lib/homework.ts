@@ -64,3 +64,15 @@ export async function uploadPicture(sem: string, assignment: string, file: File)
   if (res?.ok && j?.src) return j.src;
   throw new Error(j?.error ?? "Couldn't add the picture. Is the app still running?");
 }
+
+/** Asks the app server to print the homework to a PDF in the assignment's my-submission folder; resolves to its address. */
+export async function makePdf(sem: string, assignment: string, title: string, name: string): Promise<string> {
+  const res = await fetch("/api/homework/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sem, assignment, title, name }) }).catch(() => null);
+  const j = await res?.json().catch(() => null);
+  if (res?.ok && j?.pdf) return j.pdf;
+  throw Object.assign(new Error(j?.error ?? "Couldn't make the PDF. Is the app still running?"), { noBrowser: !!j?.noBrowser });
+}
+
+/** The print page of a homework (what goes into the PDF). */
+export const printHref = (sem: string, assignment: string, name: string) =>
+  `/print/homework/${[sem, ...assignment.split("/")].map(encodeURIComponent).join("/")}?name=${encodeURIComponent(name)}`;

@@ -5,10 +5,11 @@ import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { mdToHtml } from "../lib/markdown";
-import { saveAnswer, uploadPicture, useHomework, type AnswerPatch } from "../lib/homework";
+import { makePdf, printHref, saveAnswer, uploadPicture, useHomework, type AnswerPatch } from "../lib/homework";
+import { useConnection } from "../lib/connection";
 import { Card, Empty, cx } from "../components/ui";
 import { RichEditor } from "../components/RichEditor";
-import { Check, TriangleAlert } from "../components/icons";
+import { Check, FileText, TriangleAlert, X } from "../components/icons";
 
 const KIND: Record<HomeworkTask["kind"], string> = { written: "Written", calculation: "Calculation", choice: "Multiple choice" };
 const LETTERS = "ABCDEFGH";
@@ -78,12 +79,15 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
   return (
     <div className="grid gap-4">
       {back}
-      <div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
         <h1 className="font-serif text-3xl font-semibold leading-tight">{a.title}</h1>
         <p className="mt-1 text-sm text-muted">
           {a.due ? <>Due {fmtFull(at(a.due))}{!a.submitted && ` · ${relative(at(a.due))}`}</> : "No due date"}
           {brief && <> · <a href={brief.href} target="_blank" rel="noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">open the brief</a></>}
         </p>
+        </div>
+        <MakePdfButton sem={data.id} id={id} title={a.title} />
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Pieces tasks={tasks} answers={answers} />
@@ -198,5 +202,58 @@ export function HomeworkLink({ sem, a, tasks }: { sem: string; a: Pick<Assignmen
       <Link to={homeworkHref(sem, a.id)} aria-label={`Answer ${a.title} in the app`}
         className="rounded-full bg-ink px-3.5 py-1.5 text-sm font-semibold text-bg hover:opacity-90">{done === 0 ? "Start" : done === total ? "Open" : "Continue"}</Link>
     </span>
+  );
+}
+
+const NAME_KEY = "ouc-pdf-name";
+
+/** Make PDF: asks for the name on it (eClass's name, or the last one used), then saves the PDF into my-submission/. */
+function MakePdfButton({ sem, id, title }: { sem: string; id: string; title: string }) {
+  const conn = useConnection();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(() => { try { return localStorage.getItem(NAME_KEY) ?? ""; } catch { return ""; } });
+  const [st, setSt] = useState<{ busy?: boolean; pdf?: string; error?: string; printed?: boolean }>({});
+  useEffect(() => { if (!name && conn.user) setName(conn.user); }, [conn.user]);
+  const go = () => {
+    try { localStorage.setItem(NAME_KEY, name.trim()); } catch {}
+    setSt({ busy: true });
+    makePdf(sem, id, title, name.trim()).then((pdf) => setSt({ pdf }), (e: Error & { noBrowser?: boolean }) => {
+      // no Chrome or Edge: the print window can still save a PDF
+      if (e.noBrowser) window.open(`${printHref(sem, id, name.trim())}&print=1`, "_blank");
+      setSt({ error: e.message, printed: e.noBrowser });
+    });
+  };
+  return (
+    <>
+      <button type="button" onClick={() => { setSt({}); setOpen(true); }} className="flex min-h-11 items-center gap-1.5 rounded-full bg-ink px-4 font-semibold text-bg hover:opacity-90">
+        <FileText aria-hidden className="size-4" />Make PDF
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
+          <div role="dialog" aria-modal="true" aria-label="Make the PDF" className="relative w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-xl">
+            <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="absolute right-3 top-3 grid size-9 place-items-center rounded-full text-muted hover:bg-surface-2"><X aria-hidden className="size-4" /></button>
+            <h2 className="mb-1 font-serif text-2xl font-semibold">Make the PDF</h2>
+            <p className="mb-4 text-sm text-muted">Every task in full with your answers, your name and the assignment's title. It's saved in this assignment's my-submission folder, ready to upload on eClass.</p>
+            <label className="mb-4 grid gap-1 text-sm">
+              <span className="font-semibold">Name on the PDF</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl border border-line bg-bg px-3 py-2 outline-none focus:border-muted" />
+            </label>
+            {st.pdf && (
+              <div className="mb-4 rounded-xl bg-ok-bg p-3 text-sm text-ok">
+                Saved as <b className="break-all">{decodeURIComponent(st.pdf.split("/").pop() ?? "")}</b>.{" "}
+                <a href={st.pdf} target="_blank" rel="noreferrer" className="font-semibold underline">Open the PDF</a>
+              </div>
+            )}
+            {st.error && <div role="alert" className="mb-4 rounded-xl bg-bad-bg p-3 text-sm text-bad">{st.error}</div>}
+            <div className="flex justify-end gap-2">
+              <a href={printHref(sem, id, name.trim())} target="_blank" rel="noreferrer" className="grid min-h-11 place-items-center rounded-full border border-line px-4 text-sm">Preview</a>
+              <button type="button" onClick={go} disabled={st.busy} className="min-h-11 rounded-full bg-ink px-5 font-semibold text-bg disabled:opacity-60">
+                {st.busy ? "Making the PDF…" : st.pdf ? "Make it again" : "Make PDF"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

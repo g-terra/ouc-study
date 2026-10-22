@@ -128,6 +128,30 @@ test("answers can have inline code and code blocks with syntax colours", async (
   await expect(page.getByRole("textbox", { name: "Your answer" }).locator("pre code")).toContainText("def total(xs):");
 });
 
+test("the print page shows the name, the title, every task in full and the answers", async ({ page }) => {
+  await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student");
+  await expect(page.getByRole("heading", { level: 1, name: "Assignment 1" })).toBeVisible();
+  await expect(page.getByTestId("print-name")).toHaveText("Demo Student");
+  await expect(page.getByText("DEMO101 · Introduction to Demo Studies")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText([/Task 1/, /Task 2/, /Task 3/]);
+  await expect(page.getByText("Which part of the demo week did you like most?")).toBeVisible();
+  await expect(page.locator(".katex").first()).toBeVisible();
+});
+
+test("Make PDF saves a PDF with the student's name into the assignment's folder", async ({ page }) => {
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("button", { name: "Make PDF" }).click();
+  const dialog = page.getByRole("dialog", { name: "Make the PDF" });
+  await dialog.getByRole("textbox", { name: "Name on the PDF" }).fill("Demo Student");
+  await dialog.getByRole("button", { name: "Make PDF" }).click();
+  const link = dialog.getByRole("link", { name: "Open the PDF" });
+  await expect(link).toBeVisible({ timeout: 60_000 });
+  const href = (await link.getAttribute("href"))!;
+  expect(decodeURIComponent(href)).toMatch(/\/assignments\/DEMO101\/09-28_Assignment-1\/my-submission\/Assignment 1 - Demo Student\.pdf$/);
+  const pdf = await page.request.get(href);
+  expect((await pdf.body()).subarray(0, 4).toString()).toBe("%PDF");
+});
+
 test("the homework page fits a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
