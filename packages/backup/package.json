@@ -9,7 +9,8 @@
     "./summary": "./src/summary.ts",
     "./git": "./src/git.ts",
     "./github": "./src/github.ts",
-    "./config": "./src/config.ts"
+    "./config": "./src/config.ts",
+    "./drive": "./src/drive.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
