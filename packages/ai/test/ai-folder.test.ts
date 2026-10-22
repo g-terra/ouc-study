@@ -41,3 +41,18 @@ test("study planning never asks for or shows time estimates", () => {
     assert.doesNotMatch(text, /\b\d+(\s*[-–]\s*\d+)?\s*(h|hrs?|hours?|min|minutes?)\b|estimated hours|time-boxed|\b\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}/i, `${f} has no durations`);
   }
 });
+
+// the student found plans split each assignment into draft → review → next question and listed "submit by …" steps:
+// plans stay coarse (one task per assignment) and aim to finish 1–2 days before the deadline, no earlier
+test("study plans are coarse: one task per assignment, no submit steps, finish 1–2 days before", () => {
+  const files = ["agents/study-planner.md", "skills/plan-week/SKILL.md", "skills/assignment-helper/SKILL.md", "skills/assignment-prep/SKILL.md"];
+  for (const f of files) {
+    const text = readFileSync(join(AI, f), "utf8");
+    assert.match(text, /one task per assignment/i, `${f} keeps an assignment as one task`);
+    assert.match(text, /1–2 days before/, `${f} finishes 1–2 days before the deadline`);
+    assert.doesNotMatch(text, /at least 2 days|from start to submission/i, `${f} has no long buffers or submit steps`);
+    for (const task of text.match(/^\s*- \[[ x]\] .*$/gm) ?? []) {
+      assert.doesNotMatch(task, /\b(draft|review|submit|upload|hand in|question \d)/i, `${f}: "${task.trim()}" is a whole task, not a sub-step`);
+    }
+  }
+});

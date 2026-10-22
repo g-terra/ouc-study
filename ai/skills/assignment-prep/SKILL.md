@@ -25,7 +25,7 @@ You can use the note blocks from `docs/NOTE_FORMAT.md` (`formula`, `compare`, `s
 - `## Hints`: per question, nudges that point the way (which idea applies, what to look out for, common mistakes). **Never the answer, worked solution or submittable text.**
 - `## From your course`: the exact slides, readings and notes to revisit, each as its repo-relative path in `backticks` (the app turns it into a link showing the file name), followed by what to look at in it.
 - `## Extra material`: 3–6 good outside sources (textbook chapters, lecture videos, tutorials, papers) with working links and why each helps. Prefer the course's own books. No pirated copies.
-- `## Plan`: a short checklist from start to submission, sized to the days left.
+- `## Plan`: a few coarse steps (by part of the work, not draft → review → next question) to finish 1–2 days before it's due, never earlier; no submit or upload step. In the week plan the assignment stays one task per assignment.
 
 ## Modes (the request says which)
 - **new / start over**: write it from scratch. In "start over", don't read the old PREP.md; replace it.
