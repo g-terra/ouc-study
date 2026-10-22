@@ -19,6 +19,13 @@ if (quiz) {
   fs.mkdirSync(`${process.cwd()}/${quiz.split("/").slice(0, -1).join("/")}`, { recursive: true });
   fs.writeFileSync(`${process.cwd()}/${quiz}`, JSON.stringify({ title: "Quiz", course: "AAA", scope: "lecture", section: 1, questions: [{ type: "true-false", question: "Q?", answer: true }] }));
 }
+// a homework check: right for every task in the tasks.json next to it
+const check = prompt.match(/Save the check as `(\S+check\.json)`/)?.[1];
+if (check) {
+  const fs = await import("node:fs");
+  const { tasks } = JSON.parse(fs.readFileSync(`${process.cwd()}/${check.replace(/check\.json$/, "tasks.json")}`, "utf8"));
+  fs.writeFileSync(`${process.cwd()}/${check}`, JSON.stringify({ summary: "All good.", tasks: Object.fromEntries(tasks.map((t) => [t.id, { verdict: "right", note: "Right." }])) }));
+}
 if (prompt.includes("FAIL")) { console.error("boom: something broke"); process.exit(3); }
 out({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: `${process.cwd()}/memory/progress.md` } }] } });
 out({ type: "assistant", message: { content: [{ type: "tool_use", name: "Write", input: { file_path: `${process.cwd()}/semesters/2026-Fall/plans/2026-W42.md`, content: "x" } }] } });

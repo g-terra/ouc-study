@@ -104,3 +104,47 @@ export function applyAnswer(tasks: HomeworkTask[], answers: HomeworkAnswers, pat
   next.updated = now.toISOString();
   return { ...answers, [task.id]: next };
 }
+
+/**
+ * The AI's check of the answers (homework/check.json, see docs/HOMEWORK_FORMAT.md): a verdict and a note per task.
+ * right: right, whatever the wording; better: right, with a better way to put or do it; wrong: not right (a hint, never the answer);
+ * empty: not answered yet.
+ */
+export const VERDICTS = ["right", "better", "wrong", "empty"] as const;
+export type Verdict = (typeof VERDICTS)[number];
+export interface TaskCheck { verdict: Verdict; note: string }
+export interface HomeworkCheck {
+  summary?: string;                      // Markdown
+  tasks: Record<string, TaskCheck>;      // task id → its check
+  checked?: string;                      // ISO datetime, when the file was written
+}
+
+/** Reads a check file. `check` keeps the tasks that are fine; `problems` lists what to fix (an empty list means it's complete). */
+export function parseCheck(src: string | Raw, tasks: HomeworkTask[]): { check: HomeworkCheck | null; problems: string[] } {
+  let d: Raw = src;
+  if (typeof src === "string") {
+    try { d = JSON.parse(src); } catch (e) { return { check: null, problems: [`Not valid JSON: ${(e as Error).message}`] }; }
+  }
+  if (!d || typeof d !== "object" || !d.tasks || typeof d.tasks !== "object" || Array.isArray(d.tasks)) return { check: null, problems: ['The file must be one JSON object with "tasks": { <task id>: { verdict, note } }.'] };
+  const problems: string[] = [];
+  const out: Record<string, TaskCheck> = {};
+  for (const id of Object.keys(d.tasks)) if (!tasks.some((t) => t.id === id)) problems.push(`"${id}": no such task in tasks.json.`);
+  tasks.forEach((t, i) => {
+    const at = `Task ${i + 1} ("${t.id}")`;
+    const c = d.tasks[t.id];
+    if (c === undefined) return problems.push(`${at}: missing; give every task a verdict.`);
+    if (!VERDICTS.includes(c?.verdict)) return problems.push(`${at}: "verdict" must be one of ${VERDICTS.join(", ")}.`);
+    const note = typeof c.note === "string" ? c.note.trim() : "";
+    if (!note) return problems.push(`${at}: needs a "note" saying why.`);
+    out[t.id] = { verdict: c.verdict, note };
+  });
+  const summary = typeof d.summary === "string" ? d.summary.trim() : "";
+  return { check: { ...(summary ? { summary } : {}), tasks: out }, problems };
+}
+
+/** How many tasks got each verdict. */
+export function checkCounts(tasks: HomeworkTask[], check: HomeworkCheck): Record<Verdict, number> {
+  const n: Record<Verdict, number> = { right: 0, better: 0, wrong: 0, empty: 0 };
+  for (const t of tasks) { const v = check.tasks[t.id]?.verdict; if (v) n[v]++; }
+  return n;
+}

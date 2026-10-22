@@ -148,7 +148,7 @@ export function QuizJobs({ data, course, week }: { data: SemesterData; course?: 
 }
 
 /** Quizzes run in the background, with no chat: their steps are on the AI background work page. */
-const WorkLink = ({ sem, running }: { sem: string; running: boolean }) => (
+export const WorkLink = ({ sem, running }: { sem: string; running: boolean }) => (
   <Link to={`/${enc(sem)}/ai-work`} className="text-xs text-muted underline hover:text-ink">{running ? "Watch it work" : "See what happened"}</Link>
 );
 

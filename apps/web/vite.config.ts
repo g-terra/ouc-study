@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createAiApi } from "../../packages/ai/src/api.ts";
 import { addAttempt, readAttempts, removeCourseQuizzes, removeQuiz, resetAttempts } from "../../packages/content/src/quiz-store.ts";
 import { readProgress, setDone } from "../../packages/content/src/progress-store.ts";
-import { MAX_IMAGE, allAnswers, homeworkDir, saveAnswer, saveImage } from "../../packages/content/src/homework-store.ts";
+import { MAX_IMAGE, allAnswers, allChecks, homeworkDir, saveAnswer, saveImage } from "../../packages/content/src/homework-store.ts";
 import { NO_BROWSER, findBrowser, makeHomeworkPdf, pdfFileName } from "../../packages/ai/src/homework-pdf.ts";
 import { removeDate, saveDate } from "../../packages/content/src/dates.ts";
 import { search, semesterDocs } from "../../packages/content/src/search.ts";
@@ -262,7 +262,7 @@ function homeworkApi(): Plugin {
     }
     if (req.method === "GET") {
       const dir = semDir(new URL(req.url!, "http://x").searchParams.get("sem"));
-      return dir ? send(res, { answers: allAnswers(dir) }) : send(res, { error: "No such semester." }, 404);
+      return dir ? send(res, { answers: allAnswers(dir), checks: allChecks(dir) }) : send(res, { error: "No such semester." }, 404);
     }
     if (req.method !== "POST") return send(res, { error: "Not found" }, 404);
     let raw = "";

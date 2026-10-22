@@ -159,3 +159,71 @@ test("the homework page fits a phone", async ({ page }) => {
   const width = await page.locator("html").evaluate((el) => el.scrollWidth);
   expect(width).toBeLessThanOrEqual(390);
 });
+
+/** A made-up AI status: Claude Code set up and signed in. */
+const aiReady = (page: import("@playwright/test").Page) => page.route("**/api/ai/status**", (route) => route.fulfill({ json: {
+  chosen: "claude", label: "Claude Code", agentic: true, ready: true, reason: "", token: "t",
+  tools: [{ id: "claude", label: "Claude Code", state: "connected", chosen: true }],
+} }));
+
+test("Ask AI about this task opens the tutor on the task being answered", async ({ page }) => {
+  await aiReady(page);
+  let sent: Record<string, unknown> | undefined;
+  await page.route("**/api/ai/run", (route) => {
+    sent = route.request().postDataJSON();
+    return route.fulfill({ contentType: "text/event-stream", body: 'data: {"type":"text","text":"What does the question ask you to add?"}\n\ndata: {"type":"done","ok":true}\n\n' });
+  });
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Demo sum/ }).click();
+  await page.getByRole("button", { name: "Ask AI about this task" }).click();
+  await page.getByRole("textbox", { name: "Message" }).fill("I'm stuck");
+  await page.getByRole("button", { name: "Start" }).click();
+  await expect(page.getByText("What does the question ask you to add?")).toBeVisible();
+  expect(sent).toMatchObject({ action: "homework-tutor", params: { course: "DEMO101", assignment: "DEMO101/09-28_Assignment-1", task: "3" } });
+});
+
+test("Check my answers runs in the background, then shows a verdict on each task", async ({ page }) => {
+  await aiReady(page);
+  const job = { id: "j1", chatId: "c1", sem: "2026-Demo", assignment: "DEMO101/09-28_Assignment-1", started: "2026-09-15T10:00:00Z", running: true };
+  let posted = false, done = false;
+  await page.route("**/api/ai/homework-check", (route) => {
+    if (route.request().method() === "POST") { posted = true; return route.fulfill({ json: { jobs: [job] } }); }
+    return route.fulfill({ json: { jobs: done ? [{ ...job, running: false, ok: true }] : posted ? [job] : [] } });
+  });
+  // the check the AI saved, served with the answers
+  const check = { checked: "2026-09-15T10:00:00Z", summary: "Good start: one to look at again.", tasks: {
+    "1": { verdict: "right", note: "Clear and to the point." },
+    "2": { verdict: "better", note: "Right; say *why* in a sentence." },
+    "3": { verdict: "wrong", note: "Not quite: put both fractions over the same denominator first." },
+  } };
+  await page.route("**/api/homework?**", async (route) => {
+    const res = await route.fetch();
+    return route.fulfill({ response: res, json: { ...(await res.json()), ...(done ? { checks: { "DEMO101/09-28_Assignment-1": check } } : {}) } });
+  });
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("button", { name: "Check my answers" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "The AI is checking your answers…" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Checking…" })).toBeDisabled();
+  done = true;
+  const summary = page.getByTestId("homework-check");
+  await expect(summary).toContainText("Good start: one to look at again.", { timeout: 10_000 });
+  await expect(summary).toContainText("1 right");
+  await expect(summary).toContainText("1 not right yet");
+  await expect(page.getByRole("button", { name: "Check again" })).toBeEnabled();
+  const timeline = page.getByRole("navigation", { name: "Tasks" });
+  await expect(timeline.getByText("Not right yet")).toBeVisible();
+  await timeline.getByRole("button", { name: /Demo sum/ }).click();
+  await expect(page.getByRole("region", { name: "AI check of this task" })).toContainText("same denominator");
+});
+
+test("a check that fails says why, with no chat", async ({ page }) => {
+  await aiReady(page);
+  const job = { id: "j2", sem: "2026-Demo", assignment: "DEMO101/09-28_Assignment-1", started: "2026-09-15T10:00:00Z", running: false, ok: false, error: "You've hit your usage limit." };
+  await page.route("**/api/ai/homework-check", (route) => route.fulfill({ json: { jobs: [job] } }));
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("button", { name: "Check my answers" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Your answers weren't checked: You've hit your usage limit." })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Message" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Dismiss" }).click();
+  await expect(page.getByText("Your answers weren't checked")).toHaveCount(0);
+});

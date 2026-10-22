@@ -1,18 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import type { Assignment, SemesterData } from "@ouc/content/types";
-import { homeworkProgress, taskLabel, type HomeworkTask, type TaskAnswer } from "@ouc/content/homework";
+import { checkCounts, homeworkProgress, taskLabel, type HomeworkAnswers, type HomeworkCheck, type HomeworkTask, type TaskAnswer, type Verdict } from "@ouc/content/homework";
 import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { mdToHtml } from "../lib/markdown";
-import { makePdf, printHref, saveAnswer, uploadPicture, useHomework, type AnswerPatch } from "../lib/homework";
+import { checkAnswers, dismissCheck, makePdf, printHref, saveAnswer, uploadPicture, useCheckJobs, useHomework, type AnswerPatch } from "../lib/homework";
+import { useAiStatus } from "../lib/ai";
 import { useConnection } from "../lib/connection";
 import { Card, Empty, cx } from "../components/ui";
 import { RichEditor } from "../components/RichEditor";
-import { Check, FileText, TriangleAlert, X } from "../components/icons";
+import { AskAiButton, Markdown } from "../components/Assistant";
+import { WorkLink } from "../components/MakeQuiz";
+import { Check, FileText, Settings, Sparkles, TriangleAlert, X } from "../components/icons";
 
 const KIND: Record<HomeworkTask["kind"], string> = { written: "Written", calculation: "Calculation", choice: "Multiple choice" };
 const LETTERS = "ABCDEFGH";
+// the AI check's verdicts: lenient, so "better" is still right
+const VERDICT: Record<Verdict, { label: string; cls: string }> = {
+  right: { label: "Right", cls: "bg-ok-bg text-ok" },
+  better: { label: "Right, could be better", cls: "bg-info-bg text-info" },
+  wrong: { label: "Not right yet", cls: "bg-bad-bg text-bad" },
+  empty: { label: "Not answered", cls: "bg-surface-2 text-muted" },
+};
+const VerdictTag = ({ v, className }: { v: Verdict; className?: string }) => (
+  <span className={cx("rounded-full px-2.5 py-0.5 text-xs font-semibold", VERDICT[v].cls, className)}>{VERDICT[v].label}</span>
+);
 
 /** The href of an assignment's homework page ("CODE/folder"). */
 export const homeworkHref = (sem: string, id: string) => `/${enc(sem)}/homework/${id.split("/").map(enc).join("/")}`;
@@ -36,8 +49,9 @@ function Pieces({ tasks, answers }: { tasks: HomeworkTask[]; answers: Record<str
 export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
   const a = data.assignments.find((x) => x.id === id);
   const course = a ? courseMap(data)[a.code] : undefined;
-  const { answers: all, state } = useHomework(data.id);
+  const { answers: all, checks, state } = useHomework(data.id);
   const answers = all[id] ?? {};
+  const check = checks[id];
   const tasks = a?.homework?.tasks ?? [];
   const [cur, setCur] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,19 +101,24 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
           {brief && <> · <a href={brief.href} target="_blank" rel="noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">open the brief</a></>}
         </p>
         </div>
-        <MakePdfButton sem={data.id} id={id} title={a.title} />
+        <div className="flex flex-wrap gap-2">
+          <CheckButton sem={data.id} id={id} checked={!!check} />
+          <MakePdfButton sem={data.id} id={id} title={a.title} />
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Pieces tasks={tasks} answers={answers} />
         <div className="text-sm" data-testid="homework-progress"><b>{done} of {total} done</b><span className="text-muted"> · {left} left</span></div>
       </div>
       {error && <div role="alert" className="flex items-center gap-2 rounded-xl bg-bad-bg px-4 py-3 text-sm text-bad"><TriangleAlert aria-hidden className="size-4 shrink-0" />{error}</div>}
+      <CheckJobs sem={data.id} id={id} />
+      {check && <CheckSummary sem={data.id} tasks={tasks} check={check} answers={answers} />}
 
       <div className="flex flex-wrap items-start gap-4">
         <nav aria-label="Tasks" className="w-full rounded-2xl border border-line bg-surface p-2 sm:w-64 sm:shrink-0">
           <div className="px-2 pb-1 pt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Timeline</div>
           {tasks.map((t, n) => {
-            const isDone = !!answers[t.id]?.done, now = n === i;
+            const isDone = !!answers[t.id]?.done, now = n === i, v = check?.tasks[t.id]?.verdict;
             return (
               <button key={t.id} type="button" onClick={() => setCur(n)} aria-current={now ? "step" : undefined}
                 className={cx("flex w-full items-start gap-2.5 rounded-xl px-2 py-2 text-left", now ? "bg-surface-2" : "hover:bg-surface-2")}>
@@ -110,6 +129,7 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">{taskLabel(t, n)}</span>
                   <span className="block text-xs text-muted">{KIND[t.kind]} · {now ? "now" : isDone ? "done" : "to do"}</span>
+                  {v && <VerdictTag v={v} className="mt-1 inline-block" />}
                 </span>
               </button>
             );
@@ -121,6 +141,7 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
             <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-semibold text-muted">Task {i + 1} of {total} · {KIND[task.kind]}</span>
             {ans.done && <span className="rounded-full bg-ok-bg px-2.5 py-0.5 text-xs font-semibold text-ok">Done</span>}
             <span className="ml-auto text-xs text-muted" data-testid="save-state" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>
+            <AskAiButton action="homework-tutor" params={{ course: a.code, assignment: id, task: task.id }} className="py-1 text-xs">Ask AI about this task</AskAiButton>
           </div>
           <div className="md font-serif text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(task.question) }} />
 
@@ -144,6 +165,13 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
             <TextAnswer key={task.id} label="Your answer" value={ans.text} onSave={(text) => save({ text })} onDirty={dirty} upload={upload} onError={setError} />
           )}
 
+          {check?.tasks[task.id] && (
+            <section aria-label="AI check of this task" className="grid gap-1.5 rounded-xl border border-line bg-surface-2/50 p-3 text-sm">
+              <div className="flex items-center gap-2"><Sparkles aria-hidden className="size-4 text-accent" /><span className="font-semibold">AI check</span><VerdictTag v={check.tasks[task.id]!.verdict} /></div>
+              <Markdown text={check.tasks[task.id]!.note} sem={data.id} diagrams={false} className="text-sm" />
+            </section>
+          )}
+
           <div className="flex flex-wrap justify-between gap-2 border-t border-line pt-4">
             <button type="button" onClick={() => setCur(Math.max(0, i - 1))} disabled={i === 0}
               className="min-h-11 rounded-full border border-line px-4 disabled:opacity-40">Previous</button>
@@ -158,6 +186,56 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** Check my answers: the AI checks them in the background (no chat), leniently. */
+function CheckButton({ sem, id, checked }: { sem: string; id: string; checked: boolean }) {
+  const ai = useAiStatus();
+  const running = useCheckJobs(sem, id).some((j) => j.running);
+  const [error, setError] = useState<string | null>(null);
+  if (ai.state === "unavailable") return null;
+  return (
+    <>
+      <button type="button" disabled={running} onClick={() => { setError(null); checkAnswers(sem, id).catch((e: Error) => setError(e.message)); }}
+        className="flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-surface px-4 font-semibold hover:border-muted disabled:opacity-60">
+        <Sparkles aria-hidden className="size-4 text-accent" />{running ? "Checking…" : checked ? "Check again" : "Check my answers"}
+      </button>
+      {error && <div role="alert" className="basis-full rounded-xl bg-bad-bg px-3 py-2 text-sm text-bad">{error}</div>}
+    </>
+  );
+}
+
+/** The check being made, in place, or why the last one failed. */
+function CheckJobs({ sem, id }: { sem: string; id: string }) {
+  const jobs = useCheckJobs(sem, id);
+  return jobs.map((j) => (
+    <div key={j.id} role={j.running ? "status" : "alert"} className={cx("flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm", j.running ? "border-line bg-surface" : "border-bad/40 bg-bad-bg")}>
+      {j.running ? <Settings aria-hidden className="size-4 shrink-0 animate-spin text-accent [animation-duration:2.5s]" /> : <TriangleAlert aria-hidden className="size-4 shrink-0 text-bad" />}
+      <span className="min-w-0 flex-1">{j.running ? "The AI is checking your answers…" : <>Your answers weren't checked: {j.error}</>}</span>
+      {j.chatId && <WorkLink sem={sem} running={j.running} />}
+      {!j.running && <button type="button" aria-label="Dismiss" className="px-1 text-muted hover:text-ink" onClick={() => dismissCheck(j.id)}><X aria-hidden className="size-4" /></button>}
+    </div>
+  ));
+}
+
+/** The AI check of the whole homework: how many are right, its summary, and whether answers changed since. */
+function CheckSummary({ sem, tasks, check, answers }: { sem: string; tasks: HomeworkTask[]; check: HomeworkCheck; answers: HomeworkAnswers }) {
+  const n = checkCounts(tasks, check);
+  const changed = check.checked && tasks.some((t) => (answers[t.id]?.updated ?? "") > check.checked!);
+  return (
+    <section aria-label="AI check" data-testid="homework-check" className="grid gap-2 rounded-2xl border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Sparkles aria-hidden className="size-4 text-accent" />
+        <b>AI check</b>
+        {check.checked && <span className="text-muted">{fmtFull(new Date(check.checked))}</span>}
+        <span className="flex flex-wrap gap-1.5">
+          {(Object.keys(VERDICT) as Verdict[]).filter((v) => n[v]).map((v) => <span key={v} className={cx("rounded-full px-2.5 py-0.5 text-xs font-semibold", VERDICT[v].cls)}>{n[v]} {VERDICT[v].label.toLowerCase()}</span>)}
+        </span>
+      </div>
+      {check.summary && <Markdown text={check.summary} sem={sem} diagrams={false} className="text-sm" />}
+      {changed && <p className="text-xs text-muted">You've changed answers since this check. Check again to see where they stand.</p>}
+    </section>
   );
 }
 

@@ -152,3 +152,33 @@ test("important dates: an action for one course that points the AI at the dates 
   assert.match(p, /The student adds: final exam on 5 Dec at 13:00/);
   assert.match(buildPrompt({ root: ".", semId: "S", data, action: "important-dates" }), /Ask me which dates/);
 });
+
+const hw = fixture({
+  courses: [course("AAA", [[1, "2026-09-01", [file]]])], notes: [],
+  assignments: [{ id: "AAA/09-28_A1", code: "AAA", title: "A1", fullTitle: "AAA Assignment 1", due: "2026-10-01T23:59", briefs: [],
+    homework: { tasks: [{ id: "1", kind: "written", title: "Bayes", question: "Explain Bayes' rule." }, { id: "2", kind: "choice", question: "Which?", options: ["A", "B"] }] } }],
+});
+
+test("the homework tutor knows the task being answered and where the answers are, and never answers it", () => {
+  const p = buildPrompt({ root: ".", semId: "S", data: hw, action: "homework-tutor", params: { assignment: "AAA/09-28_A1", task: "1" }, first: false });
+  assert.match(p, /homework-tutor skill/);
+  assert.match(p, /task 1 of 2 \("Bayes"\)/i);
+  assert.match(p, /Explain Bayes' rule\./);
+  assert.match(p, /`semesters\/S\/assignments\/AAA\/09-28_A1\/homework\/answers\.json`/);
+  assert.match(p, /never write the answer/i);
+  // without a task: the whole homework
+  assert.doesNotMatch(buildPrompt({ root: ".", semId: "S", data: hw, action: "homework-tutor", params: { assignment: "AAA/09-28_A1" }, first: false }), /task 1 of 2/i);
+  assert.throws(() => buildPrompt({ root: ".", semId: "S", data: hw, action: "homework-tutor", params: { assignment: "AAA/nope" } }), /isn't in the app data/);
+});
+
+test("checking the homework: lenient, saved as check.json and validated", () => {
+  const p = buildPrompt({ root: ".", semId: "S", data: hw, action: "check-homework", params: { assignment: "AAA/09-28_A1" }, first: false });
+  assert.match(p, /check-homework skill/);
+  assert.match(p, /Save the check as `semesters\/S\/assignments\/AAA\/09-28_A1\/homework\/check\.json`/);
+  assert.match(p, /node packages\/ai\/validate\.mjs semesters\/S\/assignments\/AAA\/09-28_A1\/homework\/check\.json/);
+  assert.match(p, /not picky/i);
+  const acts = listActions(join(dirname(fileURLToPath(import.meta.url)), "../../.."));
+  assert.equal(acts.find((a) => a.id === "homework-tutor")?.title, "Homework tutor");
+  assert.equal(acts.find((a) => a.id === "check-homework")?.title, "Check my homework");
+  assert.deepEqual(acts.find((a) => a.id === "check-homework")?.fields.map((f) => [f.key, f.required ?? false]), [["course", false], ["assignment", true]]);
+});

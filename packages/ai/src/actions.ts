@@ -29,11 +29,15 @@ const FIELDS: Record<string, Field[]> = {
   "assignment-review": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "sync-eclass": [],
   "important-dates": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }],
+  // a task can come from the homework page's Ask AI button
+  "homework-tutor": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
+  "check-homework": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
 };
 const TITLE: Record<string, string> = {
   "make-notes": "Make notes", "quiz-me": "Quiz me", "make-quiz": "Make a quiz", "plan-week": "Plan my week", "research-topic": "Research a topic",
   "find-material": "Find material", "assignment-helper": "Assignment help", "assignment-prep": "Prep an assignment",
   "assignment-review": "Review my draft", "sync-eclass": "Sync eClass", "important-dates": "Important dates",
+  "homework-tutor": "Homework tutor", "check-homework": "Check my homework",
 };
 // What the app shows the student about each action (the skill's description is written for the AI: paths, trigger phrases)
 const SUMMARY: Record<string, string> = {
@@ -48,8 +52,10 @@ const SUMMARY: Record<string, string> = {
   "assignment-review": "Reviews the draft you uploaded against the brief and says what to fix, without rewriting it.",
   "sync-eclass": "Checks eClass for new files, grades, feedback and deadlines.",
   "important-dates": "Adds, changes or removes exam dates and other important dates on a course, as you tell it.",
+  "homework-tutor": "Tutors you on a homework task you're answering in the app: hints, questions back and where in the material to look, never the answer.",
+  "check-homework": "Checks your homework answers without being picky: says what's right, what could be better and what's not right yet, with hints.",
 };
-const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄", "important-dates": "📅" };
+const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄", "important-dates": "📅", "homework-tutor": "🧑‍🏫", "check-homework": "✅" };
 // What a plain local model (no file or web tools) can do from the app (it gets the material in its
 // prompt; a quiz it answers with is saved by the app server).
 const CHAT_OK = new Set(["quiz-me", "make-quiz"]);
@@ -252,6 +258,38 @@ export function reviewPrompt(root: string, semId: string, data: SemesterData, a:
     `\n\nSave the review as \`${reviewFile(semId, a, ver.v)}\`. Give feedback and say what to fix and why, but never write replacement answers or text the student could paste in.`;
 }
 
+const homeworkFolder = (semId: string, a: Pick<Assignment, "id">) => `semesters/${semId}/assignments/${a.id}/homework`;
+export const checkPath = (semId: string, a: Pick<Assignment, "id">) => `${homeworkFolder(semId, a)}/check.json`;
+const assignmentOf = (data: SemesterData, id: unknown): Assignment => {
+  const a = data.assignments.find((x) => x.id === id);
+  if (!a) throw new Error("That assignment isn't in the app data.");
+  if (!a.homework?.tasks.length) throw new Error(`${a.title} has no interactive version to answer in the app.`);
+  return a;
+};
+
+/** Tutoring on homework the student answers in the app: the task they're on (if any) and where their answers are. */
+export function homeworkTutorPrompt(semId: string, a: Assignment, taskId?: string): string {
+  const dir = homeworkFolder(semId, a);
+  const tasks = a.homework!.tasks;
+  const i = taskId ? tasks.findIndex((t) => t.id === taskId) : -1;
+  const t = tasks[i];
+  return `Use the homework-tutor skill (ai/skills/homework-tutor/SKILL.md). I'm answering ${a.fullTitle} (${a.code}${a.due ? `, due ${a.due}` : ""}) in the app. ` +
+    `Its tasks are in \`${dir}/tasks.json\` and my answers so far in \`${dir}/answers.json\` (HTML, keyed by task id; I keep editing, so read it again each turn). ` +
+    (t ? `I'm on task ${i + 1} of ${tasks.length}${t.title ? ` ("${t.title}")` : ""}, id "${t.id}":\n\n${t.question}${t.options ? `\n\nOptions: ${t.options.map((o, n) => `${"ABCDEFGH"[n]}. ${o}`).join("; ")}` : ""}\n\n` : "") +
+    "Tutor me: explain the ideas, give hints, ask me questions back and point me to where the course material covers it (file paths in backticks). " +
+    "Never write the answer for me, not even a model answer to compare with.";
+}
+
+/** Checking the student's answers, leniently, into homework/check.json (docs/HOMEWORK_FORMAT.md). */
+export function homeworkCheckPrompt(semId: string, a: Assignment): string {
+  const dir = homeworkFolder(semId, a), out = checkPath(semId, a);
+  return `Use the check-homework skill (ai/skills/check-homework/SKILL.md). Check my answers to ${a.fullTitle} (${a.code}). ` +
+    `The tasks are in \`${dir}/tasks.json\`, my answers in \`${dir}/answers.json\` (HTML; pictures in ${dir}/images/), the brief in semesters/${semId}/assignments/${a.id}/. ` +
+    "Be lenient and not picky: an answer that is right is right, whatever the wording. Give a better way only when it really helps, say plainly when an answer is not right, " +
+    "and for those give a hint and where to look, never the answer. " +
+    `Save the check as \`${out}\` (format in docs/HOMEWORK_FORMAT.md). When done, run: node packages/ai/validate.mjs ${out} and fix every error it reports.`;
+}
+
 // The chat draws ```mermaid blocks as diagrams (apps/web/src/notes/Mermaid.tsx), so flows come out as pictures, not ASCII arrows.
 export const DIAGRAMS = "When you explain a flow, a process, a sequence of steps or how parts connect, draw it as a ```mermaid diagram " +
   "(flowchart TD/LR, sequenceDiagram or stateDiagram-v2) instead of arrows in text; the app shows it as a picture. Keep node labels short and put labels with symbols or maths in quotes, e.g. A[\"V ≥ threshold?\"].";
@@ -328,6 +366,10 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       if (!a) throw new Error("That assignment isn't in the app data.");
       body = reviewPrompt(root, semId, data, a, params.version) + extra; break;
     }
+    case "homework-tutor":
+      body = homeworkTutorPrompt(semId, assignmentOf(data, params.assignment), params.task ? String(params.task) : undefined) + extra; break;
+    case "check-homework":
+      body = homeworkCheckPrompt(semId, assignmentOf(data, params.assignment)) + extra; break;
     case "important-dates":
       body = `Use the important-dates skill${course ? ` for ${course.title} (${course.code})` : ""}: the dates are in semesters/${semId}/_meta/dates.json. ` +
         `${msg ? `Add, change or remove what I say.${extra}` : "Ask me which dates to add, change or remove."}`; break;

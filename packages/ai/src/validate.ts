@@ -1,7 +1,8 @@
 /**
- * Checks a visual note or a prep pack (PREP.md) against docs/NOTE_FORMAT.md, and a quiz (quizzes/<CODE>/<name>.json)
- * against docs/QUIZ_FORMAT.md, so any AI (or person) can verify its work.
- *   node packages/ai/validate.mjs <note.md | quiz.json> [...]   exit 1 if there are errors
+ * Checks a visual note or a prep pack (PREP.md) against docs/NOTE_FORMAT.md, a quiz (quizzes/<CODE>/<name>.json)
+ * against docs/QUIZ_FORMAT.md, and homework (homework/tasks.json, homework/check.json) against docs/HOMEWORK_FORMAT.md,
+ * so any AI (or person) can verify its work.
+ *   node packages/ai/validate.mjs <note.md | quiz.json | homework/tasks.json | homework/check.json> [...]   exit 1 if there are errors
  *   node packages/ai/validate.mjs --all               every note, prep pack and quiz in every semester
  *   --fix                                             also rewrite LaTeX in double quotes as single-quoted, in place
  */
@@ -11,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import { hasQuotedLatex, parseBlock, singleQuoteLatex } from "../../content/src/yaml-blocks.ts";
 import { parseQuiz } from "../../content/src/quiz.ts";
+import { parseCheck, parseHomework } from "../../content/src/homework.ts";
 
 const CALLOUTS = new Set(["IDEA", "KEY", "TIP", "WARN", "EXAM", "ANALOGY", "LINK"]);
 const DATA = new Set(["cards", "formula", "compare", "steps", "flashcards", "terms", "links"]);
@@ -103,6 +105,17 @@ export function validateQuiz(src: string, file: string): { errors: string[]; war
   return { errors, warnings };
 }
 
+const HOMEWORK_FILE = /(^|[\\/])homework[\\/](tasks|check)\.json$/;
+
+/** A homework file, by its path: a check is read against the tasks.json next to it (`sibling` reads that). */
+export function validateHomework(src: string, file: string, sibling: (name: string) => string | null): { errors: string[]; warnings: string[] } {
+  if (file.match(HOMEWORK_FILE)?.[2] === "tasks") return { errors: parseHomework(src).problems, warnings: [] };
+  const tasks = sibling("tasks.json");
+  const hw = tasks === null ? null : parseHomework(tasks).homework;
+  if (!hw) return { errors: ["Check the answers against a valid homework/tasks.json next to this file."], warnings: [] };
+  return { errors: parseCheck(src, hw.tasks).problems, warnings: [] };
+}
+
 // ---------- CLI ----------
 /** `node packages/ai/validate.mjs` (the launcher calls this). */
 export function main(argv: string[]): never {
@@ -115,11 +128,13 @@ export function main(argv: string[]): never {
       if (!existsSync(nd) || !statSync(nd).isDirectory()) continue;
       for (const c of readdirSync(nd)) for (const f of existsSync(join(nd, c)) && statSync(join(nd, c)).isDirectory() ? readdirSync(join(nd, c)) : []) if (f.endsWith(".md")) files.push(join(nd, c, f));
     }
-    // prep packs: semesters/<id>/assignments/<CODE>/<folder>/PREP.md
+    // prep packs and homework: semesters/<id>/assignments/<CODE>/<folder>/PREP.md, homework/tasks.json, homework/check.json
     for (const s of existsSync(sems) ? readdirSync(sems) : []) {
       const ad = join(sems, s, "assignments");
       if (!existsSync(ad) || !statSync(ad).isDirectory()) continue;
-      for (const c of readdirSync(ad)) if (statSync(join(ad, c)).isDirectory()) for (const a of readdirSync(join(ad, c))) if (existsSync(join(ad, c, a, "PREP.md"))) files.push(join(ad, c, a, "PREP.md"));
+      for (const c of readdirSync(ad)) if (statSync(join(ad, c)).isDirectory()) for (const a of readdirSync(join(ad, c))) {
+        for (const f of ["PREP.md", "homework/tasks.json", "homework/check.json"]) if (existsSync(join(ad, c, a, f))) files.push(join(ad, c, a, f));
+      }
     }
     // quizzes: semesters/<id>/quizzes/<CODE>/<name>.json
     for (const s of existsSync(sems) ? readdirSync(sems) : []) {
@@ -128,13 +143,14 @@ export function main(argv: string[]): never {
       for (const c of readdirSync(qd)) if (statSync(join(qd, c)).isDirectory()) for (const f of readdirSync(join(qd, c))) if (f.endsWith(".json")) files.push(join(qd, c, f));
     }
   }
-  if (!files.length) { console.error("Usage: node packages/ai/validate.mjs <note.md | PREP.md | quiz.json> [...] | --all  [--fix]"); process.exit(2); }
+  if (!files.length) { console.error("Usage: node packages/ai/validate.mjs <note.md | PREP.md | quiz.json | homework/tasks.json | homework/check.json> [...] | --all  [--fix]"); process.exit(2); }
   let bad = 0;
   for (const f of files) {
     const name = f.replace(`${ROOT}/`, "");
     let src = readFileSync(f, "utf8");
     if (f.endsWith(".json")) {
-      const { errors, warnings } = validateQuiz(src, resolve(f));
+      const sibling = (n: string) => (existsSync(join(dirname(f), n)) ? readFileSync(join(dirname(f), n), "utf8") : null);
+      const { errors, warnings } = HOMEWORK_FILE.test(f) ? validateHomework(src, f, sibling) : validateQuiz(src, resolve(f));
       if (errors.length) { bad++; console.log(`✗ ${name}`); errors.forEach((e) => console.log(`    error: ${e}`)); }
       else console.log(`✓ ${name}`);
       warnings.forEach((w) => console.log(`    note: ${w}`));
