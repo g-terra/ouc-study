@@ -44,13 +44,47 @@ test("answer a homework task by task, see the counter move, and find the answers
   await page.reload();
   await expect(page.getByTestId("homework-progress")).toHaveText("2 of 3 done · 1 left");
   await timeline.getByRole("button", { name: /Your demo week/ }).click();
-  await expect(page.getByRole("textbox", { name: "Your answer" })).toHaveValue("I liked seeing the app with made-up data.");
+  await expect(page.getByRole("textbox", { name: "Your answer" })).toHaveText("I liked seeing the app with made-up data.");
   await timeline.getByRole("button", { name: /Favourite part/ }).click();
-  await expect(page.getByRole("textbox", { name: "Why I picked it" })).toHaveValue("It was short.");
+  await expect(page.getByRole("textbox", { name: "Why I picked it" })).toHaveText("It was short.");
 
   // the course shows the count too
   await page.goto(`${SEM}/courses/DEMO101#work`);
   await expect(page.getByTestId("homework-count")).toHaveText("2 of 3 done");
+});
+
+test("answers can have bold, colours and formulas, and keep them after a reload", async ({ page }) => {
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Demo sum/ }).click();
+  const box = page.getByRole("textbox", { name: "Your answer" });
+  await box.click();
+  await page.keyboard.type("The sum is ");
+  await page.getByRole("button", { name: "Bold" }).click();
+  await page.keyboard.type("three quarters");
+  await page.getByRole("button", { name: "Bold" }).click();
+  await page.getByRole("button", { name: "Blue text" }).click();
+  await page.keyboard.type(" in blue");
+  await expect(box.locator("strong")).toHaveText("three quarters");
+  await expect(box.locator("span[style*=color]")).toHaveText(" in blue");
+
+  await page.getByRole("button", { name: "Formula" }).click();
+  const dialog = page.getByRole("dialog", { name: "Insert a formula" });
+  await dialog.getByRole("textbox", { name: "Formula in LaTeX" }).fill("= ");
+  await dialog.getByRole("button", { name: "Fraction" }).click();
+  await page.keyboard.type("3");
+  await expect(dialog.getByRole("textbox", { name: "Formula in LaTeX" })).toHaveValue("= \\frac{3}{}");
+  await expect(dialog.getByTestId("formula-preview").locator(".katex")).toBeVisible();
+  await dialog.getByRole("button", { name: "Insert" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(box.locator(".katex")).toHaveCount(1);
+
+  await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  await page.reload();
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Demo sum/ }).click();
+  const again = page.getByRole("textbox", { name: "Your answer" });
+  await expect(again.locator("strong")).toHaveText("three quarters");
+  await expect(again.locator(".katex")).toHaveCount(1);
+  await expect(again.locator("span[style*=color]")).toHaveText(" in blue");
 });
 
 test("the homework page fits a phone", async ({ page }) => {
