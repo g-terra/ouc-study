@@ -4,6 +4,7 @@ An assignment's **interactive version** lives next to it, in `semesters/<semeste
 
 - `tasks.json`: the brief turned into tasks, written by an AI. The questions are the brief's own, in the brief's order; **the file never holds answers**.
 - `answers.json`: the student's answers, written by the app as they type (`/api/homework`).
+- `check.json`: the AI's check of the answers (**Check my answers**, or the `check-homework` skill): a verdict and a note per task. See [check.json](#checkjson).
 - **Make PDF** prints the tasks and answers to `my-submission/<title> - <name>.pdf` (the print page is `/print/homework/<semester>/<CODE>/<folder>?name=…`).
 
 ## tasks.json
@@ -39,3 +40,27 @@ A file with problems isn't used: the app shows what to fix on the homework page.
 ```
 
 `text` is the written answer and `why` the optional reason for a picked option, both HTML from the app's editor (paragraphs, bold, italic, underline, colours, highlight, lists, `<code>` and `<pre><code>` blocks; a formula is `<span data-latex="\frac{1}{2}"></span>`; a picture is `<img src="/files/<semester>/assignments/<CODE>/<folder>/homework/images/<hash>.png">`, saved in the `images/` folder next to the answers). Older answers in plain text are still read. `choice` is the index of the picked option, `done` is set when the student marks the task done.
+
+## check.json
+
+Written by the AI when the student presses **Check my answers** (it runs in the background, no chat; `/api/ai/homework-check`). Check it with `node packages/ai/validate.mjs <path>/homework/check.json`, which reads the `tasks.json` next to it.
+
+```json
+{
+  "summary": "Good start: task 3 needs another look.",
+  "tasks": {
+    "1": { "verdict": "right", "note": "Clear, and uses the course's definition." },
+    "2": { "verdict": "better", "note": "Right; one sentence on *why* would make it stronger." },
+    "3": { "verdict": "wrong", "note": "Not quite: put both fractions over the same denominator first (`semesters/<semester>/text/DEMO101/week-02.pdf.txt`, slide 4)." }
+  }
+}
+```
+
+| Field | Required | What it is |
+| --- | --- | --- |
+| `tasks` | yes | Every task in `tasks.json`, by id. |
+| `verdict` | yes | `right` (right, whatever the wording), `better` (right, with a clearly better way), `wrong` (not right: a hint and where to look, never the answer), `empty` (not answered yet). |
+| `note` | yes | Why, in Markdown with `$LaTeX$`. File paths in backticks become links to the material. |
+| `summary` | no | One or two sentences on the whole homework. |
+
+The check is lenient: wording, notation and small slips that don't change the result never make an answer wrong. The app shows when it was made (the file's time) and says when answers changed after it.

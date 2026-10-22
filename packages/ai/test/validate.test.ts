@@ -1,7 +1,7 @@
 // The note / prep pack checker: LaTeX quoting, prep packs, --fix.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fixQuotedLatex, validateNote, validateQuiz } from "../src/validate.ts";
+import { fixQuotedLatex, validateHomework, validateNote, validateQuiz } from "../src/validate.ts";
 
 const PREP = `---
 by: Codex
@@ -41,4 +41,15 @@ test("a quiz is checked against docs/QUIZ_FORMAT.md, with the course from its fo
   assert.deepEqual(validateQuiz(quiz, "semesters/S/quizzes/AAA/course-aaa.json"), { errors: [], warnings: [] });
   assert.match(validateQuiz(quiz, "semesters/S/quizzes/BBB/course.json").errors[0], /BBB folder/);
   assert.match(validateQuiz(quiz, "semesters/S/notes/AAA/quiz.json").errors[0], /quizzes\/<COURSE CODE>/);
+});
+
+test("homework files: the tasks against docs/HOMEWORK_FORMAT.md, and a check against the tasks next to it", () => {
+  const tasks = JSON.stringify({ tasks: [{ id: "1", kind: "written", question: "Why?" }, { id: "2", kind: "choice", question: "Which?", options: ["A", "B"] }] });
+  const sibling = (name: string) => (name === "tasks.json" ? tasks : null);
+  assert.deepEqual(validateHomework(tasks, "semesters/S/assignments/AAA/09-28_A1/homework/tasks.json", sibling).errors, []);
+  assert.match(validateHomework('{"tasks":[{"id":"1","kind":"essay","question":"?"}]}', "x/homework/tasks.json", sibling).errors[0]!, /kind/);
+  const check = JSON.stringify({ summary: "Fine.", tasks: { "1": { verdict: "right", note: "Yes." }, "2": { verdict: "wrong", note: "Look at week 2." } } });
+  assert.deepEqual(validateHomework(check, "x/homework/check.json", sibling).errors, []);
+  assert.match(validateHomework('{"tasks":{"1":{"verdict":"right","note":"ok"}}}', "x/homework/check.json", sibling).errors[0]!, /Task 2.*missing/);
+  assert.match(validateHomework(check, "x/homework/check.json", () => null).errors[0]!, /tasks\.json/);
 });

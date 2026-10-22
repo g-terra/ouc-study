@@ -2,11 +2,12 @@
 //   assignments/<CODE>/<folder>/homework/tasks.json    the tasks, written by the AI from the brief
 //   assignments/<CODE>/<folder>/homework/answers.json  { answers: { <task id>: { text, choice, why, done, updated } } }
 //   assignments/<CODE>/<folder>/homework/images/       pictures added to answers, named by their content
+//   assignments/<CODE>/<folder>/homework/check.json    the AI's check of the answers (Check my answers)
 // The app saves answers through POST /api/homework (apps/web/vite.config.ts).
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { applyAnswer, parseHomework, type Homework, type HomeworkAnswers } from "./homework.ts";
+import { applyAnswer, parseCheck, parseHomework, type Homework, type HomeworkAnswers, type HomeworkCheck } from "./homework.ts";
 
 const SEGMENT = /^(?!\.)[^/\\]{1,120}$/;
 
@@ -28,15 +29,30 @@ export function readAnswers(semDir: string, assignment: string): HomeworkAnswers
   try { const j = JSON.parse(readFileSync(f, "utf8")); return j?.answers && typeof j.answers === "object" && !Array.isArray(j.answers) ? j.answers : {}; } catch { return {}; }
 }
 
-/** Every assignment's answers in the semester, by assignment id. */
-export function allAnswers(semDir: string): Record<string, HomeworkAnswers> {
-  const out: Record<string, HomeworkAnswers> = {};
+// "CODE/folder" of every assignment with that file in its homework folder
+function withFile(semDir: string, file: string): string[] {
   const root = join(semDir, "assignments");
   const dirs = (p: string) => { try { return readdirSync(p, { withFileTypes: true }).filter((d) => d.isDirectory() && !d.name.startsWith(".")).map((d) => d.name); } catch { return []; } };
-  for (const code of dirs(root)) for (const folder of dirs(join(root, code))) {
-    if (existsSync(join(root, code, folder, "homework", "answers.json"))) out[`${code}/${folder}`] = readAnswers(semDir, `${code}/${folder}`);
-  }
-  return out;
+  return dirs(root).flatMap((code) => dirs(join(root, code)).filter((f) => existsSync(join(root, code, f, "homework", file))).map((f) => `${code}/${f}`));
+}
+
+/** Every assignment's answers in the semester, by assignment id. */
+export function allAnswers(semDir: string): Record<string, HomeworkAnswers> {
+  return Object.fromEntries(withFile(semDir, "answers.json").map((id) => [id, readAnswers(semDir, id)]));
+}
+
+/** The AI's check of an assignment's answers, with when it was made; undefined if there's none (or no tasks). */
+export function readCheck(semDir: string, assignment: string): HomeworkCheck | undefined {
+  const f = join(homeworkDir(semDir, assignment), "check.json");
+  const hw = readHomework(semDir, assignment)?.homework;
+  if (!hw || !existsSync(f)) return undefined;
+  const { check } = parseCheck(readFileSync(f, "utf8"), hw.tasks);
+  return check ? { ...check, checked: statSync(f).mtime.toISOString() } : undefined;
+}
+
+/** Every assignment's check in the semester, by assignment id. */
+export function allChecks(semDir: string): Record<string, HomeworkCheck> {
+  return Object.fromEntries(withFile(semDir, "check.json").map((id) => [id, readCheck(semDir, id)]).filter(([, c]) => c));
 }
 
 /** Checks and saves one change to an answer ({ assignment, task, text?, choice?, why?, done? }); returns the assignment's answers. */

@@ -46,6 +46,7 @@ import { runAgentTurn, runChatTurn, type AgentEvent, type RunHandle } from "./st
 import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview, reviewState, type Converter } from "./review.ts";
 import type { Assignment, SemesterData } from "../../content/src/types.ts";
 import { setTask } from "../../content/src/plan.ts";
+import { readCheck } from "../../content/src/homework-store.ts";
 import { setClassTime } from "../../content/src/classes.ts";
 import { createTranscriber, type Engine } from "./transcribe.ts";
 
@@ -587,6 +588,29 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     return added;
   }
 
+  // ----- Check my answers on the homework page: the AI checks them in the background into homework/check.json -----
+  type CheckJob = { id: string; chatId?: string; sem: string; assignment: string; started: string; running: boolean; ok?: boolean; error?: string };
+  let checkJobs: CheckJob[] = [];
+  function checkHomework(b: Json): CheckJob[] {
+    const { semId, a } = assignmentOf(b.sem, b.assignment);
+    if (!a.homework?.tasks.length) throw Object.assign(new Error(`${a.title} has no interactive version to check.`), { code: 400 });
+    if (checkJobs.some((j) => j.running && j.sem === semId && j.assignment === a.id)) throw Object.assign(new Error("Your answers are already being checked."), { code: 409 });
+    const before = readCheck(join(root, "semesters", semId), a.id)?.checked;
+    const t = startTurn({ sem: semId, action: "check-homework", params: { assignment: a.id }, background: true });
+    if (t.error !== undefined) throw Object.assign(new Error(t.error), { code: t.code });
+    const job: CheckJob = { id: randomUUID(), chatId: t.chat.id, sem: semId, assignment: a.id, started: t.chat.createdAt, running: true };
+    t.done.then((r) => {
+      job.running = false;
+      // a new check.json that can be read is a check made
+      const made = readCheck(join(root, "semesters", semId), a.id);
+      job.ok = !!r?.ok && !!made && made.checked !== before && !!Object.keys(made.tasks).length;
+      if (!job.ok) job.error = t.chat.messages.at(-1)?.error ?? (r?.ok ? stripTicks(t.chat.messages.at(-1)?.text) || "The AI finished without saving the check." : "The AI stopped with an error.");
+    });
+    // keep the last few finished ones, so the page can say how it went
+    checkJobs = [...checkJobs.filter((j) => j.running || Date.now() - new Date(j.started).getTime() < 3600_000).slice(-20), job];
+    return [job];
+  }
+
   // ----- pre-submission review -----
   let conv: { at: number; found: Converter | null } = { at: 0, found: null };
   // looked up again after a minute, so installing LibreOffice works without restarting the app
@@ -645,6 +669,10 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
           await approve(root, semId, a, b.v, { converter: "converter" in opts ? opts.converter : converter(true) });
           return json(res, reviewBody(semId, a));
         }
+      }
+      if (p === "/api/ai/homework-check") {
+        if (req.method === "POST") return json(res, { jobs: checkHomework(await readBody(req)) });
+        return json(res, { jobs: checkJobs });
       }
       if (p === "/api/ai/quiz") {
         if (req.method === "POST") return json(res, { jobs: makeQuiz(await readBody(req)) });

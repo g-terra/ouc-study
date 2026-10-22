@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyAnswer, homeworkProgress, parseHomework, taskLabel } from "../src/homework.ts";
-import { allAnswers, homeworkDir, readAnswers, readHomework, saveAnswer, saveImage } from "../src/homework-store.ts";
+import { applyAnswer, checkCounts, homeworkProgress, parseCheck, parseHomework, taskLabel } from "../src/homework.ts";
+import { allAnswers, allChecks, homeworkDir, readAnswers, readHomework, saveAnswer, saveImage } from "../src/homework-store.ts";
 
 const TASKS = {
   title: "Assignment 3",
@@ -108,4 +108,43 @@ test("only pictures of a sensible size are saved", () => {
   assert.throws(() => saveImage(dir, "AAA/10-26_Assignment-3", Buffer.from("<svg onload=alert(1)>")), /PNG, JPEG, GIF or WebP/);
   assert.throws(() => saveImage(dir, "AAA/10-26_Assignment-3", Buffer.concat([PNG, Buffer.alloc(11 * 1024 * 1024)])), /too big/);
   assert.throws(() => saveImage(dir, "AAA/missing", PNG), /no interactive version/);
+});
+
+test("an AI check gives each task a verdict and a note, and says what's wrong with the file", () => {
+  const tasks = parseHomework(TASKS).homework!.tasks;
+  const good = {
+    summary: "Mostly there.",
+    tasks: {
+      "1": { verdict: "right", note: "Clear." },
+      "2": { verdict: "wrong", note: "Look again at `week 3`." },
+      "3": { verdict: "better", note: "Right, but show the steps." },
+    },
+  };
+  const ok = parseCheck(JSON.stringify(good), tasks);
+  assert.deepEqual(ok.problems, []);
+  assert.equal(ok.check!.summary, "Mostly there.");
+  assert.equal(ok.check!.tasks["2"]!.verdict, "wrong");
+  assert.equal(checkCounts(tasks, ok.check!).right, 1);
+  assert.deepEqual(checkCounts(tasks, ok.check!), { right: 1, better: 1, wrong: 1, empty: 0 });
+
+  const bad = parseCheck({ tasks: { "1": { verdict: "perfect", note: "x" }, "2": { verdict: "right" }, "9": { verdict: "right", note: "?" } } }, tasks);
+  assert.ok(bad.problems.some((p) => /Task 1.*verdict/.test(p)));
+  assert.ok(bad.problems.some((p) => /Task 2.*note/.test(p)));
+  assert.ok(bad.problems.some((p) => /"9".*no such task/i.test(p)));
+  assert.ok(bad.problems.some((p) => /Task 3.*missing/i.test(p)));
+  assert.equal(Object.keys(bad.check!.tasks).length, 0);
+  assert.match(parseCheck("{", tasks).problems[0]!, /Not valid JSON/);
+  assert.equal(parseCheck("{", tasks).check, null);
+});
+
+test("the checks are read with the time they were made", () => {
+  const sem = mkdtempSync(join(tmpdir(), "ouc-hw-"));
+  const dir = homeworkDir(sem, "DEMO101/09-28_A1");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "tasks.json"), JSON.stringify(TASKS));
+  assert.deepEqual(allChecks(sem), {});
+  writeFileSync(join(dir, "check.json"), JSON.stringify({ tasks: { "1": { verdict: "right", note: "Good." } } }));
+  const all = allChecks(sem);
+  assert.equal(all["DEMO101/09-28_A1"]!.tasks["1"]!.verdict, "right");
+  assert.match(all["DEMO101/09-28_A1"]!.checked!, /^\d{4}-\d\d-\d\dT/);
 });
