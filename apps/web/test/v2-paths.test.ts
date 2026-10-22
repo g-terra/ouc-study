@@ -4,6 +4,7 @@ import { isV2, toClassic, toV2, v2Section } from "../src/v2/paths.ts";
 
 test("classic paths map to the same page in v2", () => {
   assert.equal(toV2("/2026-Fall"), "/v2/2026-Fall");
+  assert.equal(toV2("/2026-Fall/homework/COS511/a"), "/v2/2026-Fall/homework/COS511/a");
   assert.equal(toV2("/2026-Fall/courses/COS511#w3"), "/v2/2026-Fall/courses/COS511#w3");
   assert.equal(toV2("/2026-Fall/notes/COS511/week-01"), "/v2/2026-Fall/notes/COS511/week-01");
   assert.equal(toV2("/2026-Fall/assignments/COS511/10-26_Assignment-3"), "/v2/2026-Fall/assignments/COS511/10-26_Assignment-3");
@@ -37,6 +38,7 @@ test("the nav highlights the place a page belongs to", () => {
   assert.equal(v2Section("/v2/2026-Fall"), "");
   assert.equal(v2Section("/v2/2026-Fall/plan/2026-W43"), "");
   assert.equal(v2Section("/v2/2026-Fall/notes/COS511/a"), "courses");
+  assert.equal(v2Section("/v2/2026-Fall/homework/COS511/a"), "courses");
   assert.equal(v2Section("/v2/2026-Fall/assignments/COS511/a"), "calendar");
   // an assignment opened from a course week keeps Courses highlighted
   assert.equal(v2Section("/v2/2026-Fall/assignments/COS511/a", "/v2/2026-Fall/courses/COS511"), "courses");

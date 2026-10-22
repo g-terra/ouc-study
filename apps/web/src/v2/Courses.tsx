@@ -11,6 +11,7 @@ import { QuizLinks, WeekRow } from "../pages/Courses";
 import { confirmRemoveAll } from "../pages/Quizzes";
 import { assignmentHref } from "./agenda";
 import { DatesTab } from "./Dates";
+import { HomeworkLink } from "./Homework";
 import { DoneCount } from "../components/Progress";
 import { useProgress } from "../lib/progress";
 import { courseProgress, weekProgress } from "@ouc/content/progress";
@@ -140,13 +141,16 @@ export function CourseView({ data, code }: { data: SemesterData; code: string })
         <div className="grid gap-2">
           {as.length === 0 && <Empty>No assignments in this course.</Empty>}
           {as.map((a) => (
-            <Link key={a.id} to={assignmentHref(data.id, a.id)} className="flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition hover:border-muted">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold">{a.title}</span>
-                <span className="text-xs text-muted">{a.due ? fmtFull(at(a.due)) : "No due date"}{!a.submitted && a.due && ` · ${relative(at(a.due), now)}`}</span>
-              </span>
-              <StatePill state={stateOf(a, now)} grade={a.grade} />
-            </Link>
+            <div key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-surface px-4 py-3 transition hover:border-muted">
+              <Link to={assignmentHref(data.id, a.id)} className="flex min-w-0 flex-[1_1_16rem] items-center gap-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold">{a.title}</span>
+                  <span className="text-xs text-muted">{a.due ? fmtFull(at(a.due)) : "No due date"}{!a.submitted && a.due && ` · ${relative(at(a.due), now)}`}</span>
+                </span>
+                <StatePill state={stateOf(a, now)} grade={a.grade} />
+              </Link>
+              {a.homework && a.homework.tasks.length > 0 && <HomeworkLink sem={data.id} a={a} tasks={a.homework.tasks} />}
+            </div>
           ))}
           {c.grades && c.grades.length > 0 && (
             <Card className="mt-4 overflow-hidden">

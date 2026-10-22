@@ -7,6 +7,7 @@
   "exports": {
     "./types": "./src/types.ts",
     "./quiz": "./src/quiz.ts",
+    "./homework": "./src/homework.ts",
     "./yaml-blocks": "./src/yaml-blocks.ts",
     "./progress": "./src/progress.ts",
     "./search-text": "./src/search-text.ts"

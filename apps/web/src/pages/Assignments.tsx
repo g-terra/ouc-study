@@ -9,6 +9,7 @@ import { useAiStatus, usePrepStatus, type PrepStatus } from "../lib/ai";
 import { NoteBody, useNoteBlocks } from "../notes/NoteRenderer";
 import { mdToHtml } from "../lib/markdown";
 import { ReviewSection } from "./Review";
+import { HomeworkLink } from "../v2/Homework";
 
 export function AssignmentsPage({ data }: { data: SemesterData }) {
   const base = `/${enc(data.id)}`;
@@ -119,6 +120,16 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
             <div className="flex gap-1">{pdfs.map((p, i) => <button key={i} onClick={() => setPreview(i)} className={cx("rounded-full px-2.5 py-1 text-xs", i === preview ? "bg-ink text-bg" : "bg-surface-2 text-muted")}>{p.l}</button>)}</div>
           )}>Preview</SectionTitle>
           <Card className="overflow-hidden"><iframe title="PDF preview" src={pdfs[preview].f.href} className="h-[75vh] w-full" /></Card>
+        </>
+      )}
+
+      {a.homework && a.homework.tasks.length > 0 && (
+        <>
+          <SectionTitle>Answer it in the app</SectionTitle>
+          <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
+            <span className="text-sm text-muted">The brief as {a.homework.tasks.length} tasks you can answer here, one by one.</span>
+            <HomeworkLink sem={data.id} a={a} tasks={a.homework.tasks} />
+          </Card>
         </>
       )}
 

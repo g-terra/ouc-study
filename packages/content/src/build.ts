@@ -20,10 +20,11 @@ import { buildClasses, detectClasses, type ClassesConfig } from "./classes.ts";
 import { importantDates, readDates } from "./dates.ts";
 import { gradeFor } from "./grades.ts";
 import { parsePlan } from "./plan.ts";
+import { parseHomework } from "./homework.ts";
 import { parseQuiz } from "./quiz.ts";
 import type {
   UpdatesFeed, GradeItem, ClassSession,
-  Assignment, Prep, Course, Exam, FileRef, Note, Quiz, Resource, SemesterData, SemesterIndex, SemesterSummary, Week, WeekItem,
+  Assignment, AssignmentHomework, Prep, Course, Exam, FileRef, Note, Quiz, Resource, SemesterData, SemesterIndex, SemesterSummary, Week, WeekItem,
 } from "./types.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -210,6 +211,12 @@ function buildSemester(id: string): SemesterData | undefined {
       const get = (k: string) => fm.match(new RegExp(`^${k}:\\s*(.*)$`, "m"))?.[1]?.trim() || undefined;
       return { body: text.slice(fm ? text.indexOf("\n---", 3) + 4 : 0).trim(), by: get("by"), updated: get("updated"), log: [...fm.matchAll(/^\s+-\s+(.+)$/gm)].map((m) => m[1]) };
     };
+    // homework/tasks.json: the brief as tasks to answer in the app (packages/content/src/homework.ts)
+    const readHomework = (abs: string): AssignmentHomework | undefined => {
+      if (!existsSync(abs)) return undefined;
+      const { homework, problems } = parseHomework(readFileSync(abs, "utf8"));
+      return homework ?? { tasks: [], problems };
+    };
     for (const s of m.secs as any[]) {
       for (const a of s.acts as any[]) {
         if (a.type !== "assign" || String(a.name).trim() === "Exams Grade") continue;
@@ -252,6 +259,7 @@ function buildSemester(id: string): SemesterData | undefined {
           question, weekIndex: s.i, eclassUrl: a.url, briefs, submissions, resources: res,
           workingNotes: existsSync(join(folderAbs, "README.md")) ? fileHref(id, `${folderRel}/README.md`) : undefined,
           prep: readPrep(join(folderAbs, "PREP.md")),
+          homework: readHomework(join(folderAbs, "homework", "tasks.json")),
         });
         const w = weeks.find((x) => x.index === s.i);
         const it = w?.items.find((x) => x.kind === "assignment" && x.title === String(a.name).trim());
