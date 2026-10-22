@@ -23,7 +23,7 @@ updated: 2026-10-18
 One or two sentences on what this week is about.
 
 ## Next actions
-- [ ] Draft both answers for `semesters/2026-Fall/assignments/COS511/10-26_Assignment-3`
+- [ ] COS511 Assignment 3 (`semesters/2026-Fall/assignments/COS511/10-26_Assignment-3`)
 - [ ] …
 
 ## Due soon
@@ -35,18 +35,18 @@ One or two sentences on what this week is about.
 
 ## Day by day
 ### Mon 19 Oct
-- [ ] COS511 A3: question 1
+- [ ] COS511 Assignment 3
 ### Tue 20 Oct
 - [ ] …
 
 ## Risks
-- Three deadlines between 26 and 29 Oct: finish COS511 by 22 Oct.
+- Three deadlines between 26 and 29 Oct: finish COS511 by 24 Oct.
 ```
 
-1. **Next actions**: the next 3 concrete, small steps, as `- [ ]` tasks.
+1. **Next actions**: the next 3 things to get done, as `- [ ]` tasks.
 2. **Due soon (next 14 days)**: a table of course, item, due date, days left and status.
 3. **This week's study**: for each course, the lecture/week that matches the current calendar week (from the week maps) plus anything missed earlier (from progress.md).
-4. **Day by day**: one `### Mon 19 Oct` heading per day, with `- [ ]` tasks. Put deliverables first, ordered by deadline. Spread the work over the days the student studies (profile.md), without clock times. Leave a buffer of at least 2 days before each due date.
+4. **Day by day**: one `### Mon 19 Oct` heading per day, with `- [ ]` tasks. Put deliverables first, ordered by deadline. Spread the work over the days the student studies (profile.md), without clock times. Be aggressive and coarse: **one task per assignment** ("COS511 A3"), never split into draft, review or one question at a time, and no "submit" or "upload by" steps (the Due soon table already shows the deadline). Aim to finish each assignment 1–2 days before it's due, no earlier: schedule it on the days just before that.
 5. **Risks**: clashes (e.g. several deadlines in the same week), long items to start early (term projects, the COS514 Project), and installs/setup (e.g. NEURON, Python env).
 
 Name every assignment, note and course file by its repo-relative path in `backticks`: the app turns them into links. When updating a plan, keep the student's ticks (`- [x]`): they mark what's done.
