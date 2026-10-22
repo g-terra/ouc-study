@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.33.0](https://github.com/g-terra/ouc-study/compare/v0.32.0...v0.33.0) (2026-10-22)
+
+
+### Features
+
+* **backup:** add the backup core (what goes in, git backup, run status) ([#162](https://github.com/g-terra/ouc-study/issues/162)) ([66c3c99](https://github.com/g-terra/ouc-study/commit/66c3c99db0776e1a65be7872397049f008a808e2))
+* **web:** make a PDF of the homework with your name and every task ([#164](https://github.com/g-terra/ouc-study/issues/164)) ([ad391e6](https://github.com/g-terra/ouc-study/commit/ad391e6d8efe3f28354aa7b17be8f2b849d978be))
+
 ## [0.32.0](https://github.com/g-terra/ouc-study/compare/v0.31.0...v0.32.0) (2026-10-22)
 
 
