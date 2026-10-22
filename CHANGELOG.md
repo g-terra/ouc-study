@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.0](https://github.com/g-terra/ouc-study/compare/v0.29.0...v0.30.0) (2026-10-22)
+
+
+### Features
+
+* **ai:** make study plans coarser and finish assignments 1-2 days before the deadline ([#157](https://github.com/g-terra/ouc-study/issues/157)) ([cdebf84](https://github.com/g-terra/ouc-study/commit/cdebf848b247b6adab7a1ac631c2c75a79cd1c31))
+
 ## [0.29.0](https://github.com/g-terra/ouc-study/compare/v0.28.0...v0.29.0) (2026-10-20)
 
 
