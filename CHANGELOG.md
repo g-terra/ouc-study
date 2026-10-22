@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.0](https://github.com/g-terra/ouc-study/compare/v0.31.0...v0.32.0) (2026-10-22)
+
+
+### Features
+
+* **web:** rich homework answers with formulas, pictures and code ([#160](https://github.com/g-terra/ouc-study/issues/160)) ([1c479f9](https://github.com/g-terra/ouc-study/commit/1c479f931e1bef8d3ff111e88684694c855b8f33))
+
 ## [0.31.0](https://github.com/g-terra/ouc-study/compare/v0.30.0...v0.31.0) (2026-10-22)
 
 
