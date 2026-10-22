@@ -19,6 +19,9 @@ import { describe as describeAI, loadConfig as loadAI } from "../../ai/src/provi
 import { findConverter } from "../../ai/src/review.ts";
 import { findEngine, installWhisper } from "../../ai/src/transcribe.ts";
 import { loadMediaConfig } from "../../eclass-sync/src/media.ts";
+import { backupStep, restoreStep, terminal } from "./backup.ts";
+import { githubClientId, googleClient } from "../../backup/src/clients.ts";
+import { loadBackupConfig } from "../../backup/src/config.ts";
 
 const { c } = ui;
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -29,7 +32,7 @@ const MAC = process.platform === "darwin";
 const WIN = process.platform === "win32";
 const BACKGROUND = MAC || WIN;   // ouc install: LaunchAgents on macOS, Startup folder + Task Scheduler on Windows
 const OUC = (...a: string[]): [string, string[]] => [process.execPath, ["bin/ouc.mjs", ...a]];
-const STEPS = DRY ? 5 : 8;
+const STEPS = DRY ? 5 : 9;
 const PALETTE = ["#7c3aed", "#0e7490", "#be185d", "#c2410c", "#15803d", "#1d4ed8", "#a16207", "#9333ea"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -160,6 +163,22 @@ async function main() {
     if (!existsSync(tf) || readFileSync(tf, "utf8").trim() !== token) { writeFileSync(tf, `${token}\n`, { mode: 0o600 }); try { chmodSync(tf, 0o600); } catch {} ui.ok("Key saved to .eclass-token (only your user can read it)"); }
   }
   const client = memo(me.client);
+
+  // ---- backup (before anything is made, so a new computer can get it all back first) ----
+  if (!DRY) {
+    ui.step(STEPS, "Back up your study data", "a private GitHub repo or Google Drive");
+    const was = loadBackupConfig(ROOT);
+    if (was) ui.ok(`Backups go to ${was.target === "github" ? `${was.repo} on GitHub` : "your Google Drive"} ${c.gray("(change it in Settings › Backup)")}`);
+    else if (!YES) {
+      // nothing made yet on this computer: offer to bring a backup back
+      const fresh = !existsSync(join(ROOT, "memory")) && !existsSync(join(ROOT, "STUDENT.md"));
+      ui.info("Keeps a copy of your notes, course files, class videos, quizzes, homework answers and progress.");
+      if (await backupStep(ROOT, terminal, { githubClientId: githubClientId(), google: googleClient() })
+        && fresh && (await confirm("Restore your study data from this backup now? (for a new computer)", false))) {
+        await restoreStep(ROOT, terminal, { google: googleClient() });
+      }
+    }
+  }
 
   // ---- 4. courses & semester ---------------------------------------------
   ui.step(STEPS, "Choosing your courses");

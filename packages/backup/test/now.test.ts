@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { saveBackupConfig } from "../src/config.ts";
-import { backupNow } from "../src/now.ts";
+import { backupNow, restoreNow } from "../src/now.ts";
 
 const git = (cwd: string, ...a: string[]) => execFileSync("git", a, { cwd, encoding: "utf8" }).trim();
 function study(files: Record<string, string>) {
@@ -76,4 +76,21 @@ test("only one backup runs at a time", async () => {
   saveBackupConfig(root, { target: "github", repo: "s/r", login: "s", token: "t", remote });
   const [a, b] = await Promise.all([backupNow(root), backupNow(root)]);
   assert.equal(a, b, "the second call joins the first");
+});
+
+test("restore gets the saved GitHub backup back, and says so when there's nothing to restore from", async () => {
+  const none = await restoreNow(study({}));
+  assert.match(none.error ?? "", /isn't set up/);
+
+  const old = study({ "semesters/S/notes/n.md": "n" });
+  const remote = mkdtempSync(join(tmpdir(), "ouc-now-remote-"));
+  git(remote, "init", "--bare", "-q");
+  saveBackupConfig(old, { target: "github", repo: "s/r", login: "s", token: "t", remote });
+  await backupNow(old);
+
+  const fresh = study({});
+  saveBackupConfig(fresh, { target: "github", repo: "s/r", login: "s", token: "t", remote });
+  const r = await restoreNow(fresh);
+  assert.equal(r.error, undefined);
+  assert.deepEqual(r.result?.restored, ["semesters/S/notes/n.md"]);
 });

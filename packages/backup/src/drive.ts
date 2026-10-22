@@ -6,10 +6,13 @@
  * What's where is kept in .ouc/drive-state.json. `api`/`tokenUrl` point at a fake server in tests.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { closeSync, mkdirSync, openSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, createWriteStream, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { RemoteFile, RestoreResult } from "./restore.ts";
 
 const AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN = "https://oauth2.googleapis.com/token";
@@ -18,6 +21,7 @@ const SCOPE = "https://www.googleapis.com/auth/drive.file";
 const FOLDER = "OUC Study backup";
 const FOLDER_TYPE = "application/vnd.google-apps.folder";
 const TIMEOUT_MS = 60_000;
+const DOWNLOAD_TIMEOUT_MS = 30 * 60_000; // a class video's copy on a slow connection
 const SIGN_IN_WAIT_MS = 10 * 60_000;
 
 export function pkce() {
@@ -89,6 +93,16 @@ interface DriveState {
   files: Record<string, { id: string; parent: string; size: number; mtimeMs: number }>;
 }
 
+async function request(accessToken: string, method: string, url: string, body?: string | Uint8Array<ArrayBuffer>, headers: Record<string, string> = {}, timeoutMs = TIMEOUT_MS) {
+  const r = await fetch(url, { method, body, headers: { authorization: `Bearer ${accessToken}`, ...headers }, signal: AbortSignal.timeout(timeoutMs) });
+  if (r.status === 401) throw new Error("Google sign-in expired. Sign in again.");
+  if (r.status === 403 && /storageQuota/i.test(await r.clone().text())) throw new Error("Your Google Drive is full.");
+  if (!r.ok && r.status !== 308) throw new Error(`Google Drive didn't take it (${r.status}): ${(await r.text()).slice(0, 200)}`);
+  return r;
+}
+const statePathOf = (root: string) => join(root, ".ouc", "drive-state.json");
+const rootFolderQuery = `name = '${FOLDER}' and mimeType = '${FOLDER_TYPE}' and 'root' in parents and trashed = false`;
+
 export interface DriveBackupOptions {
   root: string;
   accessToken: string;
@@ -103,25 +117,18 @@ export interface DriveBackupOptions {
 
 export async function driveBackup(o: DriveBackupOptions): Promise<{ uploaded: number; removed: number }> {
   const api = o.api ?? API;
-  const statePath = join(o.root, ".ouc", "drive-state.json");
+  const statePath = statePathOf(o.root);
   let state: DriveState = { folders: {}, files: {} };
   try { state = JSON.parse(readFileSync(statePath, "utf8")); } catch {}
   const save = () => { mkdirSync(join(o.root, ".ouc"), { recursive: true }); writeFileSync(statePath, JSON.stringify(state)); };
 
-  async function call(method: string, url: string, body?: string | Uint8Array<ArrayBuffer>, headers: Record<string, string> = {}) {
-    const r = await fetch(url, { method, body, headers: { authorization: `Bearer ${o.accessToken}`, ...headers }, signal: AbortSignal.timeout(TIMEOUT_MS) });
-    if (r.status === 401) throw new Error("Google sign-in expired. Sign in again.");
-    if (r.status === 403 && /storageQuota/i.test(await r.clone().text())) throw new Error("Your Google Drive is full.");
-    if (!r.ok && r.status !== 308) throw new Error(`Google Drive didn't take it (${r.status}): ${(await r.text()).slice(0, 200)}`);
-    return r;
-  }
+  const call = (method: string, url: string, body?: string | Uint8Array<ArrayBuffer>, headers: Record<string, string> = {}) => request(o.accessToken, method, url, body, headers);
   const json = { "content-type": "application/json; charset=utf-8" };
   const makeFolder = async (name: string, parent?: string) =>
     String(((await (await call("POST", `${api}/drive/v3/files`, JSON.stringify({ name, mimeType: FOLDER_TYPE, ...(parent ? { parents: [parent] } : {}) }), json)).json()) as { id: string }).id);
 
   if (!state.folderId) {
-    const q = `name = '${FOLDER}' and mimeType = '${FOLDER_TYPE}' and 'root' in parents and trashed = false`;
-    const found = (await (await call("GET", `${api}/drive/v3/files?${new URLSearchParams({ q, fields: "files(id)" })}`)).json()) as { files: { id: string }[] };
+    const found = (await (await call("GET", `${api}/drive/v3/files?${new URLSearchParams({ q: rootFolderQuery, fields: "files(id)" })}`)).json()) as { files: { id: string }[] };
     state.folderId = found.files[0]?.id ?? (await makeFolder(FOLDER));
     state.folders = { "": state.folderId };
     save();
@@ -179,4 +186,63 @@ export async function driveBackup(o: DriveBackupOptions): Promise<{ uploaded: nu
     removed++;
   }
   return { uploaded, removed };
+}
+
+/**
+ * The files in the Drive backup, for a restore (not the ones in "_removed"). `remember` writes
+ * .ouc/drive-state.json afterwards, so the next backup updates these files instead of adding copies;
+ * a file kept different here is uploaded again then.
+ */
+export async function driveFiles(o: { root: string; accessToken: string; api?: string }): Promise<{ files: RemoteFile[]; remember: (r: RestoreResult) => void }> {
+  const api = o.api ?? API;
+  const call = (url: string, timeoutMs?: number) => request(o.accessToken, "GET", url, undefined, {}, timeoutMs);
+  const state: DriveState = { folders: {}, files: {} };
+  const found = (await (await call(`${api}/drive/v3/files?${new URLSearchParams({ q: rootFolderQuery, fields: "files(id)" })}`)).json()) as { files: { id: string }[] };
+  const listing: { path: string; id: string; parent: string; md5?: string }[] = [];
+  if (found.files[0]) {
+    state.folderId = state.folders[""] = found.files[0].id;
+    const walk = async (dir: string, id: string) => {
+      let pageToken = "";
+      do {
+        const q = `'${id}' in parents and trashed = false`;
+        const page = (await (await call(`${api}/drive/v3/files?${new URLSearchParams({ q, pageSize: "1000", fields: "nextPageToken,files(id,name,mimeType,md5Checksum)", ...(pageToken ? { pageToken } : {}) })}`)).json()) as
+          { nextPageToken?: string; files: { id: string; name: string; mimeType: string; md5Checksum?: string }[] };
+        for (const f of page.files) {
+          const path = dir ? `${dir}/${f.name}` : f.name;
+          if (f.mimeType === FOLDER_TYPE) {
+            if (!dir && f.name === "_removed") { state.removedId = f.id; continue; }
+            state.folders[path] = f.id;
+            await walk(path, f.id);
+          } else listing.push({ path, id: f.id, parent: id, md5: f.md5Checksum });
+        }
+        pageToken = page.nextPageToken ?? "";
+      } while (pageToken);
+    };
+    await walk("", found.files[0].id);
+  }
+  const md5 = (file: string) => createHash("md5").update(readFileSync(file)).digest("hex");
+  const files: RemoteFile[] = listing.map((f) => ({
+    path: f.path,
+    same: async (local) => !!f.md5 && md5(local) === f.md5,
+    save: async (to) => {
+      const body = (await call(`${api}/drive/v3/files/${f.id}?alt=media`, DOWNLOAD_TIMEOUT_MS)).body;
+      if (!body) return writeFileSync(to, "");
+      await pipeline(Readable.fromWeb(body as import("node:stream/web").ReadableStream), createWriteStream(to));
+    },
+  }));
+  function remember(r: RestoreResult) {
+    const here = new Set([...r.restored]);
+    const changed = new Set([...r.kept, ...r.keptVideos]);
+    for (const f of listing) {
+      const local = join(o.root, f.path);
+      if (changed.has(f.path)) state.files[f.path] = { id: f.id, parent: f.parent, size: -1, mtimeMs: 0 };
+      else if (existsSync(local) && (here.has(f.path) || f.md5 === md5(local))) {
+        const st = statSync(local);
+        state.files[f.path] = { id: f.id, parent: f.parent, size: st.size, mtimeMs: Math.round(st.mtimeMs) };
+      }
+    }
+    mkdirSync(join(o.root, ".ouc"), { recursive: true });
+    writeFileSync(statePathOf(o.root), JSON.stringify(state));
+  }
+  return { files, remember };
 }

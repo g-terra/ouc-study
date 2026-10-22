@@ -10,10 +10,10 @@ import { createHash } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 
-const VIDEO = /\.(mp4|m4v|mov|webm|mkv|avi)$/i;
+export const VIDEO = /\.(mp4|m4v|mov|webm|mkv|avi)$/i;
 const FFMPEG_TIMEOUT_MS = 2 * 60 * 60_000; // a long class on a slow laptop
-const PART = ".ouc-part-";
-const MANIFEST = ".ouc-parts.json";
+export const PART = ".ouc-part-";
+export const MANIFEST = ".ouc-parts.json";
 
 export interface Source { path: string; from: string }
 

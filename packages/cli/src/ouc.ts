@@ -1,5 +1,5 @@
 // ouc: control the OUC Study app and the eClass sync from a terminal (macOS, Windows, Linux).
-//   ouc setup | start | stop | restart | update | status | open | sync | pull | transcribe | logs [app|sync] | install | uninstall | help
+//   ouc setup | start | stop | restart | update | status | open | sync | pull | transcribe | backup | logs [app|sync] | install | uninstall | help
 // Started through bin/ouc (macOS/Linux) or bin/ouc.cmd (Windows). Background details: background.ts.
 import { spawn, spawnSync, type SpawnSyncOptions } from "node:child_process";
 import { accessSync, appendFileSync, chmodSync, closeSync, constants, existsSync, lstatSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, unwatchFile, watchFile } from "node:fs";
@@ -169,6 +169,8 @@ const HELP = () => `${paint("1", "ouc: OUC Study app & eClass sync")}
   ouc pull         download any new course files now (--dry-run: just list them)
   ouc transcribe   transcripts of class videos and narrated slides, made on this computer
                    (the app does this in the background; --setup: install Whisper, free)
+  ouc backup       back up your study data now (setup: GitHub or Google Drive; restore: get it
+                   back on a new computer; status: the last backup)
   ouc status       is it running? when was the last sync?
   ouc logs [sync]  follow the app (or sync) log
   ouc notes [course] [week]   AI notes for a week (default: latest without notes)
@@ -230,6 +232,10 @@ switch (cmd) {
     if (!args.includes("--dry-run")) buildData();
     break;
   case "transcribe": process.exitCode = node([join(ROOT, "bin/transcribe.mjs"), ...args]); break;
+  case "backup":
+    process.exitCode = node([join(ROOT, "bin/backup.mjs"), ...args]);
+    if (args[0] === "restore") buildData();
+    break;
   case "link": linkCmd(); break;
   case "ai": process.exitCode = node([join(ROOT, "bin/ai.mjs"), ...args]); break;
   case "notes": case "plan": case "quiz": process.exitCode = node([join(ROOT, "bin/ai.mjs"), cmd, ...args]); break;

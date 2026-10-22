@@ -21,6 +21,13 @@ const COURSE_FILE = /^semesters\/[^/]+\/courses\//;
 
 const skip = (name: string) => NEVER.has(name) || name.endsWith(".part") || name === ".git" || name === "node_modules";
 
+/** Whether a backup could hold this path: under one of the folders above, nothing secret, no ".." (restore checks every path). */
+export function inBackup(path: string) {
+  const parts = path.split("/");
+  if (path.startsWith("/") || /^[a-z]:/i.test(path) || parts.some((p) => p === ".." || p === "." || p === "" || skip(p))) return false;
+  return ROOTS.some((r) => path === r || path.startsWith(`${r}/`));
+}
+
 function walk(root: string, rel: string, out: FileEntry[]) {
   const abs = join(root, rel);
   if (!existsSync(abs)) return;
