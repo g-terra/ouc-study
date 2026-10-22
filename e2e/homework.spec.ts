@@ -104,7 +104,7 @@ test("a picture can be added to an answer and is still there after a reload", as
   await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
   const again = page.getByRole("textbox", { name: "Your answer" }).locator("img");
   await expect(again).toHaveCount(1);
-  await expect.poll(() => again.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(1);
+  await expect.poll(() => again.evaluate((el) => (el as unknown as { naturalWidth: number }).naturalWidth)).toBe(1);
 });
 
 test("answers can have inline code and code blocks with syntax colours", async ({ page }) => {
