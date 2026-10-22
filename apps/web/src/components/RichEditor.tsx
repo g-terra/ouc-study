@@ -5,9 +5,12 @@ import { NodeSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Color, TextStyle } from "@tiptap/extension-text-style";
 import Highlight from "@tiptap/extension-highlight";
+import Image from "@tiptap/extension-image";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { common, createLowlight } from "lowlight";
 import katex from "katex";
 import { FORMULA_SNIPPETS, insertSnippet, toEditorHtml } from "../lib/answer-html";
-import { List, ListOrdered } from "./icons";
+import { Code, ImagePlus, List, ListOrdered, SquareCode } from "./icons";
 import { cx } from "./ui";
 
 const tex = (latex: string, display = false) => katex.renderToString(latex, { displayMode: display, throwOnError: false, strict: false });
@@ -35,27 +38,55 @@ const Formula = Node.create({
   },
 });
 
+// code blocks get syntax colours; with no language set, lowlight guesses it
+const lowlight = createLowlight(common);
+
 // fixed colours (not theme tokens): the answer goes into a PDF on white paper
 const COLOURS = [["Black text", null], ["Orange text", "#c2410c"], ["Blue text", "#1d4ed8"], ["Green text", "#15803d"]] as const;
 
-/** A rich answer box: bold, italic, underline, colours, highlight, lists and formulas. Saves HTML through onChange. */
-export function RichEditor({ label, value, onChange, minHeight = "10rem" }: { label: string; value?: string; onChange: (html: string) => void; minHeight?: string }) {
+/**
+ * A rich answer box: bold, italic, underline, colours, highlight, lists, code, formulas and pictures.
+ * Saves HTML through onChange; `upload` stores a picture and returns its address.
+ */
+export function RichEditor({ label, value, onChange, upload, onError, minHeight = "10rem" }: {
+  label: string; value?: string; onChange: (html: string) => void; upload?: (file: File) => Promise<string>; onError?: (msg: string) => void; minHeight?: string;
+}) {
   const change = useRef(onChange);
   change.current = onChange;
+  const editorRef = useRef<Editor | null>(null);
+  const addPictures = (files: File[], at?: number) => {
+    const pics = files.filter((f) => f.type.startsWith("image/"));
+    if (!upload || !pics.length) return false;
+    for (const f of pics) {
+      upload(f).then((src) => {
+        const e = editorRef.current;
+        if (!e) return;
+        const chain = e.chain().focus();
+        (at === undefined ? chain : chain.setTextSelection(at)).setImage({ src, alt: f.name }).run();
+      }, (err: Error) => onError?.(err.message));
+    }
+    return true;
+  };
   const editor = useEditor({
-    extensions: [StarterKit.configure({ heading: false, code: false, codeBlock: false, horizontalRule: false, link: false }), TextStyle, Color, Highlight, Formula],
+    extensions: [
+      StarterKit.configure({ heading: false, codeBlock: false, horizontalRule: false, link: false }),
+      TextStyle, Color, Highlight, Formula, CodeBlockLowlight.configure({ lowlight }), Image.configure({ allowBase64: false }),
+    ],
     content: toEditorHtml(value),
     editorProps: {
       attributes: { role: "textbox", "aria-multiline": "true", "aria-label": label, class: "answer-text px-4 py-3 outline-none", style: `min-height: ${minHeight}` },
+      handlePaste: (_v, ev) => addPictures([...(ev.clipboardData?.files ?? [])]),
+      handleDrop: (view, ev) => addPictures([...((ev as DragEvent).dataTransfer?.files ?? [])], view.posAtCoords({ left: ev.clientX, top: ev.clientY })?.pos),
     },
     onUpdate: ({ editor: e }) => change.current(e.isEmpty ? "" : e.getHTML()),
   });
+  editorRef.current = editor;
   const [formula, setFormula] = useState<string | null>(null);
   return (
     <div className="grid gap-1.5">
       <span className="text-sm font-semibold" aria-hidden>{label}</span>
       <div className="rounded-xl border border-line bg-surface focus-within:border-muted">
-        <Toolbar editor={editor} onFormula={() => {
+        <Toolbar editor={editor} onPictures={upload ? (files) => addPictures(files) : undefined} onFormula={() => {
           const sel = editor.state.selection;
           setFormula(sel instanceof NodeSelection && sel.node.type.name === "formula" ? sel.node.attrs.latex : "");
         }} />
@@ -73,12 +104,12 @@ export function RichEditor({ label, value, onChange, minHeight = "10rem" }: { la
   );
 }
 
-function Toolbar({ editor, onFormula }: { editor: Editor; onFormula: () => void }) {
+function Toolbar({ editor, onFormula, onPictures }: { editor: Editor; onFormula: () => void; onPictures?: (files: File[]) => void }) {
   const on = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
       bold: e.isActive("bold"), italic: e.isActive("italic"), underline: e.isActive("underline"), highlight: e.isActive("highlight"),
-      bullet: e.isActive("bulletList"), ordered: e.isActive("orderedList"), color: (e.getAttributes("textStyle").color as string | undefined) ?? null,
+      bullet: e.isActive("bulletList"), ordered: e.isActive("orderedList"), code: e.isActive("code"), codeBlock: e.isActive("codeBlock"), color: (e.getAttributes("textStyle").color as string | undefined) ?? null,
     }),
   });
   // buttons keep the focus (and the cursor) in the answer
@@ -103,6 +134,16 @@ function Toolbar({ editor, onFormula }: { editor: Editor; onFormula: () => void 
       {sep}
       <button type="button" aria-label="Bulleted list" aria-pressed={on.bullet} onMouseDown={keep} onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(on.bullet)}><List aria-hidden className="size-4" /></button>
       <button type="button" aria-label="Numbered list" aria-pressed={on.ordered} onMouseDown={keep} onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(on.ordered)}><ListOrdered aria-hidden className="size-4" /></button>
+      {sep}
+      <button type="button" aria-label="Inline code" aria-pressed={on.code} onMouseDown={keep} onClick={() => editor.chain().focus().toggleCode().run()} className={btn(on.code)}><Code aria-hidden className="size-4" /></button>
+      <button type="button" aria-label="Code block" aria-pressed={on.codeBlock} onMouseDown={keep} onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={btn(on.codeBlock)}><SquareCode aria-hidden className="size-4" /></button>
+      {onPictures && (
+        <label title="Add a picture (or paste or drop one)" className={cx(btn(false), "cursor-pointer focus-within:ring-2 focus-within:ring-muted")} onMouseDown={keep}>
+          <ImagePlus aria-hidden className="size-4" />
+          <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple aria-label="Add a picture" className="sr-only"
+            onChange={(e) => { onPictures([...(e.target.files ?? [])]); e.target.value = ""; }} />
+        </label>
+      )}
       <button type="button" onMouseDown={keep} onClick={onFormula} title="Insert a formula, or change the one selected"
         className="ml-1 h-8 rounded-md bg-surface px-2.5 font-serif font-semibold ring-1 ring-line hover:ring-muted">∑ Formula</button>
     </div>

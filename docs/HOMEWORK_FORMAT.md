@@ -37,4 +37,4 @@ A file with problems isn't used: the app shows what to fix on the homework page.
 { "answers": { "2": { "choice": 0, "why": "Optional reason for the pick.", "done": true, "updated": "2026-10-22T21:40:00.000Z" } } }
 ```
 
-`text` is the written answer and `why` the optional reason for a picked option, both HTML from the app's editor (paragraphs, bold, italic, underline, colours, highlight, lists; a formula is `<span data-latex="\frac{1}{2}"></span>`). Older answers in plain text are still read. `choice` is the index of the picked option, `done` is set when the student marks the task done.
+`text` is the written answer and `why` the optional reason for a picked option, both HTML from the app's editor (paragraphs, bold, italic, underline, colours, highlight, lists, `<code>` and `<pre><code>` blocks; a formula is `<span data-latex="\frac{1}{2}"></span>`; a picture is `<img src="/files/<semester>/assignments/<CODE>/<folder>/homework/images/<hash>.png">`, saved in the `images/` folder next to the answers). Older answers in plain text are still read. `choice` is the index of the picked option, `done` is set when the student marks the task done.

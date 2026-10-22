@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createAiApi } from "../../packages/ai/src/api.ts";
 import { addAttempt, readAttempts, removeCourseQuizzes, removeQuiz, resetAttempts } from "../../packages/content/src/quiz-store.ts";
 import { readProgress, setDone } from "../../packages/content/src/progress-store.ts";
-import { allAnswers, saveAnswer } from "../../packages/content/src/homework-store.ts";
+import { MAX_IMAGE, allAnswers, saveAnswer, saveImage } from "../../packages/content/src/homework-store.ts";
 import { removeDate, saveDate } from "../../packages/content/src/dates.ts";
 import { search, semesterDocs } from "../../packages/content/src/search.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
@@ -233,13 +233,31 @@ function progressApi(): Plugin {
 /**
  * /api/homework?sem=… (GET): every assignment's homework answers, { answers: { "<CODE>/<folder>": { <task id>: answer } } }.
  * /api/homework (POST { sem, assignment, task, text?, choice?, why?, done? }): saves a change to one answer.
- * Stored in assignments/<CODE>/<folder>/homework/answers.json, see packages/content/src/homework-store.ts.
+ * /api/homework/image?sem=…&assignment=CODE/folder (POST, the picture as the body): saves a picture added to an answer, { src }.
+ * Stored in assignments/<CODE>/<folder>/homework/ (answers.json, images/), see packages/content/src/homework-store.ts.
  */
 function homeworkApi(): Plugin {
   const handler: Connect.NextHandleFunction = (req, res, next) => {
-    if (!/^\/api\/homework(\?|$)/.test(req.url ?? "")) return next();
+    if (!/^\/api\/homework(\/image)?(\?|$)/.test(req.url ?? "")) return next();
     const origin = req.headers.origin;
     if (!LOCAL.test(req.headers.host ?? "") || (origin && !LOCAL.test(origin.replace(/^https?:\/\//, "")))) return send(res, { error: "Forbidden" }, 403);
+    const url = new URL(req.url!, "http://x");
+    if (url.pathname === "/api/homework/image") {
+      if (req.method !== "POST") return send(res, { error: "Not found" }, 404);
+      const sem = url.searchParams.get("sem") ?? "", assignment = url.searchParams.get("assignment") ?? "";
+      const dir = semDir(sem);
+      if (!dir) return send(res, { error: "No such semester." }, 404);
+      const parts: Buffer[] = [];
+      let size = 0;
+      req.on("data", (d: Buffer) => { size += d.length; if (size > MAX_IMAGE + 1) req.destroy(); else parts.push(d); });
+      req.on("end", () => {
+        try {
+          const name = saveImage(dir, assignment, Buffer.concat(parts));
+          send(res, { src: `/files/${[sem, "assignments", ...assignment.split("/"), "homework", ...name.split("/")].map(encodeURIComponent).join("/")}` });
+        } catch (e) { send(res, { error: (e as Error).message }, (e as { code?: number }).code === 404 ? 404 : 400); }
+      });
+      return;
+    }
     if (req.method === "GET") {
       const dir = semDir(new URL(req.url!, "http://x").searchParams.get("sem"));
       return dir ? send(res, { answers: allAnswers(dir) }) : send(res, { error: "No such semester." }, 404);

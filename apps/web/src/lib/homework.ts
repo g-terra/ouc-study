@@ -36,15 +36,31 @@ export function useHomework(sem: string): HomeworkState {
 
 export type AnswerPatch = { task: string; text?: string; choice?: number | null; why?: string; done?: boolean };
 
+// the newest save per assignment: an older save's reply must not undo a newer change shown already
+const latest = new Map<string, number>();
+let saves = 0;
+
 /** Saves a change to one answer. It shows at once; if it can't be saved, the saved answers come back and this rejects. */
 export async function saveAnswer(sem: string, assignment: string, tasks: HomeworkTask[], patch: AnswerPatch): Promise<void> {
+  const key = `${sem}|${assignment}`, n = ++saves;
+  latest.set(key, n);
   const cur = store.get(sem) ?? { state: "ok" as const, answers: {} };
   const before = cur.answers[assignment] ?? {};
   set(sem, { ...cur.answers, [assignment]: applyAnswer(tasks, before, patch) }, cur.state);
   const res = await fetch("/api/homework", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sem, assignment, ...patch }) }).catch(() => null);
   const j = await res?.json().catch(() => null);
   const now = store.get(sem)!;
-  if (res?.ok && j?.answers) return set(sem, { ...now.answers, [assignment]: j.answers }, now.state);
-  set(sem, { ...now.answers, [assignment]: before }, now.state);
+  const newest = latest.get(key) === n;
+  if (res?.ok && j?.answers) { if (newest) set(sem, { ...now.answers, [assignment]: j.answers }, now.state); return; }
+  if (newest) set(sem, { ...now.answers, [assignment]: before }, now.state);
   throw new Error(j?.error ?? "Couldn't save. Is the app still running?");
+}
+
+/** Saves a picture added to an answer; resolves to its address for the editor. */
+export async function uploadPicture(sem: string, assignment: string, file: File): Promise<string> {
+  if (file.size > 10 * 1024 * 1024) throw new Error("That picture is too big (10 MB at most).");
+  const res = await fetch(`/api/homework/image?sem=${encodeURIComponent(sem)}&assignment=${encodeURIComponent(assignment)}`, { method: "POST", body: file }).catch(() => null);
+  const j = await res?.json().catch(() => null);
+  if (res?.ok && j?.src) return j.src;
+  throw new Error(j?.error ?? "Couldn't add the picture. Is the app still running?");
 }

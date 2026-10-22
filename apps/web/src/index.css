@@ -170,3 +170,14 @@ body { @apply bg-bg text-ink font-sans antialiased; }
 .answer-text mark { background: var(--warn-bg); color: inherit; border-radius: 2px; padding: 0 1px; }
 .answer-text .formula { padding: 0 2px; border-radius: 4px; cursor: pointer; }
 .answer-text .formula.ProseMirror-selectednode { outline: 2px solid var(--accent); }
+.answer-text code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; background: var(--surface-2); border-radius: 4px; padding: 0.1em 0.3em; }
+.answer-text pre { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 0.75em 1em; margin: 0.5em 0; overflow-x: auto; }
+.answer-text pre code { background: none; padding: 0; font-size: 0.85em; }
+.answer-text img { max-width: 100%; height: auto; border-radius: 6px; margin: 0.4em 0; }
+.answer-text img.ProseMirror-selectednode { outline: 2px solid var(--accent); }
+/* code colours, from the theme so they read in light and dark */
+.answer-text .hljs-keyword, .answer-text .hljs-built_in, .answer-text .hljs-selector-tag { color: var(--accent); }
+.answer-text .hljs-string, .answer-text .hljs-regexp { color: var(--ok); }
+.answer-text .hljs-number, .answer-text .hljs-literal, .answer-text .hljs-type { color: var(--info); }
+.answer-text .hljs-comment { color: var(--muted); font-style: italic; }
+.answer-text .hljs-title, .answer-text .hljs-function .hljs-title { color: var(--warn); }

@@ -87,6 +87,47 @@ test("answers can have bold, colours and formulas, and keep them after a reload"
   await expect(again.locator("span[style*=color]")).toHaveText(" in blue");
 });
 
+// a 1×1 PNG
+const PIXEL = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+
+test("a picture can be added to an answer and is still there after a reload", async ({ page }) => {
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  const box = page.getByRole("textbox", { name: "Your answer" });
+  await box.click();
+  await page.getByLabel("Add a picture").setInputFiles({ name: "photo.png", mimeType: "image/png", buffer: PIXEL });
+  const img = box.locator("img");
+  await expect(img).toHaveCount(1);
+  await expect(img).toHaveAttribute("src", /\/files\/2026-Demo\/assignments\/DEMO101\/09-28_Assignment-1\/homework\/images\/[0-9a-f]{16}\.png$/);
+  await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  await page.reload();
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  const again = page.getByRole("textbox", { name: "Your answer" }).locator("img");
+  await expect(again).toHaveCount(1);
+  await expect.poll(() => again.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(1);
+});
+
+test("answers can have inline code and code blocks with syntax colours", async ({ page }) => {
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  const box = page.getByRole("textbox", { name: "Your answer" });
+  await box.click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Inline code" }).click();
+  await page.keyboard.type("len(xs)");
+  await expect(box.locator("p code")).toHaveText("len(xs)");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Code block" }).click();
+  await page.keyboard.type("def total(xs):\n    return sum(xs)");
+  await expect(box.locator("pre code")).toContainText("return sum(xs)");
+  await expect(box.locator("pre .hljs-keyword").first()).toHaveText("def");
+  await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  await page.reload();
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  await expect(page.getByRole("textbox", { name: "Your answer" }).locator("pre code")).toContainText("def total(xs):");
+});
+
 test("the homework page fits a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);

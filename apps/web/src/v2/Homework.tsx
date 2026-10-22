@@ -5,7 +5,7 @@ import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { mdToHtml } from "../lib/markdown";
-import { saveAnswer, useHomework, type AnswerPatch } from "../lib/homework";
+import { saveAnswer, uploadPicture, useHomework, type AnswerPatch } from "../lib/homework";
 import { Card, Empty, cx } from "../components/ui";
 import { RichEditor } from "../components/RichEditor";
 import { Check, TriangleAlert } from "../components/icons";
@@ -72,6 +72,7 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
       () => { setError(null); if (n === saves.current) setSaving("saved"); },
       (e: Error) => { setError(e.message); setSaving(null); });
   };
+  const upload = (f: File) => uploadPicture(data.id, id, f);
   const brief = a.briefs.find((f) => f.ext === "pdf") ?? a.briefs[0];
 
   return (
@@ -133,10 +134,10 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
                   );
                 })}
               </div>
-              <Why key={task.id} value={ans.why} onSave={(why) => save({ why })} onDirty={dirty} />
+              <Why key={task.id} value={ans.why} onSave={(why) => save({ why })} onDirty={dirty} upload={upload} onError={setError} />
             </>
           ) : (
-            <TextAnswer key={task.id} label="Your answer" value={ans.text} onSave={(text) => save({ text })} onDirty={dirty} />
+            <TextAnswer key={task.id} label="Your answer" value={ans.text} onSave={(text) => save({ text })} onDirty={dirty} upload={upload} onError={setError} />
           )}
 
           <div className="flex flex-wrap justify-between gap-2 border-t border-line pt-4">
@@ -157,7 +158,9 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
 }
 
 /** A rich answer box that saves itself a moment after typing stops, and when it's closed. */
-function TextAnswer({ label, value, onSave, onDirty, minHeight }: { label: string; value?: string; onSave: (v: string) => void; onDirty: () => void; minHeight?: string }) {
+function TextAnswer({ label, value, onSave, onDirty, upload, onError, minHeight }: {
+  label: string; value?: string; onSave: (v: string) => void; onDirty: () => void; upload: (f: File) => Promise<string>; onError: (msg: string) => void; minHeight?: string;
+}) {
   const pending = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const save = useRef(onSave);
@@ -166,14 +169,14 @@ function TextAnswer({ label, value, onSave, onDirty, minHeight }: { label: strin
   useEffect(() => flush, []);
   return (
     <div onBlur={flush}>
-      <RichEditor label={label} value={value} minHeight={minHeight}
+      <RichEditor label={label} value={value} minHeight={minHeight} upload={upload} onError={onError}
         onChange={(html) => { pending.current = html; onDirty(); clearTimeout(timer.current); timer.current = setTimeout(flush, 700); }} />
     </div>
   );
 }
 
 /** The optional "why I picked it" under a multiple-choice task. */
-function Why({ value, onSave, onDirty }: { value?: string; onSave: (v: string) => void; onDirty: () => void }) {
+function Why({ value, ...rest }: { value?: string; onSave: (v: string) => void; onDirty: () => void; upload: (f: File) => Promise<string>; onError: (msg: string) => void }) {
   const [open, setOpen] = useState(!!value);
   if (!open) {
     return (
@@ -182,7 +185,7 @@ function Why({ value, onSave, onDirty }: { value?: string; onSave: (v: string) =
       </button>
     );
   }
-  return <TextAnswer label="Why I picked it" value={value} onSave={onSave} onDirty={onDirty} minHeight="4.5rem" />;
+  return <TextAnswer label="Why I picked it" value={value} {...rest} minHeight="4.5rem" />;
 }
 
 /** On an assignment card: how many tasks are done, and the way into the homework page. */
