@@ -21,6 +21,7 @@ import { CourseList, CourseView } from "./v2/Courses";
 import { Calendar } from "./v2/Calendar";
 import { NotificationsPage } from "./v2/Notifications";
 import { SettingsPage } from "./v2/Settings";
+import { HomeworkPage } from "./v2/Homework";
 import { isV2, toV2 } from "./v2/paths";
 import type { SemesterData } from "@ouc/content/types";
 
@@ -91,6 +92,7 @@ export default function App() {
               ["/v2/:sem/chat/:id", (p) => <V2Semester sem={p.sem} page={(d) => <ChatPage data={d} id={p.id} />} />],
               ["/v2/:sem/ai-work", (p) => <V2Semester sem={p.sem} page={(d) => <AiWorkPage data={d} />} />],
               ["/v2/:sem/assignments/:code/:folder", (p) => <V2Semester sem={p.sem} page={(d) => <AssignmentPage key={p.folder} data={d} id={`${p.code}/${p.folder}`} />} />],
+              ["/v2/:sem/homework/:code/:folder", (p) => <V2Semester sem={p.sem} page={(d) => <HomeworkPage key={p.folder} data={d} id={`${p.code}/${p.folder}`} />} />],
               ["/:sem", (p) => <Semester sem={p.sem} page={(d) => <Dashboard data={d} />} />],
               ["/:sem/plan", (p) => <Semester sem={p.sem} page={(d) => <PlanPage data={d} />} />],
               ["/:sem/plan/:week", (p) => <Semester sem={p.sem} page={(d) => <PlanPage key={p.week} data={d} week={p.week} />} />],
@@ -109,6 +111,7 @@ export default function App() {
               ["/:sem/updates", (p) => <Semester sem={p.sem} page={(d) => <UpdatesPage data={d} />} />],
               ["/:sem/assignments", (p) => <Semester sem={p.sem} page={(d) => <AssignmentsPage data={d} />} />],
               ["/:sem/assignments/:code/:folder", (p) => <Semester sem={p.sem} page={(d) => <AssignmentPage key={p.folder} data={d} id={`${p.code}/${p.folder}`} />} />],
+              ["/:sem/homework/:code/:folder", (p) => <Semester sem={p.sem} page={(d) => <HomeworkPage key={p.folder} data={d} id={`${p.code}/${p.folder}`} />} />],
             ]}
             fallback={<Problem msg="Page not found." />}
           />

@@ -1,4 +1,5 @@
 // Shared data contract between the content builder and the web app.
+import type { HomeworkTask } from "./homework.ts";
 
 export interface SemesterSummary {
   id: string;          // folder name, e.g. "2026-Fall"
@@ -102,6 +103,14 @@ export interface Assignment {
   workingNotes?: string;  // href to README.md in the assignment folder
   resources?: Resource;
   prep?: Prep;            // PREP.md: hints and extra material prepared by the AI
+  homework?: AssignmentHomework; // homework/tasks.json: the brief as tasks answered in the app
+}
+
+/** An assignment's interactive version (homework/tasks.json); answers are fetched from /api/homework. */
+export interface AssignmentHomework {
+  title?: string;
+  tasks: HomeworkTask[];   // empty when the file has problems
+  problems?: string[];     // why the file can't be used yet
 }
 
 export interface Prep {

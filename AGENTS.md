@@ -30,7 +30,7 @@ semesters/<id>/       ← personal, git-ignored
   _meta/              eclass-meta.json (course structure), submissions.json, live.json, dates.json (exams and other important dates the student adds; older exams.json is read until then), resources.json (study links)
   courses/<course>/NN-<week>/   original eClass files, class videos included; *.transcript.md next to a video or narrated .pptx = its transcript (base for notes)
   text/               plain-text copies of every PDF/PPTX/DOCX/notebook. **grep these**
-  assignments/<CODE>/<MM-DD>_<name>/   brief files, my-submission/, README.md (working notes), PREP.md (AI prep pack), review/ (drafts uploaded for review: vN.docx, vN.md text, REVIEW-vN.md, approved PDF)
+  assignments/<CODE>/<MM-DD>_<name>/   brief files, my-submission/, README.md (working notes), PREP.md (AI prep pack), review/ (drafts uploaded for review: vN.docx, vN.md text, REVIEW-vN.md, approved PDF), homework/ (interactive version: tasks.json, the student's answers.json; format: docs/HOMEWORK_FORMAT.md)
   notes/<CODE>/*.md   visual notes (format: docs/NOTE_FORMAT.md)
   quizzes/<CODE>/*.json  scored quizzes on the course's topics (format: docs/QUIZ_FORMAT.md); quizzes/attempts.json = the student's scores
   progress.json       what the student ticked off as watched or read in each week (the app writes it; videos and slides tick themselves when played or viewed to the end)
@@ -40,7 +40,7 @@ memory/               long-term memory, shared across semesters (personal, git-i
 ai/                   the students' study agents and skills, the single source (installed into .claude/, .agents/skills/ and .opencode/agents/ by setup or `ouc ai install`)
 dev/                  for contributors' coding agents only: CODING.md (coding guide), skills/ouc-dev-* (installed by `npm run dev:agents`), the cloud SessionStart hook
 tools/                Python helpers (extract_text.py, build_from_export.py, transcribe.py)
-docs/NOTE_FORMAT.md   how to write visual notes; docs/QUIZ_FORMAT.md how to write quizzes
+docs/NOTE_FORMAT.md   how to write visual notes; docs/QUIZ_FORMAT.md how to write quizzes; docs/HOMEWORK_FORMAT.md an assignment's interactive version
 .github/              CI (tests on every PR), PR-title check, release-please, issue and PR templates
 ```
 

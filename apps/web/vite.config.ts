@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createAiApi } from "../../packages/ai/src/api.ts";
 import { addAttempt, readAttempts, removeCourseQuizzes, removeQuiz, resetAttempts } from "../../packages/content/src/quiz-store.ts";
 import { readProgress, setDone } from "../../packages/content/src/progress-store.ts";
+import { allAnswers, saveAnswer } from "../../packages/content/src/homework-store.ts";
 import { removeDate, saveDate } from "../../packages/content/src/dates.ts";
 import { search, semesterDocs } from "../../packages/content/src/search.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
@@ -230,6 +231,35 @@ function progressApi(): Plugin {
 }
 
 /**
+ * /api/homework?sem=… (GET): every assignment's homework answers, { answers: { "<CODE>/<folder>": { <task id>: answer } } }.
+ * /api/homework (POST { sem, assignment, task, text?, choice?, why?, done? }): saves a change to one answer.
+ * Stored in assignments/<CODE>/<folder>/homework/answers.json, see packages/content/src/homework-store.ts.
+ */
+function homeworkApi(): Plugin {
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    if (!/^\/api\/homework(\?|$)/.test(req.url ?? "")) return next();
+    const origin = req.headers.origin;
+    if (!LOCAL.test(req.headers.host ?? "") || (origin && !LOCAL.test(origin.replace(/^https?:\/\//, "")))) return send(res, { error: "Forbidden" }, 403);
+    if (req.method === "GET") {
+      const dir = semDir(new URL(req.url!, "http://x").searchParams.get("sem"));
+      return dir ? send(res, { answers: allAnswers(dir) }) : send(res, { error: "No such semester." }, 404);
+    }
+    if (req.method !== "POST") return send(res, { error: "Not found" }, 404);
+    let raw = "";
+    req.on("data", (d) => { raw += d; if (raw.length > 500_000) req.destroy(); });
+    req.on("end", () => {
+      try {
+        const body = JSON.parse(raw || "{}");
+        const dir = semDir(body.sem);
+        if (!dir) return send(res, { error: "No such semester." }, 404);
+        send(res, { answers: saveAnswer(dir, body) });
+      } catch (e) { send(res, { error: (e as Error).message }, (e as { code?: number }).code === 404 ? 404 : 400); }
+    });
+  };
+  return { name: "homework-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
+}
+
+/**
  * /api/dates (POST { sem, id?, code, title, kind, date, time?, topics? }): adds an important date to a course, or changes the one with that id.
  * /api/dates?sem=…&id=… (DELETE): removes it.
  * Stored in semesters/<sem>/_meta/dates.json (see packages/content/src/dates.ts); the app data rebuilds on its own.
@@ -314,7 +344,7 @@ function semesterFiles(): Plugin {
         spawn(process.execPath, [resolve(HERE, "../../packages/eclass-sync/daily.mjs"), "--quiet"], { cwd: resolve(HERE, "../.."), stdio: "inherit" });
       }
       server.watcher.on("all", (_event, file) => {
-        if (!file.startsWith(SEMESTERS) || !/(\/notes\/.*\.md|\/plans\/[^/]+\.md|\/quizzes\/[^/]+\/[^/]+\.json|\/assignments\/.*\/PREP\.md|\/_meta\/(?!sync-state).*\.json|\/updates\/(?!connection).*\.json|semester\.json)$/.test(file.replaceAll(sep, "/"))) return;
+        if (!file.startsWith(SEMESTERS) || !/(\/notes\/.*\.md|\/plans\/[^/]+\.md|\/quizzes\/[^/]+\/[^/]+\.json|\/assignments\/.*\/(PREP\.md|homework\/tasks\.json)|\/_meta\/(?!sync-state).*\.json|\/updates\/(?!connection).*\.json|semester\.json)$/.test(file.replaceAll(sep, "/"))) return;
         clearTimeout(timer);
         timer = setTimeout(() => {
           // use this same Node + local tsx (works in the background service where npm isn't on PATH)
@@ -340,7 +370,7 @@ function slidesApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), quizApi(), progressApi(), datesApi(), searchApi()],
+  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), quizApi(), progressApi(), homeworkApi(), datesApi(), searchApi()],
   server: { port: 5173 },
   ...(process.env.OUC_PUBLIC ? { publicDir: resolve(process.env.OUC_PUBLIC) } : {}),
 });
