@@ -81,3 +81,18 @@ test("an unreachable backup repo says why", async () => {
   put("a.md", "1");
   await assert.rejects(gitBackup({ root, gitDir, remote: join(tmpdir(), "ouc-no-such-remote", String(Date.now())), files: ["a.md"], message: "first" }), /^Error: Backup (fetch|push) failed: .*does not appear to be a git repository/);
 });
+
+test("files can come from somewhere else (a video's smaller copy, a part) under their backup name", async () => {
+  const { root, remote, put, gitDir } = setup();
+  put("semesters/S/class.mp4", "the big original");
+  put(".ouc/backup-media/videos/k.mp4", "small");
+  put(".ouc/backup-media/parts/k/ouc-part-001", "p1");
+  await gitBackup({
+    root, gitDir, remote, message: "first",
+    files: ["semesters/S/class.mp4", "semesters/S/slides.pptx.ouc-part-001"],
+    from: { "semesters/S/class.mp4": join(root, ".ouc/backup-media/videos/k.mp4"), "semesters/S/slides.pptx.ouc-part-001": join(root, ".ouc/backup-media/parts/k/ouc-part-001") },
+  });
+  assert.equal(git(remote, "show", "main:semesters/S/class.mp4"), "small");
+  assert.equal(git(remote, "show", "main:semesters/S/slides.pptx.ouc-part-001"), "p1");
+  assert.deepEqual(shown(remote), ["semesters/S/class.mp4", "semesters/S/slides.pptx.ouc-part-001"]);
+});

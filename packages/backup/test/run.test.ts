@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { runBackup } from "../src/run.ts";
 
 const git = (cwd: string, ...a: string[]) => execFileSync("git", a, { cwd, encoding: "utf8" }).trim();
@@ -48,13 +49,22 @@ test("the next run only names what changed since, and says when nothing did", as
   assert.equal(git(remote, "rev-list", "--count", "main"), "2");
 });
 
-test("files too big for the target are listed as skipped", async () => {
+test("files too big for GitHub go up in parts, and videos as their smaller copy", async () => {
   const { root, remote, put } = setup();
+  put("semesters/S/courses/C1/01-W/slides.pptx", 2500);
   put("semesters/S/courses/C1/01-W/class.mp4", 3000);
   put("semesters/S/notes/n.md", "n");
-  const s = await runBackup({ root, remote, maxBytes: 1000 });
-  assert.deepEqual(s.skipped, ["semesters/S/courses/C1/01-W/class.mp4"]);
-  assert.equal(git(remote, "ls-tree", "-r", "--name-only", "main"), "semesters/S/notes/n.md");
+  const ffmpeg = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-ffmpeg.mjs");
+  const s = await runBackup({ root, remote, maxBytes: 1000, ffmpeg, ffmpegEnv: { FAKE_FFMPEG_BYTES: "600" } });
+  assert.equal(s.ok, true);
+  assert.equal(s.files, 3, "counts the student's files, not the parts");
+  assert.deepEqual(git(remote, "ls-tree", "-r", "--name-only", "main").split("\n"), [
+    "semesters/S/courses/C1/01-W/class.mp4",
+    "semesters/S/courses/C1/01-W/slides.pptx.ouc-part-001", "semesters/S/courses/C1/01-W/slides.pptx.ouc-part-002",
+    "semesters/S/courses/C1/01-W/slides.pptx.ouc-part-003", "semesters/S/courses/C1/01-W/slides.pptx.ouc-parts.json",
+    "semesters/S/notes/n.md",
+  ]);
+  assert.equal(git(remote, "cat-file", "-s", "main:semesters/S/courses/C1/01-W/class.mp4"), "600");
 });
 
 test("a failed run keeps the last good backup's details and says why", async () => {

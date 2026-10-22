@@ -17,6 +17,8 @@ export interface GitBackupOptions {
   remote: string;
   /** the files to back up, relative to root with "/" */
   files: string[];
+  /** backup name → the file to store under it, when that isn't the file itself (a video's smaller copy, a part) */
+  from?: Record<string, string>;
   message: string;
   /** extra environment for git (sign-in) */
   env?: NodeJS.ProcessEnv;
@@ -75,7 +77,14 @@ export async function gitBackup(o: GitBackupOptions): Promise<{ committed: boole
   const gone = lastList(o).filter((p) => !keep.has(p));
   if (gone.length) await must(o, ["rm", "-q", "--cached", "--ignore-unmatch", "--pathspec-from-file=-", "--pathspec-file-nul"], gone.join("\0"));
   // -f: the code repo's .gitignore ignores semesters/ and memory/, which is exactly what we back up
-  if (o.files.length) await must(o, ["add", "-f", "--pathspec-from-file=-", "--pathspec-file-nul"], o.files.join("\0"));
+  const from = o.from ?? {};
+  const direct = o.files.filter((p) => !from[p]);
+  const elsewhere = o.files.filter((p) => from[p]);
+  if (direct.length) await must(o, ["add", "-f", "--pathspec-from-file=-", "--pathspec-file-nul"], direct.join("\0"));
+  if (elsewhere.length) {
+    const shas = (await must(o, ["hash-object", "-w", "--no-filters", "--stdin-paths"], elsewhere.map((p) => from[p]).join("\n"))).split("\n");
+    await must(o, ["update-index", "-z", "--index-info"], elsewhere.map((p, i) => `100644 ${shas[i]}\t${p}\0`).join(""));
+  }
   const tree = await must(o, ["write-tree"]);
 
   let commit = base;
