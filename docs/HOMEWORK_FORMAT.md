@@ -4,6 +4,7 @@ An assignment's **interactive version** lives next to it, in `semesters/<semeste
 
 - `tasks.json`: the brief turned into tasks, written by an AI. The questions are the brief's own, in the brief's order; **the file never holds answers**.
 - `answers.json`: the student's answers, written by the app as they type (`/api/homework`).
+- **Make PDF** prints the tasks and answers to `my-submission/<title> - <name>.pdf` (the print page is `/print/homework/<semester>/<CODE>/<folder>?name=…`).
 
 ## tasks.json
 
