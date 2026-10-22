@@ -41,6 +41,17 @@ const Formula = Node.create({
 // code blocks get syntax colours; with no language set, lowlight guesses it
 const lowlight = createLowlight(common);
 
+const EXTENSIONS = [
+  StarterKit.configure({ heading: false, codeBlock: false, horizontalRule: false, link: false }),
+  TextStyle, Color, Highlight, Formula, CodeBlockLowlight.configure({ lowlight }), Image.configure({ allowBase64: false }),
+];
+
+/** An answer shown as the editor shows it (formulas drawn, code coloured), but not editable: for the print page. */
+export function AnswerView({ html, className }: { html?: string; className?: string }) {
+  const editor = useEditor({ extensions: EXTENSIONS, content: toEditorHtml(html), editable: false, editorProps: { attributes: { class: cx("answer-text", className) } } });
+  return <EditorContent editor={editor} />;
+}
+
 // fixed colours (not theme tokens): the answer goes into a PDF on white paper
 const COLOURS = [["Black text", null], ["Orange text", "#c2410c"], ["Blue text", "#1d4ed8"], ["Green text", "#15803d"]] as const;
 
@@ -68,10 +79,7 @@ export function RichEditor({ label, value, onChange, upload, onError, minHeight 
     return true;
   };
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({ heading: false, codeBlock: false, horizontalRule: false, link: false }),
-      TextStyle, Color, Highlight, Formula, CodeBlockLowlight.configure({ lowlight }), Image.configure({ allowBase64: false }),
-    ],
+    extensions: EXTENSIONS,
     content: toEditorHtml(value),
     editorProps: {
       attributes: { role: "textbox", "aria-multiline": "true", "aria-label": label, class: "answer-text px-4 py-3 outline-none", style: `min-height: ${minHeight}` },
