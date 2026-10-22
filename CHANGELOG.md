@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.0](https://github.com/g-terra/ouc-study/compare/v0.30.0...v0.31.0) (2026-10-22)
+
+
+### Features
+
+* **web:** answer homework tasks in the app ([#159](https://github.com/g-terra/ouc-study/issues/159)) ([a46152f](https://github.com/g-terra/ouc-study/commit/a46152f134902a4891c5ed76563d03ae94979399))
+
 ## [0.30.0](https://github.com/g-terra/ouc-study/compare/v0.29.0...v0.30.0) (2026-10-22)
 
 
