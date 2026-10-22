@@ -1,8 +1,10 @@
 // Interactive homework on this computer, next to each assignment (git-ignored with the rest of semesters/):
 //   assignments/<CODE>/<folder>/homework/tasks.json    the tasks, written by the AI from the brief
 //   assignments/<CODE>/<folder>/homework/answers.json  { answers: { <task id>: { text, choice, why, done, updated } } }
+//   assignments/<CODE>/<folder>/homework/images/       pictures added to answers, named by their content
 // The app saves answers through POST /api/homework (apps/web/vite.config.ts).
-import { existsSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { applyAnswer, parseHomework, type Homework, type HomeworkAnswers } from "./homework.ts";
 
@@ -49,4 +51,20 @@ export function saveAnswer(semDir: string, body: unknown, now = new Date()): Hom
   writeFileSync(`${f}.tmp`, `${JSON.stringify({ answers }, null, 1)}\n`);
   renameSync(`${f}.tmp`, f);
   return answers;
+}
+
+export const MAX_IMAGE = 10 * 1024 * 1024;
+const IMAGE_TYPES: [number[], string][] = [[[0x89, 0x50, 0x4e, 0x47], "png"], [[0xff, 0xd8, 0xff], "jpg"], [[0x47, 0x49, 0x46, 0x38], "gif"], [[0x52, 0x49, 0x46, 0x46], "webp"]];
+
+/** Saves a picture added to an answer; returns its path in the homework folder ("images/<hash>.<ext>"). */
+export function saveImage(semDir: string, assignment: string, buf: Buffer): string {
+  const dir = homeworkDir(semDir, assignment);
+  if (!readHomework(semDir, assignment)?.homework) throw Object.assign(new Error("This assignment has no interactive version."), { code: 404 });
+  if (buf.length > MAX_IMAGE) throw new Error("That picture is too big (10 MB at most).");
+  const ext = IMAGE_TYPES.find(([magic, e]) => magic.every((b, i) => buf[i] === b) && (e !== "webp" || buf.subarray(8, 12).toString() === "WEBP"))?.[1];
+  if (!ext) throw new Error("Pictures must be PNG, JPEG, GIF or WebP.");
+  const name = `images/${createHash("sha256").update(buf).digest("hex").slice(0, 16)}.${ext}`;
+  const f = join(dir, name);
+  if (!existsSync(f)) { mkdirSync(join(dir, "images"), { recursive: true }); writeFileSync(f, buf); }
+  return name;
 }

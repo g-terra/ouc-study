@@ -1,11 +1,11 @@
 // Interactive homework: checking the tasks file the AI writes, saving answers, and the done/left counts.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyAnswer, homeworkProgress, parseHomework, taskLabel } from "../src/homework.ts";
-import { allAnswers, homeworkDir, readAnswers, readHomework, saveAnswer } from "../src/homework-store.ts";
+import { allAnswers, homeworkDir, readAnswers, readHomework, saveAnswer, saveImage } from "../src/homework-store.ts";
 
 const TASKS = {
   title: "Assignment 3",
@@ -89,4 +89,23 @@ test("answers can't be saved outside an assignment with tasks", () => {
   assert.throws(() => saveAnswer(dir, { assignment: "../../x", task: "1", text: "x" }), /Bad assignment/);
   assert.throws(() => saveAnswer(dir, { assignment: "AAA/..", task: "1", text: "x" }), /Bad assignment/);
   assert.throws(() => saveAnswer(dir, { assignment: "AAA/missing", task: "1", text: "x" }), /no interactive version/);
+});
+
+const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("made-up picture")]);
+
+test("a picture in an answer is saved in the homework's images folder, named by its content", () => {
+  const dir = semester();
+  const name = saveImage(dir, "AAA/10-26_Assignment-3", PNG);
+  assert.match(name, /^images\/[0-9a-f]{16}\.png$/);
+  assert.ok(existsSync(join(homeworkDir(dir, "AAA/10-26_Assignment-3"), name)));
+  assert.equal(saveImage(dir, "AAA/10-26_Assignment-3", PNG), name, "the same picture twice is one file");
+  const jpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from("x")]);
+  assert.match(saveImage(dir, "AAA/10-26_Assignment-3", jpg), /\.jpg$/);
+});
+
+test("only pictures of a sensible size are saved", () => {
+  const dir = semester();
+  assert.throws(() => saveImage(dir, "AAA/10-26_Assignment-3", Buffer.from("<svg onload=alert(1)>")), /PNG, JPEG, GIF or WebP/);
+  assert.throws(() => saveImage(dir, "AAA/10-26_Assignment-3", Buffer.concat([PNG, Buffer.alloc(11 * 1024 * 1024)])), /too big/);
+  assert.throws(() => saveImage(dir, "AAA/missing", PNG), /no interactive version/);
 });

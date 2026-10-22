@@ -5,8 +5,9 @@ import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { mdToHtml } from "../lib/markdown";
-import { saveAnswer, useHomework, type AnswerPatch } from "../lib/homework";
+import { saveAnswer, uploadPicture, useHomework, type AnswerPatch } from "../lib/homework";
 import { Card, Empty, cx } from "../components/ui";
+import { RichEditor } from "../components/RichEditor";
 import { Check, TriangleAlert } from "../components/icons";
 
 const KIND: Record<HomeworkTask["kind"], string> = { written: "Written", calculation: "Calculation", choice: "Multiple choice" };
@@ -34,11 +35,13 @@ function Pieces({ tasks, answers }: { tasks: HomeworkTask[]; answers: Record<str
 export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
   const a = data.assignments.find((x) => x.id === id);
   const course = a ? courseMap(data)[a.code] : undefined;
-  const { answers: all } = useHomework(data.id);
+  const { answers: all, state } = useHomework(data.id);
   const answers = all[id] ?? {};
   const tasks = a?.homework?.tasks ?? [];
   const [cur, setCur] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState<"saving" | "saved" | null>(null);
+  const saves = useRef(0);
   if (!a) return <Empty>Assignment not found.</Empty>;
   const base = `/${enc(data.id)}`;
   const back = <Link to={`${base}/courses/${enc(a.code)}#work`} className="text-sm text-muted hover:text-ink">← {course?.short ?? a.code} · Assignments</Link>;
@@ -54,12 +57,22 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
       </div>
     );
   }
+  // the answer boxes start from the saved answers, so wait for them
+  if (state === "loading") return <div className="grid gap-4">{back}<p className="text-sm text-muted">Loading your answers…</p></div>;
   const { done, total, left } = homeworkProgress(tasks, answers);
   const i = Math.min(cur ?? Math.max(0, tasks.findIndex((t) => !answers[t.id]?.done)), tasks.length - 1);
   const task = tasks[i]!;
   const ans = answers[task.id] ?? {};
-  const save = (patch: Omit<AnswerPatch, "task">) => saveAnswer(data.id, id, tasks, { task: task.id, ...patch })
-    .then(() => setError(null), (e: Error) => setError(e.message));
+  // typed but not sent yet: "Saving…" until the save after it comes back
+  const dirty = () => { saves.current++; setSaving("saving"); };
+  const save = (patch: Omit<AnswerPatch, "task">) => {
+    setSaving("saving");
+    const n = ++saves.current;
+    return saveAnswer(data.id, id, tasks, { task: task.id, ...patch }).then(
+      () => { setError(null); if (n === saves.current) setSaving("saved"); },
+      (e: Error) => { setError(e.message); setSaving(null); });
+  };
+  const upload = (f: File) => uploadPicture(data.id, id, f);
   const brief = a.briefs.find((f) => f.ext === "pdf") ?? a.briefs[0];
 
   return (
@@ -103,6 +116,7 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-semibold text-muted">Task {i + 1} of {total} · {KIND[task.kind]}</span>
             {ans.done && <span className="rounded-full bg-ok-bg px-2.5 py-0.5 text-xs font-semibold text-ok">Done</span>}
+            <span className="ml-auto text-xs text-muted" data-testid="save-state" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>
           </div>
           <div className="md font-serif text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(task.question) }} />
 
@@ -120,10 +134,10 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
                   );
                 })}
               </div>
-              <Why key={task.id} value={ans.why} onSave={(why) => save({ why })} />
+              <Why key={task.id} value={ans.why} onSave={(why) => save({ why })} onDirty={dirty} upload={upload} onError={setError} />
             </>
           ) : (
-            <TextAnswer key={task.id} label="Your answer" value={ans.text} onSave={(text) => save({ text })} rows={8} />
+            <TextAnswer key={task.id} label="Your answer" value={ans.text} onSave={(text) => save({ text })} onDirty={dirty} upload={upload} onError={setError} />
           )}
 
           <div className="flex flex-wrap justify-between gap-2 border-t border-line pt-4">
@@ -143,9 +157,10 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
   );
 }
 
-/** A text box that saves itself a moment after typing stops, and when it's left. */
-function TextAnswer({ label, value, onSave, rows }: { label: string; value?: string; onSave: (v: string) => void; rows: number }) {
-  const [text, setText] = useState(value ?? "");
+/** A rich answer box that saves itself a moment after typing stops, and when it's closed. */
+function TextAnswer({ label, value, onSave, onDirty, upload, onError, minHeight }: {
+  label: string; value?: string; onSave: (v: string) => void; onDirty: () => void; upload: (f: File) => Promise<string>; onError: (msg: string) => void; minHeight?: string;
+}) {
   const pending = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const save = useRef(onSave);
@@ -153,17 +168,15 @@ function TextAnswer({ label, value, onSave, rows }: { label: string; value?: str
   const flush = () => { clearTimeout(timer.current); if (pending.current !== null) { save.current(pending.current); pending.current = null; } };
   useEffect(() => flush, []);
   return (
-    <label className="grid gap-1.5">
-      <span className="text-sm font-semibold">{label}</span>
-      <textarea value={text} rows={rows} onBlur={flush}
-        onChange={(e) => { setText(e.target.value); pending.current = e.target.value; clearTimeout(timer.current); timer.current = setTimeout(flush, 700); }}
-        className="w-full rounded-xl border border-line bg-surface px-3.5 py-3 leading-relaxed outline-none focus:border-muted" />
-    </label>
+    <div onBlur={flush}>
+      <RichEditor label={label} value={value} minHeight={minHeight} upload={upload} onError={onError}
+        onChange={(html) => { pending.current = html; onDirty(); clearTimeout(timer.current); timer.current = setTimeout(flush, 700); }} />
+    </div>
   );
 }
 
 /** The optional "why I picked it" under a multiple-choice task. */
-function Why({ value, onSave }: { value?: string; onSave: (v: string) => void }) {
+function Why({ value, ...rest }: { value?: string; onSave: (v: string) => void; onDirty: () => void; upload: (f: File) => Promise<string>; onError: (msg: string) => void }) {
   const [open, setOpen] = useState(!!value);
   if (!open) {
     return (
@@ -172,7 +185,7 @@ function Why({ value, onSave }: { value?: string; onSave: (v: string) => void })
       </button>
     );
   }
-  return <TextAnswer label="Why I picked it" value={value} onSave={onSave} rows={3} />;
+  return <TextAnswer label="Why I picked it" value={value} {...rest} minHeight="4.5rem" />;
 }
 
 /** On an assignment card: how many tasks are done, and the way into the homework page. */
