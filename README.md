@@ -147,6 +147,7 @@ The key is saved in `.eclass-token`, readable only by you and never committed. *
 | `ouc pull` | download any new course files, class videos included (`--dry-run` just lists them) |
 | `ouc transcribe` | make the missing transcripts of class videos and narrated slides now (the app does it in the background; `--setup` installs Whisper) |
 | `ouc setup` | add courses, start a new semester, or replace your key |
+| `ouc backup` | back up your study data now; `ouc backup setup` chooses GitHub or Google Drive, `ouc backup restore` gets it back on a new computer, `ouc backup status` shows the last one (see [Backups](#backups)) |
 | `ouc status` | is the app running, is the daily sync scheduled, when was the last sync |
 | `ouc start` · `ouc stop` · `ouc restart` | control the background app |
 | `ouc update` | update to the latest release (`ouc restart` does this too; `--check` only looks, `--main` follows main instead of releases) |
@@ -278,7 +279,9 @@ ai/  tools/  docs/    agents & skills, helpers, the note and quiz formats
 - **GitHub**: **Sign in with GitHub** (type the code it shows on github.com) or paste a fine-grained token (Contents read and write, plus Administration so the app can make the repo). The app makes a private repo `ouc-study-backup` and refuses a public one. Every backup is a commit, so you can go back to any earlier one.
 - **Google Drive**: **Sign in with Google**. Files go to an "OUC Study backup" folder, and the app can only see the files it made there. A file you deleted moves to `_removed` in that folder instead of disappearing.
 
-**Back up now** runs one straight away; with **Back up automatically** on, one runs after each eClass sync that changed something. Only what changed goes up. Class videos go up as smaller copies made with ffmpeg (the originals stay on your computer; without ffmpeg the original goes up), and on GitHub any file over 50 MB goes up in parts that are joined again when you restore. Switch off **Course files** or **Class videos** to leave them out. If a backup fails, a bar at the top of the app says why. Students who installed before backups existed are asked once (**Set up now**, **Later** or **Don't ask again**). The sign-in is kept in `.ouc/backup.json` on your computer only.
+**Back up now** runs one straight away; with **Back up automatically** on, one runs after each eClass sync that changed something. Only what changed goes up. Class videos go up as smaller copies made with ffmpeg (the originals stay on your computer; without ffmpeg the original goes up), and on GitHub any file over 50 MB goes up in parts that are joined again when you restore. Switch off **Course files** or **Class videos** to leave them out. If a backup fails, a bar at the top of the app says why. Students who installed before backups existed are asked once (**Set up now**, **Later** or **Don't ask again**). The sign-in is kept in `.ouc/backup.json` on your computer only. `ouc setup` asks about backups too (**Not now** asks again in the app a week later), and from Terminal `ouc backup` backs up now.
+
+**On a new computer** (or after losing files): run `ouc setup`; when it asks about backups, sign in to the same GitHub account or Google Drive and say yes to **Restore**. Or run `ouc backup restore` any time. Missing files come back, big files are joined from their parts, and a file that's different on this computer is only replaced if you say so (you see which ones first). A class video that's on the computer is always kept, since the backup has a smaller copy.
 
 ## Privacy and sharing
 

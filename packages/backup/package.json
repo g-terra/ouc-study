@@ -15,6 +15,7 @@
     "./run": "./src/run.ts",
     "./api": "./src/api.ts",
     "./now": "./src/now.ts",
+    "./restore": "./src/restore.ts",
     "./clients": "./src/clients.ts"
   },
   "scripts": {
