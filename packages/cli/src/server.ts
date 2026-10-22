@@ -2,7 +2,7 @@
  * Background app server, started at login by the `ouc` LaunchAgent on macOS or the Startup-folder
  * launcher on Windows (or `ouc start`).
  *  1. builds the app data from semesters/   2. runs the Vite server on http://localhost:5173
- *  3. runs the eClass sync every few hours while it's up (if a key exists).
+ *  3. runs the eClass sync every few hours while it's up (if a key exists), then the backup when it's set up.
  * No npm needed at runtime: everything is launched with this same Node binary.
  */
 import { spawn, type SpawnOptions } from "node:child_process";
@@ -57,6 +57,8 @@ if (SYNC_EVERY_H > 0) {
     if (!existsSync(join(ROOT, ".eclass-token"))) return;
     say("Periodic eClass sync…");
     await run([syncer]);
+    // the app's backup API knows the settings and the sign-in; it skips when no backup is set up or it's turned off
+    await fetch(`http://127.0.0.1:${PORT}/api/backup/run?auto=1`, { method: "POST", signal: AbortSignal.timeout(60 * 60_000) }).catch(() => {});
   }, SYNC_EVERY_H * 3600_000).unref();
 }
 

@@ -94,6 +94,8 @@ export interface DriveBackupOptions {
   accessToken: string;
   /** relative to root, with "/" */
   files: string[];
+  /** backup name → the file to upload under it, when that isn't the file itself (a video's smaller copy) */
+  from?: Record<string, string>;
   api?: string;
   /** upload chunk size, a multiple of 256 KB */
   chunkBytes?: number;
@@ -106,7 +108,7 @@ export async function driveBackup(o: DriveBackupOptions): Promise<{ uploaded: nu
   try { state = JSON.parse(readFileSync(statePath, "utf8")); } catch {}
   const save = () => { mkdirSync(join(o.root, ".ouc"), { recursive: true }); writeFileSync(statePath, JSON.stringify(state)); };
 
-  async function call(method: string, url: string, body?: string | Uint8Array, headers: Record<string, string> = {}) {
+  async function call(method: string, url: string, body?: string | Uint8Array<ArrayBuffer>, headers: Record<string, string> = {}) {
     const r = await fetch(url, { method, body, headers: { authorization: `Bearer ${o.accessToken}`, ...headers }, signal: AbortSignal.timeout(TIMEOUT_MS) });
     if (r.status === 401) throw new Error("Google sign-in expired. Sign in again.");
     if (r.status === 403 && /storageQuota/i.test(await r.clone().text())) throw new Error("Your Google Drive is full.");
@@ -133,6 +135,7 @@ export async function driveBackup(o: DriveBackupOptions): Promise<{ uploaded: nu
     return state.folders[dir];
   }
 
+  const source = (path: string) => o.from?.[path] ?? join(o.root, path);
   async function upload(path: string, size: number, existing?: string): Promise<string> {
     const cut = path.lastIndexOf("/");
     const parent = await folder(cut < 0 ? "" : path.slice(0, cut));
@@ -142,7 +145,7 @@ export async function driveBackup(o: DriveBackupOptions): Promise<{ uploaded: nu
     const session = start.headers.get("location");
     if (!session) throw new Error("Google Drive didn't start the upload.");
     const chunk = o.chunkBytes ?? 8 * 1024 * 1024;
-    const fd = openSync(join(o.root, path), "r");
+    const fd = openSync(source(path), "r");
     try {
       if (size === 0) return String(((await (await call("PUT", session, new Uint8Array(0), { "content-range": "bytes */0" })).json()) as { id: string }).id);
       for (let at = 0; ; at += chunk) {
@@ -156,7 +159,7 @@ export async function driveBackup(o: DriveBackupOptions): Promise<{ uploaded: nu
 
   let uploaded = 0;
   for (const path of o.files) {
-    const st = statSync(join(o.root, path));
+    const st = statSync(source(path));
     const was = state.files[path];
     const mtimeMs = Math.round(st.mtimeMs);
     if (was && was.size === st.size && was.mtimeMs === mtimeMs) continue;

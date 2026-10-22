@@ -97,10 +97,10 @@ Built by students for students. Works with **your own** eClass account: nothing 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark.webp">
-  <img src="docs/images/settings.webp" alt="The settings page with eClass, AI tools and appearance sections">
+  <img src="docs/images/settings.webp" alt="The settings page with the eClass connection and AI tools">
 </picture>
 
-**Settings**<br>The eClass connection, your AI tools, video transcripts and the colour theme, from the profile circle.
+**Settings**<br>The eClass connection, your AI tools, video transcripts, backups and the colour theme, from the profile circle.
 
 </td>
 </tr>
@@ -172,7 +172,7 @@ The top bar has **Today**, **Courses** and **Calendar**, plus **Search**, the �
 - **Answer it in the app**: an assignment with an interactive version (`homework/tasks.json` in its folder) can be answered task by task on its own page: a timeline of the tasks, a done/left counter (also on the course's Assignments tab), written answers with bold, italic, colours, highlight, lists, code (inline and blocks with syntax colours), pictures (button, paste or drop) and a **Formula** button (symbol buttons, LaTeX and a live preview), and multiple choice with an optional "why I picked it". Answers save as you type, on your computer only. **Make PDF** saves every task in full with your answers, your name and the assignment title as a PDF in the assignment's `my-submission/` folder, ready to upload on eClass (it uses Google Chrome or Microsoft Edge in the background; without either, the print window opens so you can choose Save as PDF). **Ask AI about this task** opens a tutor on the task you're on (hints, questions back and where the material covers it, never the answer), and **Check my answers** has the AI check them in the background without being picky: right, could be better or not right yet, with a hint for each. The format is in [`docs/HOMEWORK_FORMAT.md`](docs/HOMEWORK_FORMAT.md).
 - **Search** (top bar, or ⌘K on a Mac / Ctrl K on Windows): finds words in your notes, slides and PDFs (their text copies in `text/`), class video and slide transcripts, assignments (question, prep pack, your working notes) and eClass announcements and forum posts. Results are grouped by course and week; a transcript result opens the video at the moment it's said, a slide result opens that slide, a PDF opens at that page. Accents and capitals don't matter. It runs on your computer and needs no AI tool.
 - **Notifications** (🔔): what changed on eClass each day, with **Sync now**. See [Daily updates](#daily-updates).
-- **Settings** (profile circle): eClass connection, AI tools, video transcripts, colour theme, and **Back to the classic look** if you prefer the older layout.
+- **Settings** (profile circle): eClass connection, AI tools, video transcripts, [backups](#backups), colour theme, and **Back to the classic look** if you prefer the older layout.
 - **Ask AI** (the 🤖 button at the bottom right, on every page): talk to your AI assistant from the app. See [Ask AI in the app](#ask-ai-in-the-app).
 
 ### Live classes
@@ -265,6 +265,20 @@ semesters/<id>/       YOUR data for each semester: course files, notes, assignme
 memory/               the assistant's memory of your progress (git-ignored)
 ai/  tools/  docs/    agents & skills, helpers, the note and quiz formats
 ```
+
+## Backups
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/backup-dark.webp">
+  <img src="docs/images/backup.webp" alt="Settings, Backup: backed up today to a private GitHub repo, with Back up now and switches for automatic backups, course files and class videos" width="600">
+</picture>
+
+**Settings → Backup** keeps a copy of everything you made and downloaded in a **private GitHub repo** or your **Google Drive**: notes, course files, class videos, quizzes and scores, homework answers, progress, your AI memory and chats, and your settings. Your eClass key and the backup's own sign-in never go in. Pick one place:
+
+- **GitHub**: **Sign in with GitHub** (type the code it shows on github.com) or paste a fine-grained token (Contents read and write, plus Administration so the app can make the repo). The app makes a private repo `ouc-study-backup` and refuses a public one. Every backup is a commit, so you can go back to any earlier one.
+- **Google Drive**: **Sign in with Google**. Files go to an "OUC Study backup" folder, and the app can only see the files it made there. A file you deleted moves to `_removed` in that folder instead of disappearing.
+
+**Back up now** runs one straight away; with **Back up automatically** on, one runs after each eClass sync that changed something. Only what changed goes up. Class videos go up as smaller copies made with ffmpeg (the originals stay on your computer; without ffmpeg the original goes up), and on GitHub any file over 50 MB goes up in parts that are joined again when you restore. Switch off **Course files** or **Class videos** to leave them out. If a backup fails, a bar at the top of the app says why. Students who installed before backups existed are asked once (**Set up now**, **Later** or **Don't ask again**). The sign-in is kept in `.ouc/backup.json` on your computer only.
 
 ## Privacy and sharing
 

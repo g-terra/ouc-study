@@ -12,7 +12,10 @@
     "./config": "./src/config.ts",
     "./drive": "./src/drive.ts",
     "./media": "./src/media.ts",
-    "./run": "./src/run.ts"
+    "./run": "./src/run.ts",
+    "./api": "./src/api.ts",
+    "./now": "./src/now.ts",
+    "./clients": "./src/clients.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

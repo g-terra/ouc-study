@@ -17,6 +17,10 @@ import { search, semesterDocs } from "../../packages/content/src/search.ts";
 import { checkForUpdate, restartDetached } from "../../packages/cli/src/update.ts";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { createSlidesApi, sendFile } from "../../packages/ai/src/slides.ts";
+import { findBin } from "../../packages/ai/src/transcribe.ts";
+import { createBackupApi } from "../../packages/backup/src/api.ts";
+import { githubClientId, googleClient } from "../../packages/backup/src/clients.ts";
+import { backupNow } from "../../packages/backup/src/now.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 
@@ -93,7 +97,8 @@ function eclassApi(): Plugin {
         progress = { step: 3 };
         await node([TSX(), "packages/content/src/build.ts"]);
         cache = { at: Date.now(), body: { ok: r.ok, state: r.state, user: r.user ?? cache?.body?.user, error: r.error, checkedAt: new Date().toISOString() } };
-        // then the AI makes whatever notes and prep packs are missing, in the background
+        // then the backup (when it's set up and left on) and whatever notes and prep packs the AI still has to make
+        if (r.ok) void autoBackup?.();
         return { ...r, ai: r.ok ? aiHandler?.catchUp() : undefined };
       }).finally(() => { syncing = undefined; });
       return send(res, await syncing);
@@ -117,6 +122,18 @@ function aiApi(): Plugin {
       setTimeout(() => void aiHandler?.warmUp(), 3_000).unref();
     },
   };
+}
+
+/** /api/backup/*: Settings › Backup and the one-time prompt (packages/backup/src/api.ts). OUC_BACKUP_ROOT: another study folder, OUC_NO_BACKUP_PROMPT=1: no prompt (e2e). */
+let autoBackup: (() => Promise<unknown>) | undefined;
+function backupApi(): Plugin {
+  const root = process.env.OUC_BACKUP_ROOT ? resolve(process.env.OUC_BACKUP_ROOT) : resolve(HERE, "../..");
+  const google = googleClient();
+  const backup = (r: string) => backupNow(r, { google, ffmpeg: findBin("ffmpeg") });
+  const api = createBackupApi({ root, backup, githubClientId: githubClientId(), google, askToSetUp: process.env.OUC_NO_BACKUP_PROMPT !== "1" });
+  autoBackup = api.auto;
+  const handler: Connect.NextHandleFunction = (req, res, next) => { void api(req, res, next); };
+  return { name: "backup-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
 }
 
 /**
@@ -400,7 +417,7 @@ function slidesApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), quizApi(), progressApi(), homeworkApi(), datesApi(), searchApi()],
+  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), backupApi(), quizApi(), progressApi(), homeworkApi(), datesApi(), searchApi()],
   server: { port: 5173 },
   ...(process.env.OUC_PUBLIC ? { publicDir: resolve(process.env.OUC_PUBLIC) } : {}),
 });
