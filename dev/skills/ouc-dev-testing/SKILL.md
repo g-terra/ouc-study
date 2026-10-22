@@ -23,6 +23,7 @@ Test at the lowest layer that proves the behaviour, and add an e2e test only whe
 | `packages/content` (build, search, quiz, plan, progress, grades) | `packages/content/test/` | Made-up `Course`/`Week` objects (`as unknown as Course` for partial shapes), `mkdtempSync(join(tmpdir(), …))` for files. |
 | `packages/eclass-sync` | `packages/eclass-sync/test/` | A fake `MoodleClient` whose `call` returns made-up sections; never the network. |
 | `packages/ai` (providers, `/api/ai`, review, slides, transcribe) | `packages/ai/test/` | `helpers.ts` (`portOf`, `json`, `zip` to build a .docx/.pptx), `fixtures/fake-agent.mjs` stands in for the agent CLIs. |
+| `packages/backup` (what's backed up, git target, runs) | `packages/backup/test/` | Temp folders and a local bare repo (`git init --bare`) as the remote; never GitHub or Google. |
 | `packages/cli` (`ouc`, setup, background, updates) | `packages/cli/test/` | Temp folders; never install, schedule or touch the real home folder. |
 | A page, a component, navigation, a user flow | `e2e/<area>.spec.ts` | Playwright on `e2e/demo/2026-Demo` (made-up semester). |
 | `ai/` skills or agents | `packages/ai/test/ai-folder.test.ts` already checks front matter | Add a test if you change how actions are built (`actions.test.ts`). |

@@ -1,0 +1,19 @@
+{
+  "name": "@ouc/backup",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Backs up the student's own files (semesters/, memory/, settings) to a private GitHub repo or Google Drive",
+  "exports": {
+    "./select": "./src/select.ts",
+    "./summary": "./src/summary.ts",
+    "./git": "./src/git.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}
