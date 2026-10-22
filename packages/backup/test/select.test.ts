@@ -67,13 +67,6 @@ test("course files and class videos can be left out", () => {
   assert.deepEqual(paths(root, { courseFiles: false }), ["semesters/S/courses/C1/01-Week/class.transcript.md", "semesters/S/notes/C1/n.md"]);
 });
 
-test("files over the size limit are listed apart, not dropped silently", () => {
-  const root = folder({ "semesters/S/courses/C1/01-Week/class.mp4": 2000, "semesters/S/notes/n.md": "n" });
-  const r = selectFiles(root, { maxBytes: 1000 });
-  assert.deepEqual(r.files.map((f) => f.path), ["semesters/S/notes/n.md"]);
-  assert.deepEqual(r.tooBig.map((f) => [f.path, f.size]), [["semesters/S/courses/C1/01-Week/class.mp4", 2000]]);
-});
-
 test("a missing folder is simply skipped", () => {
   assert.deepEqual(paths(folder({ "STUDENT.md": "me" })), ["STUDENT.md"]);
 });

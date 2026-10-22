@@ -12,8 +12,6 @@ export interface SelectOptions {
   courseFiles?: boolean;
   /** class videos (default on) */
   videos?: boolean;
-  /** files bigger than this go to `tooBig` (the target's limit) */
-  maxBytes?: number;
 }
 
 const ROOTS = ["semesters", "memory", "STUDENT.md", "CLAUDE.local.md", ".ouc/ai.json", ".ouc/media.json", ".ouc/chats"];
@@ -32,14 +30,13 @@ function walk(root: string, rel: string, out: FileEntry[]) {
   } else if (st.isFile()) out.push({ path: rel, size: st.size, mtimeMs: Math.round(st.mtimeMs) });
 }
 
-export function selectFiles(root: string, opts: SelectOptions = {}): { files: FileEntry[]; tooBig: FileEntry[] } {
+export function selectFiles(root: string, opts: SelectOptions = {}): { files: FileEntry[] } {
   const all: FileEntry[] = [];
   for (const r of ROOTS) walk(root, r, all);
-  const wanted = all.filter((f) => {
+  const files = all.filter((f) => {
     if (opts.courseFiles === false && COURSE_FILE.test(f.path) && !f.path.endsWith(".transcript.md")) return false;
     if (opts.videos === false && VIDEO.test(f.path)) return false;
     return true;
   }).sort((a, b) => (a.path < b.path ? -1 : 1));
-  const max = opts.maxBytes ?? Infinity;
-  return { files: wanted.filter((f) => f.size <= max), tooBig: wanted.filter((f) => f.size > max) };
+  return { files };
 }

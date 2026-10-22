@@ -10,7 +10,9 @@
     "./git": "./src/git.ts",
     "./github": "./src/github.ts",
     "./config": "./src/config.ts",
-    "./drive": "./src/drive.ts"
+    "./drive": "./src/drive.ts",
+    "./media": "./src/media.ts",
+    "./run": "./src/run.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
