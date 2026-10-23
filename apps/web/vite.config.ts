@@ -19,7 +19,7 @@ import { checkForUpdate, restartDetached } from "../../packages/cli/src/update.t
 import { createSlidesApi, sendFile } from "../../packages/ai/src/slides.ts";
 import { findBin } from "../../packages/ai/src/transcribe.ts";
 import { createBackupApi } from "../../packages/backup/src/api.ts";
-import { githubClientId, googleClient } from "../../packages/backup/src/clients.ts";
+import { githubClientId } from "../../packages/backup/src/clients.ts";
 import { backupNow } from "../../packages/backup/src/now.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
@@ -128,9 +128,8 @@ function aiApi(): Plugin {
 let autoBackup: (() => Promise<unknown>) | undefined;
 function backupApi(): Plugin {
   const root = process.env.OUC_BACKUP_ROOT ? resolve(process.env.OUC_BACKUP_ROOT) : resolve(HERE, "../..");
-  const google = googleClient();
-  const backup = (r: string) => backupNow(r, { google, ffmpeg: findBin("ffmpeg") });
-  const api = createBackupApi({ root, backup, githubClientId: githubClientId(), google, askToSetUp: process.env.OUC_NO_BACKUP_PROMPT !== "1" });
+  const backup = (r: string) => backupNow(r, { ffmpeg: findBin("ffmpeg") });
+  const api = createBackupApi({ root, backup, githubClientId: githubClientId(), askToSetUp: process.env.OUC_NO_BACKUP_PROMPT !== "1" });
   autoBackup = api.auto;
   const handler: Connect.NextHandleFunction = (req, res, next) => { void api(req, res, next); };
   return { name: "backup-api", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };

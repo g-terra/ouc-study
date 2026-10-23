@@ -169,8 +169,8 @@ const HELP = () => `${paint("1", "ouc: OUC Study app & eClass sync")}
   ouc pull         download any new course files now (--dry-run: just list them)
   ouc transcribe   transcripts of class videos and narrated slides, made on this computer
                    (the app does this in the background; --setup: install Whisper, free)
-  ouc backup       back up your study data now (setup: GitHub or Google Drive; restore: get it
-                   back on a new computer; status: the last backup)
+  ouc backup       back up your study data now to a private GitHub repo (setup: sign in; restore:
+                   get it back on a new computer; status: the last backup)
   ouc status       is it running? when was the last sync?
   ouc logs [sync]  follow the app (or sync) log
   ouc notes [course] [week]   AI notes for a week (default: latest without notes)

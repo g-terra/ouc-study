@@ -1,6 +1,6 @@
 // `ouc backup`: back up the study data now, set the backup up, or get it back on a new computer.
 //   ouc backup            back up now (also: ouc backup now)
-//   ouc backup setup      choose a private GitHub repo or Google Drive and sign in
+//   ouc backup setup      sign in to GitHub and make (or find) the private backup repo
 //   ouc backup restore    get the backup back into this folder (asks before replacing a file that differs here)
 //   ouc backup status     the last backup
 // `backupStep` and `restoreStep` are also the backup step of `ouc setup`. Details: packages/backup.
@@ -10,15 +10,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as ui from "./tui.ts";
 import { findBin } from "../../ai/src/transcribe.ts";
-import { githubClientId, googleClient } from "../../backup/src/clients.ts";
+import { githubClientId } from "../../backup/src/clients.ts";
 import { connectGithub, loadBackupConfig, saveBackupConfig } from "../../backup/src/config.ts";
-import { exchangeCode, googleAuthUrl, pkce, waitForGoogleCode } from "../../backup/src/drive.ts";
 import { startDeviceLogin, waitForDeviceToken } from "../../backup/src/github.ts";
 import { backupNow, restoreNow } from "../../backup/src/now.ts";
 import { tokenHelp, type HelpOs } from "../../backup/src/help.ts";
 import { progressText } from "../../backup/src/progress.ts";
 import type { BackupStatus } from "../../backup/src/run.ts";
-import { randomBytes } from "node:crypto";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const WEEK_MS = 7 * 24 * 60 * 60_000;
@@ -36,7 +34,6 @@ export interface BackupIo {
 }
 export interface Clients {
   githubClientId: string;
-  google: { clientId: string; clientSecret: string } | null;
   githubApi?: string;
   githubBase?: string;
 }
@@ -53,11 +50,10 @@ export const terminal: BackupIo = {
   open: (url) => { ui.info(`Opening ${url}`); openBrowser(url); },
 };
 
-/** Asks where to back up and signs in. false: skipped (the app asks again in a week) or it didn't work. */
+/** Asks whether to back up to a private GitHub repo and signs in. false: skipped (the app asks again in a week) or it didn't work. */
 export async function backupStep(root: string, io: BackupIo, c: Clients): Promise<boolean> {
-  const where = await io.select<"github" | "drive" | "skip">("Back up your study data?", [
+  const where = await io.select<"github" | "skip">("Back up your study data?", [
     { label: "A private GitHub repo", hint: "every backup kept as a version", value: "github" },
-    ...(c.google ? [{ label: "Google Drive", hint: "an \"OUC Study backup\" folder", value: "drive" as const }] : []),
     { label: "Not now", hint: "Settings › Backup in the app any time", value: "skip" },
   ]);
   if (where === "skip") {
@@ -68,32 +64,20 @@ export async function backupStep(root: string, io: BackupIo, c: Clients): Promis
   const before = loadBackupConfig(root);
   const choices = { auto: before?.auto, courseFiles: before?.courseFiles, videos: before?.videos };
   try {
-    if (where === "github") {
-      let token: string;
-      if (c.githubClientId) {
-        const d = await startDeviceLogin({ clientId: c.githubClientId, base: c.githubBase });
-        io.say(`Type this code on GitHub: ${ui.c.bold(d.userCode)}`);
-        io.open(d.verificationUri);
-        token = await waitForDeviceToken({ clientId: c.githubClientId, deviceCode: d.deviceCode, interval: d.interval, base: c.githubBase });
-      } else {
-        sayTokenHelp(io);
-        token = await io.secret("Paste the GitHub token");
-        if (!token) { io.warn("No token: backup not set up."); return false; }
-      }
-      const gh = await connectGithub({ root, token, api: c.githubApi });
-      saveBackupConfig(root, { ...gh, ...strip(choices) });
-      io.ok(`Backups go to ${gh.repo} (private), signed in as ${gh.login}`);
-      return true;
+    let token: string;
+    if (c.githubClientId) {
+      const d = await startDeviceLogin({ clientId: c.githubClientId, base: c.githubBase });
+      io.say(`Type this code on GitHub: ${ui.c.bold(d.userCode)}`);
+      io.open(d.verificationUri);
+      token = await waitForDeviceToken({ clientId: c.githubClientId, deviceCode: d.deviceCode, interval: d.interval, base: c.githubBase });
+    } else {
+      sayTokenHelp(io);
+      token = await io.secret("Paste the GitHub token");
+      if (!token) { io.warn("No token: backup not set up."); return false; }
     }
-    const google = c.google!;
-    const { verifier, challenge } = pkce();
-    const state = randomBytes(16).toString("hex");
-    const back = await waitForGoogleCode({ state });
-    io.say("Sign in with Google in the browser tab that opens.");
-    io.open(googleAuthUrl({ clientId: google.clientId, redirectUri: back.redirectUri, challenge, state }));
-    const t = await exchangeCode({ ...google, code: await back.code, verifier, redirectUri: back.redirectUri });
-    saveBackupConfig(root, { target: "drive", refreshToken: t.refreshToken, ...strip(choices) });
-    io.ok("Backups go to \"OUC Study backup\" in your Google Drive");
+    const gh = await connectGithub({ root, token, api: c.githubApi });
+    saveBackupConfig(root, { ...gh, ...strip(choices) });
+    io.ok(`Backups go to ${gh.repo} (private), signed in as ${gh.login}`);
     return true;
   } catch (e) {
     io.warn(`Backup not set up: ${(e as Error).message}`);
@@ -115,9 +99,8 @@ export function sayTokenHelp(io: Pick<BackupIo, "say">, os = thisOs()) {
 const strip = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
 
 /** Gets the backup back into `root`, asking once before replacing files that differ here. */
-export async function restoreStep(root: string, io: BackupIo, c: Pick<Clients, "google">): Promise<boolean> {
+export async function restoreStep(root: string, io: BackupIo): Promise<boolean> {
   const r = await restoreNow(root, {
-    google: c.google,
     replace: async (differ) => {
       io.say(`${differ.length === 1 ? "This file is" : "These files are"} different on this computer and in the backup:`);
       for (const p of differ.slice(0, SHOW_FILES)) io.say(`  ${p}`);
@@ -140,7 +123,7 @@ export function statusText(s: BackupStatus | null) {
   return s.ok ? `Backed up ${when}: ${s.summary}` : `Backup failed ${when}: ${s.error}`;
 }
 
-const clients = (): Clients => ({ githubClientId: githubClientId(), google: googleClient() });
+const clients = (): Clients => ({ githubClientId: githubClientId() });
 function lastStatus(root: string): BackupStatus | null {
   try { return JSON.parse(readFileSync(join(root, ".ouc", "backup-status.json"), "utf8")); } catch { return null; }
 }
@@ -153,17 +136,17 @@ export async function main(args = process.argv.slice(2)) {
       if (await backupStep(root, terminal, clients()) && await terminal.confirm("Back up now?", true)) await main(["now"]);
     } else if (sub === "restore") {
       if (!loadBackupConfig(root) && !(await backupStep(root, terminal, clients()))) { process.exitCode = 1; return; }
-      if (!(await restoreStep(root, terminal, clients()))) process.exitCode = 1;
+      if (!(await restoreStep(root, terminal))) process.exitCode = 1;
     } else if (sub === "status") {
       const cfg = loadBackupConfig(root);
-      ui.say(cfg ? `  To ${cfg.target === "github" ? `${cfg.repo} on GitHub` : "Google Drive"}` : "  Backup isn't set up yet: ouc backup setup");
+      ui.say(cfg ? `  To ${cfg.repo} on GitHub` : "  Backup isn't set up yet: ouc backup setup");
       ui.say(`  ${statusText(lastStatus(root))}`);
     } else if (sub === "now") {
       if (!loadBackupConfig(root)) { ui.warn("Backup isn't set up yet. Run: ouc backup setup"); process.exitCode = 1; return; }
       const sp = ui.spinner("Backing up…");
       let shown = { step: "", at: 0 };
       const s = await backupNow(root, {
-        google: clients().google, ffmpeg: findBin("ffmpeg"),
+        ffmpeg: findBin("ffmpeg"),
         // a new line for each step, and the count and time left every few seconds (not every file)
         onProgress: (p) => {
           if (p.step === shown.step && Date.now() - shown.at < (ui.TTY ? 500 : 15_000)) return;
