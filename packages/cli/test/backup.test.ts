@@ -50,7 +50,7 @@ test("setup's backup step connects GitHub with a token and saves it, never showi
   try {
     const root = study();
     const t = io(["github", "gho_secret"]);
-    const done = await backupStep(root, t, { githubApi: gh.base, githubClientId: "", google: null });
+    const done = await backupStep(root, t, { githubApi: gh.base, githubClientId: "" });
     assert.equal(done, true);
     assert.equal(loadBackupConfig(root)?.target, "github");
     assert.equal(t.said.join("\n").includes("gho_secret"), false);
@@ -60,19 +60,19 @@ test("setup's backup step connects GitHub with a token and saves it, never showi
 
 test("skipping the step asks again later in the app, not never", async () => {
   const root = study();
-  const done = await backupStep(root, io(["skip"]), { githubClientId: "", google: null });
+  const done = await backupStep(root, io(["skip"]), { githubClientId: "" });
   assert.equal(done, false);
   assert.equal(loadBackupConfig(root), null);
   const p = JSON.parse(readFileSync(join(root, ".ouc", "backup-prompt.json"), "utf8"));
   assert.ok(p.snoozedUntil && !p.never);
 });
 
-test("Google Drive is only offered when this version of the app can sign in to it", async () => {
+test("the only place to back up to is a private GitHub repo (or not now)", async () => {
   const root = study();
   const t = io(["skip"]);
   let offered: unknown[] = [];
   t.select = async (_q, choices) => { offered = choices.map((c) => c.value); return "skip" as never; };
-  await backupStep(root, t, { githubClientId: "", google: null });
+  await backupStep(root, t, { githubClientId: "" });
   assert.deepEqual(offered, ["github", "skip"]);
 });
 
@@ -86,7 +86,7 @@ test("restore asks once about files that differ here, and keeps them on no", asy
   const here = study({ "semesters/S/notes/a.md": "mine" });
   saveBackupConfig(here, { target: "github", repo: "s/r", login: "s", token: "t", remote });
   const t = io([false]);
-  const r = await restoreStep(here, t, { google: null });
+  const r = await restoreStep(here, t);
   assert.equal(r, true);
   assert.equal(t.asked.length, 1);
   assert.match(t.asked[0], /1 file/);
@@ -109,6 +109,6 @@ test("the token help in Terminal gives both ways, with the commands for this com
 test("without a sign-in app, setup shows how to get a token before asking for it", async () => {
   const root = study();
   const t = io(["github", ""]);
-  await backupStep(root, t, { githubClientId: "", google: null });
+  await backupStep(root, t, { githubClientId: "" });
   assert.ok(t.said.some((s) => s.includes("gh auth token")));
 });

@@ -1,9 +1,7 @@
-// "Back up now": the saved settings pick the target (GitHub or Google Drive) and its sign-in.
+// "Back up now": the saved settings pick the GitHub repo and its sign-in.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -34,39 +32,14 @@ test("a GitHub backup goes to the saved repo", async () => {
   assert.equal(git(remote, "ls-tree", "-r", "--name-only", "main"), "semesters/S/notes/n.md");
 });
 
-test("a Google Drive backup gets a fresh access token first, and an expired sign-in says so", async () => {
+test("a Google Drive setup from an older version asks to set the backup up again", async () => {
   const root = study({ "semesters/S/notes/n.md": "n" });
-  let expired = false;
-  const seen: string[] = [];
-  const server = createServer((req, res) => {
-    seen.push(`${req.method} ${req.url}`);
-    let b = ""; req.on("data", (d) => (b += d));
-    req.on("end", () => {
-      res.setHeader("content-type", "application/json");
-      if (req.url === "/token") {
-        if (expired) { res.statusCode = 400; return res.end(JSON.stringify({ error: "invalid_grant" })); }
-        return res.end(JSON.stringify({ access_token: "acc", expires_in: 3600 }));
-      }
-      if (req.headers.authorization !== "Bearer acc") { res.statusCode = 401; return res.end("{}"); }
-      if (req.url?.startsWith("/drive/v3/files?")) return res.end(JSON.stringify({ files: [] }));
-      if (req.url === "/drive/v3/files") return res.end(JSON.stringify({ id: "folder" }));
-      if (req.url?.startsWith("/upload/")) { res.setHeader("location", `http://${req.headers.host}/session/1`); return res.end(); }
-      res.end(JSON.stringify({ id: "file1" }));
-    });
-  });
-  await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok));
-  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  try {
-    saveBackupConfig(root, { target: "drive", refreshToken: "ref" });
-    const s = await backupNow(root, { google: { clientId: "cid", clientSecret: "cs" }, tokenUrl: `${base}/token`, driveApi: base });
-    assert.equal(s.ok, true, s.error ?? "");
-    assert.equal(s.target, "drive");
-    assert.ok(seen.includes("PUT /session/1"));
-    expired = true;
-    const bad = await backupNow(root, { google: { clientId: "cid", clientSecret: "cs" }, tokenUrl: `${base}/token`, driveApi: base });
-    assert.equal(bad.ok, false);
-    assert.match(bad.error ?? "", /Google sign-in expired/);
-  } finally { server.closeAllConnections(); server.close(); }
+  mkdirSync(join(root, ".ouc"), { recursive: true });
+  writeFileSync(join(root, ".ouc", "backup.json"), JSON.stringify({ target: "drive", refreshToken: "ref" }));
+  const s = await backupNow(root);
+  assert.equal(s.ok, false);
+  assert.match(s.error ?? "", /isn't set up/);
+  assert.match((await restoreNow(root)).error ?? "", /isn't set up/);
 });
 
 test("only one backup runs at a time", async () => {

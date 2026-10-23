@@ -80,7 +80,7 @@ function TokenHelp({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Not set up yet: GitHub (sign in with a code, or paste a token) or Google Drive. */
+/** Not set up yet: a private GitHub repo (sign in with a code, or paste a token). */
 function Connect({ info, reload }: { info: BackupInfo; reload: () => void }) {
   const [token, setToken] = useState("");
   const [showToken, setShowToken] = useState(!info.can.githubDevice);
@@ -92,51 +92,40 @@ function Connect({ info, reload }: { info: BackupInfo; reload: () => void }) {
     const r = await postBackup(path, body);
     setWorking(false);
     if (r.error) setError(r.error);
-    else if (typeof r.url === "string") window.open(r.url, "_blank", "noopener");
     reload();
   };
   const code = info.signIn?.kind === "github" && info.signIn.userCode ? info.signIn : null;
   return (
     <div className="space-y-3">
       <p>Keep a copy of everything you made and downloaded: notes, course files, class videos, quizzes and scores, homework answers, progress, your AI memory and chats. Your eClass key and the backup's sign-in never go in.</p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <section aria-labelledby="backup-github" className="space-y-2 rounded-xl border border-line p-3">
-          <h3 id="backup-github" className="font-semibold">A private GitHub repo</h3>
-          <p className="text-xs text-muted">Every backup is kept as a version you can go back to. Big files go up in parts; class videos as smaller copies.</p>
-          {code ? (
-            <div className="space-y-1" role="status">
-              <p className="font-mono text-xl font-bold tracking-widest">{code.userCode}</p>
-              <p className="text-xs">Open <a className="underline" href={code.verificationUri} target="_blank" rel="noreferrer">{code.verificationUri}</a> and type this code. This page carries on by itself.</p>
+      <section aria-labelledby="backup-github" className="space-y-2 rounded-xl border border-line p-3">
+        <h3 id="backup-github" className="font-semibold">A private GitHub repo</h3>
+        <p className="text-xs text-muted">Every backup is kept as a version you can go back to. Big files go up in parts; class videos as smaller copies.</p>
+        {code ? (
+          <div className="space-y-1" role="status">
+            <p className="font-mono text-xl font-bold tracking-widest">{code.userCode}</p>
+            <p className="text-xs">Open <a className="underline" href={code.verificationUri} target="_blank" rel="noreferrer">{code.verificationUri}</a> and type this code. This page carries on by itself.</p>
+          </div>
+        ) : info.can.githubDevice && (
+          <button type="button" className={primary} disabled={working} onClick={() => act("github/start")}>Sign in with GitHub</button>
+        )}
+        {info.can.githubDevice && !showToken && (
+          <button type="button" className="block text-xs text-muted underline hover:text-ink" onClick={() => setShowToken(true)}>Use a token instead</button>
+        )}
+        {showToken && (
+          <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); act("github/token", { token }); }}>
+            <label className="block text-xs">
+              <span className="mb-1 block text-muted">GitHub token (fine-grained, Contents read and write; Administration to make the repo)</span>
+              <input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 font-mono text-sm" />
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="submit" className={primary} disabled={working || !token.trim()}>Connect GitHub</button>
+              <button type="button" className={cx(secondary, "inline-flex items-center gap-1.5")} onClick={() => setHelp(true)}><CircleHelp aria-hidden className="size-4" />How to get a token</button>
             </div>
-          ) : info.can.githubDevice && (
-            <button type="button" className={primary} disabled={working} onClick={() => act("github/start")}>Sign in with GitHub</button>
-          )}
-          {info.can.githubDevice && !showToken && (
-            <button type="button" className="block text-xs text-muted underline hover:text-ink" onClick={() => setShowToken(true)}>Use a token instead</button>
-          )}
-          {showToken && (
-            <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); act("github/token", { token }); }}>
-              <label className="block text-xs">
-                <span className="mb-1 block text-muted">GitHub token (fine-grained, Contents read and write; Administration to make the repo)</span>
-                <input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 font-mono text-sm" />
-              </label>
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="submit" className={primary} disabled={working || !token.trim()}>Connect GitHub</button>
-                <button type="button" className={cx(secondary, "inline-flex items-center gap-1.5")} onClick={() => setHelp(true)}><CircleHelp aria-hidden className="size-4" />How to get a token</button>
-              </div>
-            </form>
-          )}
-          {help && <TokenHelp onClose={() => setHelp(false)} />}
-        </section>
-        <section aria-labelledby="backup-drive" className="space-y-2 rounded-xl border border-line p-3">
-          <h3 id="backup-drive" className="font-semibold">Google Drive</h3>
-          <p className="text-xs text-muted">Uploads to an "OUC Study backup" folder in your Drive. The app can only see the files it made.</p>
-          {info.can.google
-            ? <button type="button" className={secondary} disabled={working} onClick={() => act("google/start")}>Sign in with Google</button>
-            : <p className="text-xs text-muted">Not available in this version of the app yet.</p>}
-          {info.signIn?.kind === "google" && !info.signIn.error && <p className="text-xs" role="status">Finish signing in in the browser tab that opened…</p>}
-        </section>
-      </div>
+          </form>
+        )}
+        {help && <TokenHelp onClose={() => setHelp(false)} />}
+      </section>
       {(error ?? info.signIn?.error) && <p className="text-sm text-bad" role="alert">{error ?? info.signIn?.error}</p>}
     </div>
   );
@@ -172,9 +161,7 @@ function Connected({ info, setInfo, reload }: { info: BackupInfo; setInfo: (i: B
         </div>
       )}
       <p className="text-xs text-muted">
-        {setup.target === "github"
-          ? <>To <a className="underline" href={`https://github.com/${setup.repo}`} target="_blank" rel="noreferrer">{setup.repo}</a> (private) · signed in as {setup.login}</>
-          : <>To "OUC Study backup" in your Google Drive{setup.email ? ` · ${setup.email}` : ""}</>}
+        To <a className="underline" href={`https://github.com/${setup.repo}`} target="_blank" rel="noreferrer">{setup.repo}</a> (private) · signed in as {setup.login}
       </p>
       <div className="flex flex-wrap gap-2">
         <button type="button" className={primary} onClick={run} disabled={info.running}>{info.running ? "Backing up…" : "Back up now"}</button>
@@ -225,7 +212,7 @@ export function BackupPrompt({ sem }: { sem: string }) {
         </div>
         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">New</div>
         <h2 id="backup-prompt-title" className="font-serif text-2xl font-semibold">Back up your study data</h2>
-        <p className="text-muted">Keep a copy of your notes, course files, class videos, quizzes, homework answers and progress in a private GitHub repo or your Google Drive. If this laptop breaks, a new one gets it all back.</p>
+        <p className="text-muted">Keep a copy of your notes, course files, class videos, quizzes, homework answers and progress in a private GitHub repo. If this laptop breaks, a new one gets it all back.</p>
         <div className="flex flex-col gap-2">
           <Link to={`/v2/${enc(sem)}/settings#settings-backup`} onClick={() => answer("later")} className={cx(primary, "text-center")}>Set up now</Link>
           <button type="button" className={secondary} onClick={() => answer("later")}>Later</button>

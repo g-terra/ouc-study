@@ -5,7 +5,6 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { driveBackup } from "./drive.ts";
 import { gitBackup } from "./git.ts";
 import { prepareSources } from "./media.ts";
 import { selectFiles, type SelectOptions } from "./select.ts";
@@ -15,7 +14,7 @@ import type { Report } from "./git.ts";
 
 export interface BackupStatus {
   ok: boolean;
-  target?: "github" | "drive";
+  target?: "github";
   /** when this run happened (ISO) */
   at: string;
   /** "3 notes, progress" or "no changes" */
@@ -29,13 +28,11 @@ export interface BackupStatus {
 
 export interface RunOptions extends Omit<SelectOptions, "maxBytes"> {
   root: string;
-  /** GitHub (any git remote) ... */
+  /** the GitHub repo (any git remote) */
   remote?: string;
   env?: NodeJS.ProcessEnv;
-  /** ... or Google Drive */
-  drive?: { accessToken: string; api?: string };
   now?: Date;
-  /** bigger files go up in parts (GitHub refuses files over 100 MB and warns above 50); Drive takes any size */
+  /** bigger files go up in parts (GitHub refuses files over 100 MB and warns above 50) */
   maxBytes?: number;
   /** ffmpeg for videos' smaller copies; null backs up the originals */
   ffmpeg?: string | null;
@@ -71,18 +68,16 @@ export async function runBackup(o: RunOptions): Promise<BackupStatus> {
     if (started.step !== p.step) started = { step: p.step, at: new Date().toISOString() };
     o.onProgress?.({ ...p, startedAt: started.at });
   };
-  const target = o.drive ? "drive" as const : "github" as const;
-  const base = { target, at, summary, files: files.length, bytes: files.reduce((n, f) => n + f.size, 0) };
+  const base = { target: "github" as const, at, summary, files: files.length, bytes: files.reduce((n, f) => n + f.size, 0) };
   let status: BackupStatus;
   try {
-    const sources = await prepareSources(o.root, files.map((f) => f.path), { maxBytes: o.drive ? undefined : o.maxBytes ?? GITHUB_MAX_BYTES, ffmpeg: o.ffmpeg ?? null, env: o.ffmpegEnv,
+    const sources = await prepareSources(o.root, files.map((f) => f.path), { maxBytes: o.maxBytes ?? GITHUB_MAX_BYTES, ffmpeg: o.ffmpeg ?? null, env: o.ffmpegEnv,
       onVideo: (done, total) => report({ step: "compressing", done, total, bytesDone: 0, bytesTotal: 0 }) });
     const paths = sources.map((s) => s.path);
     const from = Object.fromEntries(sources.filter((s) => s.from !== join(o.root, s.path)).map((s) => [s.path, s.from]));
     // a part or a video's copy counts as changed when the file it comes from did
     const changed = new Set(paths.filter((p) => changedPaths.has(p.replace(/\.ouc-part(s\.json|-\d+)$/, ""))));
-    if (o.drive) await driveBackup({ root: o.root, accessToken: o.drive.accessToken, api: o.drive.api, files: paths, from, onProgress: report });
-    else if (o.remote) await gitBackup({ root: o.root, gitDir: ouc(o.root, "backup.git"), remote: o.remote, message: summary, env: o.env, files: paths, from, changed, onProgress: report });
+    if (o.remote) await gitBackup({ root: o.root, gitDir: ouc(o.root, "backup.git"), remote: o.remote, message: summary, env: o.env, files: paths, from, changed, onProgress: report });
     else throw new Error("No backup target.");
     writeFileSync(ouc(o.root, "backup-manifest.json"), JSON.stringify(files));
     status = { ok: true, ...base };

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type RequestListener } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createBackupApi } from "../src/api.ts";
@@ -29,7 +29,7 @@ async function app(o: { now?: Date; githubClientId?: string } = {}) {
   });
   const done: BackupStatus = { ok: true, target: "github", at: "2026-10-22T18:04:00.000Z", summary: "1 note", files: 1, bytes: 1 };
   const handler = createBackupApi({
-    root, githubApi: gh.base, githubClientId: o.githubClientId ?? "", google: null, now: () => o.now ?? new Date("2026-10-22T12:00:00Z"),
+    root, githubApi: gh.base, githubClientId: o.githubClientId ?? "", now: () => o.now ?? new Date("2026-10-22T12:00:00Z"),
     backup: async (r) => { runs.push(r); return done; },
   });
   const web = await serve((req, res) => handler(req, res, () => { res.statusCode = 404; res.end(); }));
@@ -46,7 +46,18 @@ test("before setup it says so, offers the token route, and asks to show the prom
     const { json } = await a.call("GET", "/api/backup");
     assert.equal(json.setup, null);
     assert.equal(json.prompt, "show");
-    assert.deepEqual(json.can, { githubDevice: false, google: false });
+    assert.deepEqual(json.can, { githubDevice: false });
+  } finally { a.close(); }
+});
+
+test("a Google Drive setup from an older version counts as not set up, so the prompt asks again", async () => {
+  const a = await app();
+  try {
+    mkdirSync(join(a.root, ".ouc"), { recursive: true });
+    writeFileSync(join(a.root, ".ouc", "backup.json"), JSON.stringify({ target: "drive", refreshToken: "ref" }));
+    const { json } = await a.call("GET", "/api/backup");
+    assert.equal(json.setup, null);
+    assert.equal(json.prompt, "show");
   } finally { a.close(); }
 });
 
@@ -109,7 +120,7 @@ test("Don't ask again hides the prompt for good", async () => {
 test("Later hides the prompt for a week, then it comes back", async () => {
   let now = new Date("2026-10-22T12:00:00Z");
   const root = mkdtempSync(join(tmpdir(), "ouc-api-"));
-  const handler = createBackupApi({ root, githubClientId: "", google: null, now: () => now, backup: async () => ({}) as BackupStatus });
+  const handler = createBackupApi({ root, githubClientId: "", now: () => now, backup: async () => ({}) as BackupStatus });
   const web = await serve((req, res) => handler(req, res, () => {}));
   const get = async () => ((await (await fetch(`${web.base}/api/backup`)).json()) as { prompt: string }).prompt;
   try {
@@ -122,7 +133,7 @@ test("Later hides the prompt for a week, then it comes back", async () => {
 
 test("only pages from this computer may use it", async () => {
   const root = mkdtempSync(join(tmpdir(), "ouc-api-"));
-  const handler = createBackupApi({ root, githubClientId: "", google: null, backup: async () => ({}) as BackupStatus });
+  const handler = createBackupApi({ root, githubClientId: "", backup: async () => ({}) as BackupStatus });
   const web = await serve((req, res) => handler(req, res, () => {}));
   try {
     const r = await fetch(`${web.base}/api/backup/disconnect`, { method: "POST", headers: { origin: "https://evil.example" } });
@@ -144,7 +155,7 @@ test("the automatic run after a sync only backs up when it's set up and left on"
 
 test("the prompt can be turned off for the whole app (the smoke tests)", async () => {
   const root = mkdtempSync(join(tmpdir(), "ouc-api-"));
-  const handler = createBackupApi({ root, githubClientId: "", google: null, askToSetUp: false, backup: async () => ({}) as BackupStatus });
+  const handler = createBackupApi({ root, githubClientId: "", askToSetUp: false, backup: async () => ({}) as BackupStatus });
   const web = await serve((req, res) => handler(req, res, () => {}));
   try {
     assert.equal(((await (await fetch(`${web.base}/api/backup`)).json()) as { prompt: string }).prompt, "hide");
