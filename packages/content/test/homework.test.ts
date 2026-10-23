@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyAnswer, checkCounts, homeworkProgress, parseCheck, parseHomework, taskLabel } from "../src/homework.ts";
+import { applyAnswer, checkCounts, homeworkProgress, parseAnswers, parseCheck, parseHomework, taskLabel } from "../src/homework.ts";
 import { allAnswers, allChecks, homeworkDir, readAnswers, readHomework, saveAnswer, saveImage } from "../src/homework-store.ts";
 
 const TASKS = {
@@ -147,4 +147,16 @@ test("the checks are read with the time they were made", () => {
   const all = allChecks(sem);
   assert.equal(all["DEMO101/09-28_A1"]!.tasks["1"]!.verdict, "right");
   assert.match(all["DEMO101/09-28_A1"]!.checked!, /^\d{4}-\d\d-\d\dT/);
+});
+
+test("an answers file the AI fills in from a submission is checked against the tasks", () => {
+  const tasks = parseHomework(TASKS).homework!.tasks;
+  const ok = { answers: { "1": { text: "<p>It assumes <b>independence</b>.</p>", done: true }, "2": { choice: 0, why: "<p>As in week 3.</p>", done: true } } };
+  assert.deepEqual(parseAnswers(JSON.stringify(ok), tasks).problems, []);
+  assert.equal(parseAnswers(ok, tasks).answers["2"]!.choice, 0);
+  const bad = parseAnswers({ answers: { "1": { text: 5 }, "2": { choice: 7 }, "9": { text: "x" } } }, tasks).problems;
+  assert.ok(bad.some((p) => /"1".*text/i.test(p)), bad.join("|"));
+  assert.ok(bad.some((p) => /"2".*choice/i.test(p)), bad.join("|"));
+  assert.ok(bad.some((p) => /"9".*no such task/i.test(p)), bad.join("|"));
+  assert.match(parseAnswers("[]", tasks).problems[0]!, /"answers"/);
 });

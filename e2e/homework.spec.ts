@@ -227,3 +227,26 @@ test("a check that fails says why, with no chat", async ({ page }) => {
   await page.getByRole("button", { name: "Dismiss" }).click();
   await expect(page.getByText("Your answers weren't checked")).toHaveCount(0);
 });
+
+test("an assignment without an interactive version can have one made in the background", async ({ page }) => {
+  await aiReady(page);
+  // the demo assignment, as if it had no tasks file yet
+  await page.route("**/data/2026-Demo.json", async (route) => {
+    const res = await route.fetch();
+    const data = await res.json();
+    for (const a of data.assignments) delete a.homework;
+    return route.fulfill({ response: res, json: data });
+  });
+  const job = { id: "m1", kind: "make", chatId: "c2", sem: "2026-Demo", assignment: "DEMO101/09-28_Assignment-1", started: "2026-09-15T10:00:00Z", running: true };
+  let posted = false;
+  await page.route("**/api/ai/homework-make", (route) => {
+    if (route.request().method() === "POST") { posted = true; return route.fulfill({ json: { jobs: [job] } }); }
+    return route.fulfill({ json: { jobs: posted ? [{ ...job, running: false, ok: false, error: "You've hit your usage limit." }] : [] } });
+  });
+  await page.goto(`${SEM}/assignments/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("button", { name: "Make it interactive" }).click();
+  // it ran in the background (no chat) and says why it failed
+  await expect(page.getByRole("alert").filter({ hasText: "The interactive version wasn't made: You've hit your usage limit." })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("textbox", { name: "Message" })).toHaveCount(0);
+  expect(posted).toBe(true);
+});

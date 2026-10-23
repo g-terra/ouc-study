@@ -5,13 +5,13 @@ import { Markdown } from "../components/Assistant";
 import { cx } from "../components/ui";
 import { quizJobLabel, quizPhase } from "../components/MakeQuiz";
 import { useQuizJobs } from "../lib/quiz";
-import { useCheckJobs } from "../lib/homework";
+import { useCheckJobs, useMakeJobs } from "../lib/homework";
 
 /** Everything the AI is doing in the background (missing notes, prep packs, quizzes), live. Opened in its own window from the work bar. */
 export function AiWorkPage({ data }: { data: SemesterData }) {
   const st = usePrepStatus();
   const quizzes = useQuizJobs(data.id, undefined, true);
-  const checks = useCheckJobs(data.id, undefined, true);
+  const homework = [...useMakeJobs(data.id, undefined, true), ...useCheckJobs(data.id, undefined, true)].sort((x, y) => x.started.localeCompare(y.started));
   const [shown, setShown] = useState<string | null>(null); // a finished job opened for reading
   if (!st) return <p className="text-muted">Checking what the AI is doing…</p>;
   if (!st.enabled) return <p className="text-muted">Background AI work only runs in the app on your computer (ouc open), with an AI set up (ouc ai setup).</p>;
@@ -58,16 +58,16 @@ export function AiWorkPage({ data }: { data: SemesterData }) {
         </section>
       )}
 
-      {checks.length > 0 && (
-        <section aria-label="Homework checks">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Homework checks</h2>
+      {homework.length > 0 && (
+        <section aria-label="Homework">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Homework</h2>
           <ul className="flex flex-col gap-1 text-sm">
-            {[...checks].reverse().map((j) => {
+            {[...homework].reverse().map((j) => {
               const a = data.assignments.find((x) => x.id === j.assignment);
-              const title = `Check · ${a ? `${a.code} ${a.title}` : j.assignment}`;
+              const title = `${j.kind === "check" ? "Check" : "Interactive"} · ${a ? `${a.code} ${a.title}` : j.assignment}`;
               return (
                 <li key={j.id}>
-                  {j.running && j.chatId ? <Job chatId={j.chatId} title={`${title}: checking your answers`} live sem={data.id} /> : (
+                  {j.running && j.chatId ? <Job chatId={j.chatId} title={`${title}: ${j.kind === "check" ? "checking your answers" : "making the tasks"}`} live sem={data.id} /> : (
                     <>
                       <button type="button" disabled={!j.chatId} onClick={() => setShown(shown === j.chatId ? null : j.chatId ?? null)}
                         className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface-2">

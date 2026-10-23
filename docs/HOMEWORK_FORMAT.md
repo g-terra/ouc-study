@@ -2,8 +2,8 @@
 
 An assignment's **interactive version** lives next to it, in `semesters/<semester>/assignments/<COURSE CODE>/<folder>/homework/` (on this computer only, never committed). The app shows it as tasks you answer one by one, with a timeline and a done/left counter.
 
-- `tasks.json`: the brief turned into tasks, written by an AI. The questions are the brief's own, in the brief's order; **the file never holds answers**.
-- `answers.json`: the student's answers, written by the app as they type (`/api/homework`).
+- `tasks.json`: the brief turned into tasks, written by an AI with the `make-homework` skill. The questions are the brief's own, in the brief's order; **the file never holds answers**. The app makes it in the background for every new assignment (not submitted yet) that has a brief or a task on eClass, after each sync (add `"autoHomework": false` to `.ouc/ai.json` to turn that off), and **Make it interactive** on an assignment's page makes one on request.
+- `answers.json`: the student's answers, written by the app as they type (`/api/homework`). For an assignment already submitted, the AI makes the tasks from the student's submission (`my-submission/`) and copies their answers into this file exactly as they wrote them, marked done.
 - `check.json`: the AI's check of the answers (**Check my answers**, or the `check-homework` skill): a verdict and a note per task. See [check.json](#checkjson).
 - **Make PDF** prints the tasks and answers to `my-submission/<title> - <name>.pdf` (the print page is `/print/homework/<semester>/<CODE>/<folder>?name=…`).
 

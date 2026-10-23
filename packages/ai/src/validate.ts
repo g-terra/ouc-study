@@ -1,6 +1,6 @@
 /**
  * Checks a visual note or a prep pack (PREP.md) against docs/NOTE_FORMAT.md, a quiz (quizzes/<CODE>/<name>.json)
- * against docs/QUIZ_FORMAT.md, and homework (homework/tasks.json, homework/check.json) against docs/HOMEWORK_FORMAT.md,
+ * against docs/QUIZ_FORMAT.md, and homework (homework/tasks.json, answers.json, check.json) against docs/HOMEWORK_FORMAT.md,
  * so any AI (or person) can verify its work.
  *   node packages/ai/validate.mjs <note.md | quiz.json | homework/tasks.json | homework/check.json> [...]   exit 1 if there are errors
  *   node packages/ai/validate.mjs --all               every note, prep pack and quiz in every semester
@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import { hasQuotedLatex, parseBlock, singleQuoteLatex } from "../../content/src/yaml-blocks.ts";
 import { parseQuiz } from "../../content/src/quiz.ts";
-import { parseCheck, parseHomework } from "../../content/src/homework.ts";
+import { parseAnswers, parseCheck, parseHomework } from "../../content/src/homework.ts";
 
 const CALLOUTS = new Set(["IDEA", "KEY", "TIP", "WARN", "EXAM", "ANALOGY", "LINK"]);
 const DATA = new Set(["cards", "formula", "compare", "steps", "flashcards", "terms", "links"]);
@@ -105,15 +105,15 @@ export function validateQuiz(src: string, file: string): { errors: string[]; war
   return { errors, warnings };
 }
 
-const HOMEWORK_FILE = /(^|[\\/])homework[\\/](tasks|check)\.json$/;
+const HOMEWORK_FILE = /(^|[\\/])homework[\\/](tasks|check|answers)\.json$/;
 
-/** A homework file, by its path: a check is read against the tasks.json next to it (`sibling` reads that). */
+/** A homework file, by its path: answers and a check are read against the tasks.json next to it (`sibling` reads that). */
 export function validateHomework(src: string, file: string, sibling: (name: string) => string | null): { errors: string[]; warnings: string[] } {
   if (file.match(HOMEWORK_FILE)?.[2] === "tasks") return { errors: parseHomework(src).problems, warnings: [] };
   const tasks = sibling("tasks.json");
   const hw = tasks === null ? null : parseHomework(tasks).homework;
-  if (!hw) return { errors: ["Check the answers against a valid homework/tasks.json next to this file."], warnings: [] };
-  return { errors: parseCheck(src, hw.tasks).problems, warnings: [] };
+  if (!hw) return { errors: ["This file goes next to a valid homework/tasks.json: fix that first."], warnings: [] };
+  return { errors: (file.match(HOMEWORK_FILE)?.[2] === "answers" ? parseAnswers(src, hw.tasks) : parseCheck(src, hw.tasks)).problems, warnings: [] };
 }
 
 // ---------- CLI ----------

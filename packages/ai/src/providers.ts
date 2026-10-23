@@ -28,6 +28,7 @@ export interface AiConfig {
   opencode?: LocalModel;
   autoPrep?: boolean;   // prepare assignment prep packs in the background (default on)
   autoQuiz?: boolean;   // Sync now also makes a quiz for every class without one (default on)
+  autoHomework?: boolean; // make the interactive version of each new assignment in the background (default on)
   parallel?: number;    // background AI runs at once (default 3)
   models?: Partial<Record<"claude" | "codex", string[]>>;   // the models the app offers for these tools (default AGENT_MODELS)
   defaultModels?: Partial<Record<Tool, string>>;            // the model each AI uses unless the chat picks another (Settings)

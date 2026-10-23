@@ -6,7 +6,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkQuizFile, createAiApi, needsPrep, quizWriting, readPrepMeta, stampQuiz } from "../src/api.ts";
+import { checkQuizFile, createAiApi, needsHomework, needsPrep, quizWriting, readPrepMeta, stampQuiz } from "../src/api.ts";
 import { setServerModels } from "../src/providers.ts";
 import { json, portOf, type Ev } from "./helpers.ts";
 import type { Server } from "node:http";
@@ -235,7 +235,12 @@ test("prep packs: prepared on their own, then reviewed by another AI with the hi
   meta = readPrepMeta(readFileSync(file, "utf8"));
   assert.equal(meta.log.length, 2);
   assert.match(meta.log[1], /reviewed and improved/);
-  assert.equal(JSON.parse(readFileSync(join(root, ".ouc/chats", readdirSync(join(root, ".ouc/chats"))[0]), "utf8")).action, "assignment-prep");
+  const chats = readdirSync(join(root, ".ouc/chats")).map((f) => JSON.parse(readFileSync(join(root, ".ouc/chats", f), "utf8")));
+  assert.ok(chats.some((c) => c.action === "assignment-prep" && c.params?.mode === "review"));
+  // the same background work made the interactive versions of the new assignments, not of the done one
+  assert.ok(existsSync(join(sem, "assignments/AAA/open/homework/tasks.json")));
+  assert.ok(existsSync(join(sem, "assignments/AAA/late/homework/tasks.json")));
+  assert.ok(!existsSync(join(sem, "assignments/AAA/done/homework/tasks.json")));
 });
 
 test("visuals the AI saved are served sandboxed, and nothing else is", async (t) => {
@@ -570,5 +575,39 @@ test("Check my answers: the AI checks the homework in the background and saves c
   assert.deepEqual([jobs[0].running, jobs[0].ok, jobs[0].assignment], [false, true, "AAA/09-28_A1"]);
   assert.equal(JSON.parse(readFileSync(join(dir, "check.json"), "utf8")).tasks["1"].verdict, "right");
   // background work: not in the chat history
+  assert.ok(!(await json(fetch(`${base}/api/ai/chats`))).chats.some((c: Ev) => c.id === jobs[0].chatId));
+});
+
+test("interactive versions: Sync makes them for new assignments with a task, never for done ones; the app can ask for one", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  const sem = join(root, "semesters/S");
+  const assignment = (id: string, extra?: object) => ({ id, code: "AAA", title: id, fullTitle: id, status: "", submitted: false, question: "", weekIndex: 1, briefs: [], submissions: [], ...extra });
+  for (const f of ["new", "empty", "done", "made"]) mkdirSync(join(sem, "assignments/AAA", f), { recursive: true });
+  mkdirSync(join(sem, "assignments/AAA/made/homework"));
+  writeFileSync(join(sem, "assignments/AAA/made/homework/tasks.json"), JSON.stringify({ tasks: [{ id: "1", kind: "written", question: "Q?" }] }));
+  writeFileSync(join(sem, "semester.json"), JSON.stringify({ start: "2000-01-01", end: "2999-01-01", courses: [] }));
+  mkdirSync(join(root, "apps/web/public/data"), { recursive: true });
+  const data = {
+    courses: [{ code: "AAA", short: "AAA", title: "AAA course", weeks: [] }], notes: [],
+    assignments: [assignment("AAA/new", { question: "Solve the three problems." }), assignment("AAA/empty"), assignment("AAA/done", { submitted: true, question: "Q?" }), assignment("AAA/made", { question: "Q?" })],
+  };
+  writeFileSync(join(root, "apps/web/public/data/S.json"), JSON.stringify(data));
+  // only a new one with something to work from, without an interactive version, not tried in the last hours
+  assert.deepEqual(needsHomework(root, "S", data as never).map((a) => a.id), ["AAA/new"]);
+  assert.deepEqual(needsHomework(root, "S", data as never, { "homework:AAA/new": new Date().toISOString() }).map((a) => a.id), []);
+  writeFileSync(join(sem, "assignments/AAA/new/brief.pdf"), "%PDF made up");
+  assert.deepEqual(needsHomework(root, "S", { ...data, assignments: [assignment("AAA/empty", { briefs: [{ title: "b", href: "/files/S/assignments/AAA/empty/b.pdf", ext: "pdf" }] })] } as never).map((a) => a.id), ["AAA/empty"]);
+
+  // the app asks for one (a done assignment too): made in the background, with no chat
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const post = (body: object) => fetch(`${base}/api/ai/homework-make`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
+  assert.equal((await post({ sem: "S", assignment: "AAA/made" })).status, 409);   // has one already
+  const { jobs: [job] } = await json(post({ sem: "S", assignment: "AAA/done" }));
+  assert.equal(job.kind, "make");
+  let jobs: Ev[] = [];
+  for (let i = 0; i < 100 && (!jobs.length || jobs[0].running); i++) { await new Promise((ok) => setTimeout(ok, 20)); jobs = (await json(fetch(`${base}/api/ai/homework-make`))).jobs; }
+  assert.deepEqual([jobs[0].running, jobs[0].ok], [false, true]);
+  assert.ok(existsSync(join(sem, "assignments/AAA/done/homework/tasks.json")));
   assert.ok(!(await json(fetch(`${base}/api/ai/chats`))).chats.some((c: Ev) => c.id === jobs[0].chatId));
 });

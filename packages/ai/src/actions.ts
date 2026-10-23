@@ -30,6 +30,7 @@ const FIELDS: Record<string, Field[]> = {
   "sync-eclass": [],
   "important-dates": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }],
   // a task can come from the homework page's Ask AI button
+  "make-homework": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "homework-tutor": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "check-homework": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
 };
@@ -37,7 +38,7 @@ const TITLE: Record<string, string> = {
   "make-notes": "Make notes", "quiz-me": "Quiz me", "make-quiz": "Make a quiz", "plan-week": "Plan my week", "research-topic": "Research a topic",
   "find-material": "Find material", "assignment-helper": "Assignment help", "assignment-prep": "Prep an assignment",
   "assignment-review": "Review my draft", "sync-eclass": "Sync eClass", "important-dates": "Important dates",
-  "homework-tutor": "Homework tutor", "check-homework": "Check my homework",
+  "make-homework": "Make it interactive", "homework-tutor": "Homework tutor", "check-homework": "Check my homework",
 };
 // What the app shows the student about each action (the skill's description is written for the AI: paths, trigger phrases)
 const SUMMARY: Record<string, string> = {
@@ -52,10 +53,11 @@ const SUMMARY: Record<string, string> = {
   "assignment-review": "Reviews the draft you uploaded against the brief and says what to fix, without rewriting it.",
   "sync-eclass": "Checks eClass for new files, grades, feedback and deadlines.",
   "important-dates": "Adds, changes or removes exam dates and other important dates on a course, as you tell it.",
+  "make-homework": "Turns an assignment into tasks you answer in the app; a done one comes with the answers you submitted.",
   "homework-tutor": "Tutors you on a homework task you're answering in the app: hints, questions back and where in the material to look, never the answer.",
   "check-homework": "Checks your homework answers without being picky: says what's right, what could be better and what's not right yet, with hints.",
 };
-const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄", "important-dates": "📅", "homework-tutor": "🧑‍🏫", "check-homework": "✅" };
+const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄", "important-dates": "📅", "make-homework": "🧩", "homework-tutor": "🧑‍🏫", "check-homework": "✅" };
 // What a plain local model (no file or web tools) can do from the app (it gets the material in its
 // prompt; a quiz it answers with is saved by the app server).
 const CHAT_OK = new Set(["quiz-me", "make-quiz"]);
@@ -267,6 +269,31 @@ const assignmentOf = (data: SemesterData, id: unknown): Assignment => {
   return a;
 };
 
+/**
+ * Making an assignment's interactive version (homework/tasks.json): a new one from its eClass task and brief, with no answers;
+ * one already submitted from the student's submitted work, with their answers copied into answers.json.
+ */
+export function homeworkMakePrompt(semId: string, a: Assignment): string {
+  const dir = homeworkFolder(semId, a);
+  if (a.homework) throw new Error(`${a.title} already has an interactive version.`);
+  const rel = (h: string) => `semesters/${semId}/${decodeURIComponent(h.split("/").slice(3).join("/"))}`;
+  const list = (xs: { href: string }[]) => xs.map((f) => `\`${rel(f.href)}\``).join(", ");
+  const from = `${a.briefs.length ? `the brief (${list(a.briefs)}; text copies in semesters/${semId}/text/)` : `the assignment folder semesters/${semId}/assignments/${a.id}/`}` +
+    `${a.question ? ` and the task on eClass, in the assignment's entry in \`semesters/${semId}/_meta/eclass-meta.json\`` : ""}`;
+  const head = `Use the make-homework skill (ai/skills/make-homework/SKILL.md). Make the interactive version of ${a.fullTitle} (${a.code}): ` +
+    `the tasks I answer in the app, each one the assignment's own question, in its order. Save the tasks as \`${dir}/tasks.json\` (format in docs/HOMEWORK_FORMAT.md). `;
+  const submitted = a.submitted && a.submissions.some((f) => !/(^|\/)feedback_/.test(f.href));
+  if (!submitted) {
+    return head + `Work from ${from}. It's a new assignment: the file has no answers, hints or solutions. ` +
+      `When done, run: node packages/ai/validate.mjs ${dir}/tasks.json and fix every error it reports.`;
+  }
+  const mine = a.submissions.filter((f) => !/(^|\/)feedback_/.test(f.href));
+  return head + `I've already submitted it: take the tasks from my submission (${list(mine)}), checked against ${from}. ` +
+    `Then save my answers as \`${dir}/answers.json\`, each task's answer exactly as I wrote it in my submission (HTML: paragraphs, lists, bold, formulas as <span data-latex>; the choice I made for a multiple-choice task), marked done. ` +
+    "Copy, never correct, improve or complete my answers; a task I didn't answer gets no entry. " +
+    `When done, run: node packages/ai/validate.mjs ${dir}/tasks.json ${dir}/answers.json and fix every error it reports.`;
+}
+
 /** Tutoring on homework the student answers in the app: the task they're on (if any) and where their answers are. */
 export function homeworkTutorPrompt(semId: string, a: Assignment, taskId?: string): string {
   const dir = homeworkFolder(semId, a);
@@ -365,6 +392,11 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       const a = data.assignments.find((x) => x.id === params.assignment);
       if (!a) throw new Error("That assignment isn't in the app data.");
       body = reviewPrompt(root, semId, data, a, params.version) + extra; break;
+    }
+    case "make-homework": {
+      const a = data.assignments.find((x) => x.id === params.assignment);
+      if (!a) throw new Error("That assignment isn't in the app data.");
+      body = homeworkMakePrompt(semId, a) + extra; break;
     }
     case "homework-tutor":
       body = homeworkTutorPrompt(semId, assignmentOf(data, params.assignment), params.task ? String(params.task) : undefined) + extra; break;
