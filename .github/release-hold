@@ -1,3 +1,0 @@
-Releases are on hold while this file is on main: the release PR stays open instead of merging itself
-(.github/workflows/release-please.yml), so main can be tried out before anyone gets an update.
-To release: merge the release PR by hand, or delete this file to go back to automatic releases.
