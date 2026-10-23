@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { gitBackup } from "../src/git.ts";
+import { gitBackup, pushError } from "../src/git.ts";
 
 const git = (cwd: string, ...a: string[]) => execFileSync("git", a, { cwd, encoding: "utf8" }).trim();
 
@@ -95,4 +95,32 @@ test("files can come from somewhere else (a video's smaller copy, a part) under 
   assert.equal(git(remote, "show", "main:semesters/S/class.mp4"), "small");
   assert.equal(git(remote, "show", "main:semesters/S/slides.pptx.ouc-part-001"), "p1");
   assert.deepEqual(shown(remote), ["semesters/S/class.mp4", "semesters/S/slides.pptx.ouc-part-001"]);
+});
+
+test("a big backup goes up in several smaller pushes, so a dropped connection doesn't lose it all", async () => {
+  const { root, remote, put, gitDir } = setup();
+  for (const n of ["a", "b", "c", "d", "e"]) put(`semesters/S/${n}.md`, n.repeat(400));
+  const files = ["a", "b", "c", "d", "e"].map((n) => `semesters/S/${n}.md`);
+  const r = await gitBackup({ root, gitDir, remote, files, message: "5 notes", batchBytes: 1000 });
+  assert.equal(r.committed, true);
+  assert.deepEqual(shown(remote), files);
+  assert.deepEqual(git(remote, "log", "--format=%s", "main").split("\n"), ["5 notes", "5 notes (part 2 of 3)", "5 notes (part 1 of 3)"]);
+});
+
+test("a push that fails is tried again, and what was already sent stays", async () => {
+  const { root, remote, put, gitDir } = setup();
+  // the backup repo turns the first push down, the way a dropped connection would
+  const hook = join(remote, "hooks", "pre-receive");
+  writeFileSync(hook, `#!/bin/sh\nif [ ! -f "${join(remote, "once")}" ]; then touch "${join(remote, "once")}"; exit 1; fi\n`, { mode: 0o755 });
+  put("semesters/S/a.md", "a");
+  const r = await gitBackup({ root, gitDir, remote, files: ["semesters/S/a.md"], message: "1 note", retryDelayMs: 1 });
+  assert.equal(r.committed, true);
+  assert.deepEqual(shown(remote), ["semesters/S/a.md"]);
+});
+
+test("a dropped connection gets a plain explanation", () => {
+  const raw = "error: RPC failed; curl 55 Recv failure: Connection reset by peer\nsend-pack: unexpected disconnect while reading sideband packet\nfatal: the remote end hung up unexpectedly";
+  assert.match(pushError(raw), /^The upload to GitHub was cut off/);
+  assert.match(pushError(raw), /next backup carries on/);
+  assert.match(pushError("remote: Repository not found."), /Backup push failed: remote: Repository not found\./);
 });
