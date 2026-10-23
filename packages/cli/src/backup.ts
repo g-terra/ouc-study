@@ -15,6 +15,8 @@ import { connectGithub, loadBackupConfig, saveBackupConfig } from "../../backup/
 import { exchangeCode, googleAuthUrl, pkce, waitForGoogleCode } from "../../backup/src/drive.ts";
 import { startDeviceLogin, waitForDeviceToken } from "../../backup/src/github.ts";
 import { backupNow, restoreNow } from "../../backup/src/now.ts";
+import { tokenHelp, type HelpOs } from "../../backup/src/help.ts";
+import { progressText } from "../../backup/src/progress.ts";
 import type { BackupStatus } from "../../backup/src/run.ts";
 import { randomBytes } from "node:crypto";
 
@@ -74,8 +76,7 @@ export async function backupStep(root: string, io: BackupIo, c: Clients): Promis
         io.open(d.verificationUri);
         token = await waitForDeviceToken({ clientId: c.githubClientId, deviceCode: d.deviceCode, interval: d.interval, base: c.githubBase });
       } else {
-        io.say("Make a fine-grained token on github.com › Settings › Developer settings › Personal access tokens:");
-        io.say("all repositories (or just ouc-study-backup), Contents read and write, Administration read and write.");
+        sayTokenHelp(io);
         token = await io.secret("Paste the GitHub token");
         if (!token) { io.warn("No token: backup not set up."); return false; }
       }
@@ -98,6 +99,18 @@ export async function backupStep(root: string, io: BackupIo, c: Clients): Promis
     io.warn(`Backup not set up: ${(e as Error).message}`);
     return false;
   }
+}
+const thisOs = (): HelpOs => (process.platform === "darwin" ? "mac" : process.platform === "win32" ? "windows" : "linux");
+/** "How to get a token", the same steps as the app's pop-up */
+export function sayTokenHelp(io: Pick<BackupIo, "say">, os = thisOs()) {
+  io.say("How to get a GitHub token (either way):");
+  tokenHelp(os).forEach((way, i) => {
+    io.say(`${i + 1}. ${way.title}: ${way.note}`);
+    for (const st of way.steps) {
+      io.say(`   - ${st.text}${st.link ? ` ${st.link}` : ""}`);
+      if (st.command) io.say(`       ${st.command}`);
+    }
+  });
 }
 const strip = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
 
@@ -148,7 +161,16 @@ export async function main(args = process.argv.slice(2)) {
     } else if (sub === "now") {
       if (!loadBackupConfig(root)) { ui.warn("Backup isn't set up yet. Run: ouc backup setup"); process.exitCode = 1; return; }
       const sp = ui.spinner("Backing up…");
-      const s = await backupNow(root, { google: clients().google, ffmpeg: findBin("ffmpeg") });
+      let shown = { step: "", at: 0 };
+      const s = await backupNow(root, {
+        google: clients().google, ffmpeg: findBin("ffmpeg"),
+        // a new line for each step, and the count and time left every few seconds (not every file)
+        onProgress: (p) => {
+          if (p.step === shown.step && Date.now() - shown.at < (ui.TTY ? 500 : 15_000)) return;
+          shown = { step: p.step, at: Date.now() };
+          sp.text = progressText(p);
+        },
+      });
       s.ok ? sp.succeed(statusText(s)) : sp.fail(statusText(s));
       if (!s.ok) process.exitCode = 1;
     } else {

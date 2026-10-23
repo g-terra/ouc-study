@@ -87,14 +87,16 @@ test("later backups upload only what changed and move removed files to _removed"
   } finally { d.close(); }
 });
 
-test("big files go up in chunks", async () => {
+test("big files go up in chunks, and progress counts the bytes as they go", async () => {
   const d = await fakeDrive();
   const big = Buffer.alloc(600 * 1024, 7);
   const { root } = study({ "semesters/S/courses/C/class.mp4": big });
+  const bytes: number[] = [];
   try {
-    await driveBackup({ root, accessToken: "acc", files: ["semesters/S/courses/C/class.mp4"], api: d.base, chunkBytes: 256 * 1024 });
+    await driveBackup({ root, accessToken: "acc", files: ["semesters/S/courses/C/class.mp4"], api: d.base, chunkBytes: 256 * 1024, onProgress: (p) => bytes.push(p.bytesDone) });
     const it = [...d.items.values()].find((i) => i.name === "class.mp4");
     assert.equal(it?.data.length, big.length);
+    assert.deepEqual(bytes, [0, 256 * 1024, 512 * 1024, big.length, big.length]);
   } finally { d.close(); }
 });
 

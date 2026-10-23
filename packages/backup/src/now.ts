@@ -8,6 +8,7 @@ import { driveFiles, refreshAccess } from "./drive.ts";
 import { gitAuthEnv, githubRemote } from "./github.ts";
 import { githubFiles, restoreFiles, type RestoreOptions, type RestoreResult } from "./restore.ts";
 import { failedStatus, runBackup, type BackupStatus } from "./run.ts";
+import type { BackupProgress } from "./progress.ts";
 
 export interface NowOptions {
   /** the Google Cloud OAuth client (Drive) */
@@ -15,12 +16,16 @@ export interface NowOptions {
   ffmpeg?: string | null;
   tokenUrl?: string;
   driveApi?: string;
+  onProgress?: (p: BackupProgress) => void;
 }
 
 const running = new Map<string, Promise<BackupStatus>>();
+const progress = new Map<string, BackupProgress>();
 const restoring = new Map<string, Promise<unknown>>();
 
 export function backupRunning(root: string) { return running.has(root); }
+/** How far the backup that's running has got (null when none is). */
+export function backupProgress(root: string) { return progress.get(root) ?? null; }
 
 export function backupNow(root: string, o: NowOptions = {}): Promise<BackupStatus> {
   const busy = running.get(root);
@@ -29,14 +34,15 @@ export function backupNow(root: string, o: NowOptions = {}): Promise<BackupStatu
     await restoring.get(root);
     const cfg = loadBackupConfig(root);
     if (!cfg) return failedStatus(root, "Backup isn't set up yet. Set it up in Settings › Backup.");
-    const choices = { courseFiles: cfg.courseFiles, videos: cfg.videos, ffmpeg: o.ffmpeg ?? null };
+    const onProgress = (p: BackupProgress) => { progress.set(root, p); o.onProgress?.(p); };
+    const choices = { courseFiles: cfg.courseFiles, videos: cfg.videos, ffmpeg: o.ffmpeg ?? null, onProgress };
     if (cfg.target === "github") return runBackup({ root, ...choices, remote: cfg.remote ?? githubRemote(cfg.repo), env: gitAuthEnv(cfg.token) });
     if (!o.google) return failedStatus(root, "Google Drive isn't available in this version of the app.");
     let accessToken: string;
     try { accessToken = await refreshAccess({ ...o.google, refreshToken: cfg.refreshToken, tokenUrl: o.tokenUrl }); }
     catch (e) { return failedStatus(root, (e as Error).message); }
     return runBackup({ root, ...choices, drive: { accessToken, api: o.driveApi } });
-  })().finally(() => running.delete(root));
+  })().finally(() => { running.delete(root); progress.delete(root); });
   running.set(root, run);
   return run;
 }

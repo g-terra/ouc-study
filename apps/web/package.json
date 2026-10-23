@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ouc/backup": "*",
     "@ouc/content": "*",
     "@tiptap/core": "^3.32.0",
     "@tiptap/extension-code-block": "^3.32.0",
