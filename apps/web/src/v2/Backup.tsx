@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, enc } from "../lib/router";
+import { progressText } from "@ouc/backup/progress";
+import { tokenHelp, type HelpOs } from "@ouc/backup/help";
 import { getBackup, postBackup, statusLine, type BackupInfo } from "../lib/backup";
 import { Card, Switch, cx } from "../components/ui";
-import { CloudUpload, TriangleAlert, X } from "../components/icons";
+import { CircleHelp, CloudUpload, Copy, Check, TriangleAlert, X } from "../components/icons";
 
 /** /api/backup, checked again every few seconds while a backup or a sign-in is under way. */
 function useBackup() {
@@ -12,15 +14,71 @@ function useBackup() {
   const busy = !!info && (info.running || (!!info.signIn && !info.signIn.error));
   useEffect(() => {
     if (!busy) return;
-    const t = window.setInterval(load, 3000);
+    const t = window.setInterval(load, 2000);
     return () => window.clearInterval(t);
   }, [busy, load]);
   return { info, setInfo, load };
 }
 
+const percent = (p: NonNullable<BackupInfo["progress"]>) =>
+  Math.round(100 * (p.bytesTotal > 0 ? p.bytesDone / p.bytesTotal : p.total > 0 ? p.done / p.total : 0));
+
 const button = "rounded-full px-3.5 py-2 text-sm font-semibold";
 const primary = cx(button, "bg-ink text-bg hover:opacity-90 disabled:opacity-50");
 const secondary = cx(button, "border border-line hover:bg-surface-2");
+
+const thisOs = (): HelpOs => {
+  const p = typeof navigator === "undefined" ? "" : `${navigator.platform} ${navigator.userAgent}`;
+  return /Win/i.test(p) ? "windows" : /Mac/i.test(p) ? "mac" : "linux";
+};
+
+function CopyCommand({ command }: { command: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 font-mono text-xs">
+      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap">{command}</code>
+      <button type="button" aria-label={`Copy ${command}`} className="shrink-0 rounded p-1 text-muted hover:text-ink"
+        onClick={() => { void navigator.clipboard?.writeText(command).then(() => setCopied(true)).catch(() => {}); }}>
+        {copied ? <Check aria-hidden className="size-4" /> : <Copy aria-hidden className="size-4" />}
+      </button>
+    </div>
+  );
+}
+
+/** "How to get a token": the gh way and the github.com way, step by step. */
+function TokenHelp({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div role="dialog" aria-modal="true" aria-labelledby="token-help-title" className="w-full max-w-lg space-y-4 rounded-2xl border border-line bg-surface p-6 text-sm shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <h2 id="token-help-title" className="font-serif text-2xl font-semibold">How to get a GitHub token</h2>
+          <button type="button" aria-label="Close" onClick={onClose} className="rounded-full p-1 text-muted hover:bg-surface-2"><X aria-hidden className="size-4" /></button>
+        </div>
+        <p className="text-muted">Two ways. Either one ends with a token to paste into Settings › Backup.</p>
+        {tokenHelp(thisOs()).map((way) => (
+          <section key={way.title} aria-label={way.title} className="space-y-2 rounded-xl border border-line p-4">
+            <h3 className="font-semibold">{way.title}</h3>
+            <p className="text-xs text-muted">{way.note}</p>
+            <ol className="list-decimal space-y-2 pl-5">
+              {way.steps.map((st) => (
+                <li key={st.text} className="space-y-1">
+                  <span>{st.text}</span>
+                  {st.link && <> <a className="underline" href={st.link} target="_blank" rel="noreferrer">Open</a></>}
+                  {st.command && <CopyCommand command={st.command} />}
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** Not set up yet: GitHub (sign in with a code, or paste a token) or Google Drive. */
 function Connect({ info, reload }: { info: BackupInfo; reload: () => void }) {
@@ -28,6 +86,7 @@ function Connect({ info, reload }: { info: BackupInfo; reload: () => void }) {
   const [showToken, setShowToken] = useState(!info.can.githubDevice);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const [help, setHelp] = useState(false);
   const act = async (path: string, body?: unknown) => {
     setError(null); setWorking(true);
     const r = await postBackup(path, body);
@@ -61,9 +120,13 @@ function Connect({ info, reload }: { info: BackupInfo; reload: () => void }) {
                 <span className="mb-1 block text-muted">GitHub token (fine-grained, Contents read and write; Administration to make the repo)</span>
                 <input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 font-mono text-sm" />
               </label>
-              <button type="submit" className={primary} disabled={working || !token.trim()}>Connect GitHub</button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="submit" className={primary} disabled={working || !token.trim()}>Connect GitHub</button>
+                <button type="button" className={cx(secondary, "inline-flex items-center gap-1.5")} onClick={() => setHelp(true)}><CircleHelp aria-hidden className="size-4" />How to get a token</button>
+              </div>
             </form>
           )}
+          {help && <TokenHelp onClose={() => setHelp(false)} />}
         </section>
         <section aria-labelledby="backup-drive" className="space-y-2 rounded-xl border border-line p-3">
           <h3 id="backup-drive" className="font-semibold">Google Drive</h3>
@@ -101,8 +164,13 @@ function Connected({ info, setInfo, reload }: { info: BackupInfo; setInfo: (i: B
     <div className="space-y-3">
       <p className={cx("flex items-start gap-1.5", failed ? "text-bad" : "")} data-testid="backup-status">
         {failed && <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />}
-        {info.running ? "Backing up…" : statusLine(info.status)}
+        {info.running ? (info.progress ? progressText(info.progress) : "Backing up…") : statusLine(info.status)}
       </p>
+      {info.running && info.progress && (
+        <div role="progressbar" aria-label="Backup progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent(info.progress)} className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+          <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${percent(info.progress)}%` }} />
+        </div>
+      )}
       <p className="text-xs text-muted">
         {setup.target === "github"
           ? <>To <a className="underline" href={`https://github.com/${setup.repo}`} target="_blank" rel="noreferrer">{setup.repo}</a> (private) · signed in as {setup.login}</>

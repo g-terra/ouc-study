@@ -10,6 +10,8 @@ import { gitBackup } from "./git.ts";
 import { prepareSources } from "./media.ts";
 import { selectFiles, type SelectOptions } from "./select.ts";
 import { diffFiles, summarize, type FileEntry } from "./summary.ts";
+import type { BackupProgress } from "./progress.ts";
+import type { Report } from "./git.ts";
 
 export interface BackupStatus {
   ok: boolean;
@@ -38,6 +40,8 @@ export interface RunOptions extends Omit<SelectOptions, "maxBytes"> {
   /** ffmpeg for videos' smaller copies; null backs up the originals */
   ffmpeg?: string | null;
   ffmpegEnv?: NodeJS.ProcessEnv;
+  /** called as it goes: compressing videos, saving the files that changed, uploading */
+  onProgress?: (p: BackupProgress) => void;
 }
 
 export const GITHUB_MAX_BYTES = 50 * 1024 * 1024;
@@ -58,16 +62,27 @@ export async function runBackup(o: RunOptions): Promise<BackupStatus> {
   const at = (o.now ?? new Date()).toISOString();
   const { files } = selectFiles(o.root, { courseFiles: o.courseFiles, videos: o.videos });
   const last = readJson<FileEntry[]>(ouc(o.root, "backup-manifest.json"), []);
-  const summary = summarize(diffFiles(last, files));
+  const changes = diffFiles(last, files);
+  const summary = summarize(changes);
+  const changedPaths = new Set([...changes.added, ...changes.changed]);
+  // each step keeps its own start time, so the time left is worked out per step
+  let started = { step: "", at: "" };
+  const report: Report = (p) => {
+    if (started.step !== p.step) started = { step: p.step, at: new Date().toISOString() };
+    o.onProgress?.({ ...p, startedAt: started.at });
+  };
   const target = o.drive ? "drive" as const : "github" as const;
   const base = { target, at, summary, files: files.length, bytes: files.reduce((n, f) => n + f.size, 0) };
   let status: BackupStatus;
   try {
-    const sources = await prepareSources(o.root, files.map((f) => f.path), { maxBytes: o.drive ? undefined : o.maxBytes ?? GITHUB_MAX_BYTES, ffmpeg: o.ffmpeg ?? null, env: o.ffmpegEnv });
+    const sources = await prepareSources(o.root, files.map((f) => f.path), { maxBytes: o.drive ? undefined : o.maxBytes ?? GITHUB_MAX_BYTES, ffmpeg: o.ffmpeg ?? null, env: o.ffmpegEnv,
+      onVideo: (done, total) => report({ step: "compressing", done, total, bytesDone: 0, bytesTotal: 0 }) });
     const paths = sources.map((s) => s.path);
     const from = Object.fromEntries(sources.filter((s) => s.from !== join(o.root, s.path)).map((s) => [s.path, s.from]));
-    if (o.drive) await driveBackup({ root: o.root, accessToken: o.drive.accessToken, api: o.drive.api, files: paths, from });
-    else if (o.remote) await gitBackup({ root: o.root, gitDir: ouc(o.root, "backup.git"), remote: o.remote, message: summary, env: o.env, files: paths, from });
+    // a part or a video's copy counts as changed when the file it comes from did
+    const changed = new Set(paths.filter((p) => changedPaths.has(p.replace(/\.ouc-part(s\.json|-\d+)$/, ""))));
+    if (o.drive) await driveBackup({ root: o.root, accessToken: o.drive.accessToken, api: o.drive.api, files: paths, from, onProgress: report });
+    else if (o.remote) await gitBackup({ root: o.root, gitDir: ouc(o.root, "backup.git"), remote: o.remote, message: summary, env: o.env, files: paths, from, changed, onProgress: report });
     else throw new Error("No backup target.");
     writeFileSync(ouc(o.root, "backup-manifest.json"), JSON.stringify(files));
     status = { ok: true, ...base };

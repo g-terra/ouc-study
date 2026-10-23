@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadBackupConfig, saveBackupConfig } from "../../backup/src/config.ts";
 import { backupNow } from "../../backup/src/now.ts";
-import { backupStep, restoreStep, type BackupIo } from "../src/backup.ts";
+import { backupStep, restoreStep, sayTokenHelp, type BackupIo } from "../src/backup.ts";
 
 function study(files: Record<string, string> = {}) {
   const root = mkdtempSync(join(tmpdir(), "ouc-cli-backup-"));
@@ -94,4 +94,21 @@ test("restore asks once about files that differ here, and keeps them on no", asy
   assert.equal(readFileSync(join(here, "semesters/S/notes/a.md"), "utf8"), "mine");
   assert.equal(readFileSync(join(here, "semesters/S/notes/b.md"), "utf8"), "b");
   assert.ok(existsSync(join(here, ".ouc", "backup.git")));
+});
+
+test("the token help in Terminal gives both ways, with the commands for this computer", () => {
+  const said: string[] = [];
+  sayTokenHelp({ say: (s) => said.push(s) }, "mac");
+  const text = said.join("\n");
+  assert.match(text, /With the GitHub CLI \(gh\)/);
+  assert.match(text, /gh auth token \| pbcopy/);
+  assert.match(text, /github\.com\/new\?name=ouc-study-backup&visibility=private/);
+  assert.match(text, /Contents → Read and write/);
+});
+
+test("without a sign-in app, setup shows how to get a token before asking for it", async () => {
+  const root = study();
+  const t = io(["github", ""]);
+  await backupStep(root, t, { githubClientId: "", google: null });
+  assert.ok(t.said.some((s) => s.includes("gh auth token")));
 });

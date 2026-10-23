@@ -1,6 +1,6 @@
 /**
  * /api/backup for Settings › Backup and the one-time "Back up your study data" prompt (a Vite middleware).
- *   GET  /api/backup                   setup (never the sign-in), choices, last status, running, prompt, sign-in in progress
+ *   GET  /api/backup                   setup (never the sign-in), choices, last status, running and how far, prompt, sign-in in progress
  *   POST /api/backup/run               back up now (answers when it's done); ?auto=1 after a sync: only when set up and left on
  *   POST /api/backup/github/start      sign in to GitHub with a code → { userCode, verificationUri }; GET shows when it's done
  *   POST /api/backup/github/token      { token } sign in with a pasted token
@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { connectGithub, loadBackupConfig, saveBackupConfig, type BackupChoices, type BackupConfig } from "./config.ts";
 import { exchangeCode, googleAuthUrl, pkce, waitForGoogleCode } from "./drive.ts";
 import { startDeviceLogin, waitForDeviceToken } from "./github.ts";
-import { backupRunning } from "./now.ts";
+import { backupProgress, backupRunning } from "./now.ts";
 import type { BackupStatus } from "./run.ts";
 
 export interface BackupApiOptions {
@@ -93,7 +93,7 @@ export function createBackupApi(o: BackupApiOptions) {
     try {
       if (req.method === "GET" && url.pathname === "/api/backup") {
         return send(res, {
-          setup: setupOf(cfg), choices: choicesOf(cfg), status: readJson<BackupStatus>(statusFile), running: backupRunning(o.root),
+          setup: setupOf(cfg), choices: choicesOf(cfg), status: readJson<BackupStatus>(statusFile), running: backupRunning(o.root), progress: backupProgress(o.root),
           prompt: prompt(), signIn, can: { githubDevice: !!o.githubClientId, google: !!o.google },
         });
       }

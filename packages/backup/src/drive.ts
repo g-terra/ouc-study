@@ -12,6 +12,7 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import type { Report } from "./git.ts";
 import type { RemoteFile, RestoreResult } from "./restore.ts";
 
 const AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -113,6 +114,7 @@ export interface DriveBackupOptions {
   api?: string;
   /** upload chunk size, a multiple of 256 KB */
   chunkBytes?: number;
+  onProgress?: Report;
 }
 
 export async function driveBackup(o: DriveBackupOptions): Promise<{ uploaded: number; removed: number }> {
@@ -159,21 +161,30 @@ export async function driveBackup(o: DriveBackupOptions): Promise<{ uploaded: nu
         const buf = Buffer.alloc(Math.min(chunk, size - at));
         readSync(fd, buf, 0, buf.length, at);
         const r = await call("PUT", session, new Uint8Array(buf), { "content-range": `bytes ${at}-${at + buf.length - 1}/${size}` });
+        progress.bytesDone += buf.length;
+        report();
         if (r.status !== 308) return String(((await r.json()) as { id: string }).id);
       }
     } finally { closeSync(fd); }
   }
 
+  const todo = o.files.map((path) => ({ path, st: statSync(source(path)) })).filter(({ path, st }) => {
+    const was = state.files[path];
+    return !(was && was.size === st.size && was.mtimeMs === Math.round(st.mtimeMs));
+  });
+  const progress = { done: 0, total: todo.length, bytesDone: 0, bytesTotal: todo.reduce((n, f) => n + f.st.size, 0) };
+  const report = () => o.onProgress?.({ step: "saving", ...progress });
+  report();
   let uploaded = 0;
-  for (const path of o.files) {
-    const st = statSync(source(path));
+  for (const { path, st } of todo) {
     const was = state.files[path];
     const mtimeMs = Math.round(st.mtimeMs);
-    if (was && was.size === st.size && was.mtimeMs === mtimeMs) continue;
     const id = await upload(path, st.size, was?.id);
     state.files[path] = { id, parent: await folder(path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ""), size: st.size, mtimeMs };
     save();
     uploaded++;
+    progress.done++;
+    report();
   }
   const keep = new Set(o.files);
   let removed = 0;

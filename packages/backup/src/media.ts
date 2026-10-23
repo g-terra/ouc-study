@@ -118,11 +118,17 @@ export function joinParts(dir: string, rel = ""): string[] {
 }
 
 /** What to upload for each file: the file itself, a video's smaller copy, or parts when it's over `maxBytes`. */
-export async function prepareSources(root: string, files: string[], o: { maxBytes?: number; ffmpeg: string | null; env?: NodeJS.ProcessEnv }): Promise<Source[]> {
+export async function prepareSources(root: string, files: string[], o: { maxBytes?: number; ffmpeg: string | null; env?: NodeJS.ProcessEnv; onVideo?: (done: number, total: number) => void }): Promise<Source[]> {
   const out: Source[] = [];
+  const videos = o.ffmpeg ? files.filter((p) => VIDEO.test(p)).length : 0;
+  let videosDone = 0;
+  if (videos) o.onVideo?.(0, videos);
   for (const path of files) {
     let from = join(root, path);
-    if (VIDEO.test(path)) from = (await compressVideo(root, path, o)) ?? from;
+    if (VIDEO.test(path)) {
+      from = (await compressVideo(root, path, o)) ?? from;
+      if (videos) o.onVideo?.(++videosDone, videos);
+    }
     if (o.maxBytes && statSync(from).size > o.maxBytes) {
       for (const p of splitFile(from, join(cacheDir(root), "parts", key(root, path)), o.maxBytes)) out.push({ path: `${path}${p.suffix}`, from: p.from });
     } else out.push({ path, from });

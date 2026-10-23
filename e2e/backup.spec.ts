@@ -83,3 +83,31 @@ test("a failed backup shows a bar with the reason, at phone width too", async ({
   await bar.getByRole("link", { name: "Backup settings" }).click();
   await expect(page.getByRole("region", { name: "Backup" }).getByTestId("backup-status")).toContainText("The last backup didn't work");
 });
+
+test("How to get a token shows both ways, with commands to copy and links", async ({ page }) => {
+  await mockBackup(page);
+  await page.goto(SETTINGS);
+  const section = page.getByRole("region", { name: "Backup" });
+  await section.getByRole("button", { name: "How to get a token" }).click();
+  const help = page.getByRole("dialog", { name: "How to get a GitHub token" });
+  await expect(help.getByRole("region", { name: "With the GitHub CLI (gh)" })).toContainText(/gh auth token/);
+  await expect(help.getByRole("button", { name: /^Copy gh auth token/ })).toBeVisible();
+  const web = help.getByRole("region", { name: /On github\.com/ });
+  await expect(web.getByRole("link", { name: "Open" }).first()).toHaveAttribute("href", /github\.com\/new\?name=ouc-study-backup&visibility=private/);
+  await expect(web).toContainText("Contents → Read and write");
+  await page.keyboard.press("Escape");
+  await expect(help).toHaveCount(0);
+});
+
+test("a running backup shows files saved out of the total and about how long is left", async ({ page }) => {
+  const startedAt = new Date(Date.now() - 120_000).toISOString();
+  await mockBackup(page, {
+    setup: { target: "github", repo: "student1/ouc-study-backup", login: "student1" }, running: true,
+    progress: { step: "saving", done: 120, total: 340, bytesDone: 50, bytesTotal: 100, startedAt },
+  });
+  await page.goto(SETTINGS);
+  const section = page.getByRole("region", { name: "Backup" });
+  await expect(section.getByTestId("backup-status")).toHaveText("Saving files: 120 of 340 · about 2 min left");
+  await expect(section.getByRole("progressbar", { name: "Backup progress" })).toHaveAttribute("aria-valuenow", "50");
+  await expect(section.getByRole("button", { name: "Backing up…" })).toBeDisabled();
+});

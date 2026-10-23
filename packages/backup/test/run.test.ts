@@ -79,3 +79,21 @@ test("a failed run keeps the last good backup's details and says why", async () 
   // it tries again with the full change list next time
   assert.equal((await runBackup({ root, remote })).summary, "1 note");
 });
+
+test("a run reports its progress: files saved out of those that changed, then the upload", async () => {
+  const { root, remote, put } = setup();
+  put("semesters/S/notes/C1/w1.md", "n");
+  put("semesters/S/notes/C1/w2.md", "nn");
+  put("memory/progress.md", "p");
+  const seen: { step: string; done: number; total: number }[] = [];
+  const s = await runBackup({ root, remote, onProgress: (p) => seen.push({ step: p.step, done: p.done, total: p.total }) });
+  assert.equal(s.ok, true);
+  const saving = seen.filter((x) => x.step === "saving");
+  assert.deepEqual(saving.at(-1), { step: "saving", done: 3, total: 3 });
+  assert.ok(seen.some((x) => x.step === "uploading"), "the push says how far it got");
+
+  put("semesters/S/notes/C1/w2.md", "changed");
+  seen.length = 0;
+  await runBackup({ root, remote, onProgress: (p) => seen.push({ step: p.step, done: p.done, total: p.total }) });
+  assert.deepEqual(seen.filter((x) => x.step === "saving").at(-1), { step: "saving", done: 1, total: 1 }, "only what changed counts");
+});

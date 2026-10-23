@@ -16,7 +16,9 @@
     "./api": "./src/api.ts",
     "./now": "./src/now.ts",
     "./restore": "./src/restore.ts",
-    "./clients": "./src/clients.ts"
+    "./clients": "./src/clients.ts",
+    "./progress": "./src/progress.ts",
+    "./help": "./src/help.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

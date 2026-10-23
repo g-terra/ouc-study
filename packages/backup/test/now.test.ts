@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { saveBackupConfig } from "../src/config.ts";
-import { backupNow, restoreNow } from "../src/now.ts";
+import { backupNow, backupProgress, restoreNow } from "../src/now.ts";
 
 const git = (cwd: string, ...a: string[]) => execFileSync("git", a, { cwd, encoding: "utf8" }).trim();
 function study(files: Record<string, string>) {
@@ -93,4 +93,15 @@ test("restore gets the saved GitHub backup back, and says so when there's nothin
   const r = await restoreNow(fresh);
   assert.equal(r.error, undefined);
   assert.deepEqual(r.result?.restored, ["semesters/S/notes/n.md"]);
+});
+
+test("while a backup runs, how far it has got can be read; afterwards there's none", async () => {
+  const root = study({ "semesters/S/notes/n.md": "n" });
+  const remote = mkdtempSync(join(tmpdir(), "ouc-now-remote-"));
+  git(remote, "init", "--bare", "-q");
+  saveBackupConfig(root, { target: "github", repo: "s/r", login: "s", token: "t", remote });
+  const seen: (string | undefined)[] = [];
+  await backupNow(root, { onProgress: () => seen.push(backupProgress(root)?.step) });
+  assert.ok(seen.includes("saving") && seen.includes("uploading"));
+  assert.equal(backupProgress(root), null);
 });

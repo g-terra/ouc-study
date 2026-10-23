@@ -1,4 +1,5 @@
 /** Settings › Backup and the one-time prompt: /api/backup (packages/backup/src/api.ts) and the words for its status. */
+import type { BackupProgress } from "@ouc/backup/progress";
 import { daysBetween, fmtShort, fmtTime } from "./dates.ts";
 
 export interface BackupStatus { ok: boolean; target?: "github" | "drive"; at: string; summary: string; files: number; bytes: number; error?: string; lastGood?: string }
@@ -7,6 +8,8 @@ export interface BackupInfo {
   choices: { auto: boolean; courseFiles: boolean; videos: boolean };
   status: BackupStatus | null;
   running: boolean;
+  /** how far the running backup has got */
+  progress?: BackupProgress | null;
   prompt: "show" | "hide";
   signIn: null | { kind: "github" | "google"; userCode?: string; verificationUri?: string; url?: string; error?: string };
   can: { githubDevice: boolean; google: boolean };
