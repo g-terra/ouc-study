@@ -25,7 +25,8 @@ export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..")
 const INSTALLER = /\.(pkg|dmg|exe|msi|deb|rpm|appimage|apk)$/i;
 const norm = (s: unknown) => String(s).replace(/\s+/g, " ").trim();
 const humanStatus: Record<string, string> = { submitted: "Submitted for grading", draft: "Draft (not submitted)", new: "No submissions have been made yet", reopened: "Reopened" };
-const shortAssignName = (name: unknown) => String(name).replace(/\s*\(due date:[^)]*\)/, "").trim();
+// strip() decodes entities (eClass sends "&amp;"), so the folder matches the one packages/content expects
+const shortAssignName = (name: unknown) => strip(name).replace(/\s*\(due date:[^)]*\)/, "").trim();
 const assignFolder = (name: string, duedate?: number) => {
   const short = shortAssignName(name);
   if (!duedate) return slug(short, 45);
