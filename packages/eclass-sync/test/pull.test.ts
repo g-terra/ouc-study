@@ -108,3 +108,20 @@ test("after new files, the text copies are made for the AI to read", () => {
   assert.equal(textCopies("/r", "2026-Fall", { run, python: null }), false);   // no Python: skipped
   assert.equal(textCopies("/r", "2026-Fall", { run: () => ({ status: 1 }), python: "python" }), false);
 });
+
+test("an assignment whose eClass name has an HTML entity gets the folder the app looks in (& decoded, not \"amp\")", async () => {
+  const root = setup({ videos: false });
+  const due = Math.floor(new Date(2026, 9, 7, 21, 59).getTime() / 1000);
+  const week: MoodleSection[] = [{ section: 1, name: "Week 1", summary: "", modules: [
+    { id: 31, name: "Assignment 1 &amp; 2: Finding a Paper", modname: "assign", url: "https://e/mod/assign/view.php?id=31", contents: [] },
+  ] }];
+  const client = {
+    site: "https://e",
+    call: (async (fn: string) => (fn === "core_course_get_contents" ? week
+      : fn === "mod_assign_get_assignments" ? { courses: [{ id: 7, assignments: [{ id: 5, cmid: 31, name: "Assignment 1 &amp; 2: Finding a Paper", duedate: due }] }] } : {})) as MoodleClient["call"],
+    getText: async () => "",
+    download: async (_url: string, dest: string) => { mkdirSync(dirname(dest), { recursive: true }); writeFileSync(dest, "x"); return 1; },
+  } as MoodleClient;
+  await pull({ root, semId: "T", cfg, client, fetchImpl: answers("") });
+  assert.equal(meta(root)[0].folder, "assignments/ABC101/10-07_Assignment-1-2-Finding-a-Paper");
+});
