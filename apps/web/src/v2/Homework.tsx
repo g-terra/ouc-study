@@ -5,7 +5,7 @@ import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { mdToHtml } from "../lib/markdown";
-import { checkAnswers, dismissCheck, makePdf, printHref, saveAnswer, uploadPicture, useCheckJobs, useHomework, type AnswerPatch } from "../lib/homework";
+import { checkAnswers, dismissJob, makeInteractive, makePdf, printHref, saveAnswer, uploadPicture, useCheckJobs, useHomework, useMakeJobs, type AnswerPatch, type HomeworkJob } from "../lib/homework";
 import { useAiStatus } from "../lib/ai";
 import { useConnection } from "../lib/connection";
 import { Card, Empty, cx } from "../components/ui";
@@ -208,13 +208,17 @@ function CheckButton({ sem, id, checked }: { sem: string; id: string; checked: b
 
 /** The check being made, in place, or why the last one failed. */
 function CheckJobs({ sem, id }: { sem: string; id: string }) {
-  const jobs = useCheckJobs(sem, id);
+  return <JobRows sem={sem} jobs={useCheckJobs(sem, id)} running="The AI is checking your answers…" failed="Your answers weren't checked" />;
+}
+
+/** Background homework work in place: spinning gears while it runs, then why it failed (until dismissed). */
+function JobRows({ sem, jobs, running, failed }: { sem: string; jobs: HomeworkJob[]; running: string; failed: string }) {
   return jobs.map((j) => (
     <div key={j.id} role={j.running ? "status" : "alert"} className={cx("flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm", j.running ? "border-line bg-surface" : "border-bad/40 bg-bad-bg")}>
       {j.running ? <Settings aria-hidden className="size-4 shrink-0 animate-spin text-accent [animation-duration:2.5s]" /> : <TriangleAlert aria-hidden className="size-4 shrink-0 text-bad" />}
-      <span className="min-w-0 flex-1">{j.running ? "The AI is checking your answers…" : <>Your answers weren't checked: {j.error}</>}</span>
+      <span className="min-w-0 flex-1">{j.running ? running : <>{failed}: {j.error}</>}</span>
       {j.chatId && <WorkLink sem={sem} running={j.running} />}
-      {!j.running && <button type="button" aria-label="Dismiss" className="px-1 text-muted hover:text-ink" onClick={() => dismissCheck(j.id)}><X aria-hidden className="size-4" /></button>}
+      {!j.running && <button type="button" aria-label="Dismiss" className="px-1 text-muted hover:text-ink" onClick={() => dismissJob(j.id)}><X aria-hidden className="size-4" /></button>}
     </div>
   ));
 }
@@ -268,6 +272,31 @@ function Why({ value, ...rest }: { value?: string; onSave: (v: string) => void; 
     );
   }
   return <TextAnswer label="Why I picked it" value={value} {...rest} minHeight="4.5rem" />;
+}
+
+/**
+ * On an assignment without an interactive version: the AI makes one in the background (from the eClass task,
+ * or for a submitted assignment from the submission, with its answers filled in).
+ */
+export function MakeInteractive({ sem, a }: { sem: string; a: Pick<Assignment, "id" | "submitted"> }) {
+  const ai = useAiStatus();
+  const jobs = useMakeJobs(sem, a.id);
+  const [error, setError] = useState<string | null>(null);
+  if (ai.state === "unavailable") return null;
+  const busy = jobs.some((j) => j.running);
+  return (
+    <div className="grid gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-sm text-muted">{a.submitted ? "Have the AI turn your submission into tasks here, with your answers filled in." : "Have the AI turn the assignment into tasks you answer here, one by one."}</span>
+        <button type="button" disabled={busy} onClick={() => { setError(null); makeInteractive(sem, a.id).catch((e: Error) => setError(e.message)); }}
+          className="flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-surface px-4 font-semibold hover:border-muted disabled:opacity-60">
+          <Sparkles aria-hidden className="size-4 text-accent" />{busy ? "Making it…" : "Make it interactive"}
+        </button>
+      </div>
+      {error && <div role="alert" className="rounded-xl bg-bad-bg px-3 py-2 text-sm text-bad">{error}</div>}
+      <JobRows sem={sem} jobs={jobs} running="The AI is making the interactive version…" failed="The interactive version wasn't made" />
+    </div>
+  );
 }
 
 /** On an assignment card: how many tasks are done, and the way into the homework page. */

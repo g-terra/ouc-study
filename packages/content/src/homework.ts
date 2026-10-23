@@ -148,3 +148,25 @@ export function checkCounts(tasks: HomeworkTask[], check: HomeworkCheck): Record
   for (const t of tasks) { const v = check.tasks[t.id]?.verdict; if (v) n[v]++; }
   return n;
 }
+
+/**
+ * Reads an answers file ({ answers: { <task id>: { text?, choice?, why?, done? } } }), e.g. one the AI filled in
+ * from the student's submitted work. `answers` keeps what's valid; `problems` lists the rest.
+ */
+export function parseAnswers(src: string | Raw, tasks: HomeworkTask[]): { answers: HomeworkAnswers; problems: string[] } {
+  let d: Raw = src;
+  if (typeof src === "string") {
+    try { d = JSON.parse(src); } catch (e) { return { answers: {}, problems: [`Not valid JSON: ${(e as Error).message}`] }; }
+  }
+  if (!d || typeof d !== "object" || !d.answers || typeof d.answers !== "object" || Array.isArray(d.answers)) return { answers: {}, problems: ['The file must be one JSON object with "answers": { <task id>: { text, choice, why, done } }.'] };
+  const problems: string[] = [];
+  let answers: HomeworkAnswers = {};
+  for (const [id, a] of Object.entries(d.answers as Record<string, Raw>)) {
+    if (!tasks.some((t) => t.id === id)) { problems.push(`"${id}": no such task in tasks.json.`); continue; }
+    const { updated, ...rest } = a && typeof a === "object" ? a : ({} as Raw);
+    try {
+      answers = applyAnswer(tasks, answers, { ...rest, task: id }, typeof updated === "string" && !Number.isNaN(Date.parse(updated)) ? new Date(updated) : undefined);
+    } catch (e) { problems.push(`"${id}": ${(e as Error).message.replace(/\.$/, "")} (text and why are HTML strings, choice the index of an option, done true or false).`); }
+  }
+  return { answers, problems };
+}

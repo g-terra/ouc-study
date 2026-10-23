@@ -26,6 +26,13 @@ if (check) {
   const { tasks } = JSON.parse(fs.readFileSync(`${process.cwd()}/${check.replace(/check\.json$/, "tasks.json")}`, "utf8"));
   fs.writeFileSync(`${process.cwd()}/${check}`, JSON.stringify({ summary: "All good.", tasks: Object.fromEntries(tasks.map((t) => [t.id, { verdict: "right", note: "Right." }])) }));
 }
+// an interactive version: one task
+const tasksFile = prompt.match(/Save the tasks as `(\S+tasks\.json)`/)?.[1];
+if (tasksFile) {
+  const fs = await import("node:fs");
+  fs.mkdirSync(`${process.cwd()}/${tasksFile.replace(/\/tasks\.json$/, "")}`, { recursive: true });
+  fs.writeFileSync(`${process.cwd()}/${tasksFile}`, JSON.stringify({ tasks: [{ id: "1", kind: "written", question: "Q?" }] }));
+}
 if (prompt.includes("FAIL")) { console.error("boom: something broke"); process.exit(3); }
 out({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: `${process.cwd()}/memory/progress.md` } }] } });
 out({ type: "assistant", message: { content: [{ type: "tool_use", name: "Write", input: { file_path: `${process.cwd()}/semesters/2026-Fall/plans/2026-W42.md`, content: "x" } }] } });

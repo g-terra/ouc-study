@@ -133,6 +133,7 @@ export function workLabel(id: string, data?: SemesterData | null): string {
     const w = c?.weeks.find((x) => String(x.index) === week);
     return `Quiz · ${c?.short ?? code}${w ? ` ${w.index === 0 ? "General" : w.label}` : ""}`;
   }
+  if (id.startsWith("homework:")) { const a = data?.assignments.find((x) => x.id === id.slice(9)); return `Interactive · ${a ? `${a.code} ${a.title}` : id.split("/").pop()}`; }
   if (id.startsWith("notes:")) { const c = data?.courses.find((x) => x.code === id.slice(6)); return `Notes · ${c?.short ?? id.slice(6)}`; }
   const a = data?.assignments.find((x) => x.id === id);
   return `Prep · ${a ? `${a.code} ${a.title}` : id.split("/").pop()}`;

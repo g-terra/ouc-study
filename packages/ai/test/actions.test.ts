@@ -182,3 +182,28 @@ test("checking the homework: lenient, saved as check.json and validated", () => 
   assert.equal(acts.find((a) => a.id === "check-homework")?.title, "Check my homework");
   assert.deepEqual(acts.find((a) => a.id === "check-homework")?.fields.map((f) => [f.key, f.required ?? false]), [["course", false], ["assignment", true]]);
 });
+
+test("making the interactive version: a new assignment from its eClass task, a done one from the submission with the answers filled in", () => {
+  const base = { code: "AAA", title: "A2", fullTitle: "AAA Assignment 2", question: "Answer the questions in the PDF.", status: "", weekIndex: 1,
+    briefs: [{ title: "brief.pdf", href: "/files/S/assignments/AAA/10-05_A2/brief.pdf", ext: "pdf" }] };
+  const open = fixture({ courses: [course("AAA", [[1, "2026-09-01", [file]]])], notes: [],
+    assignments: [{ ...base, id: "AAA/10-05_A2", submitted: false, submissions: [] },
+      { ...base, id: "AAA/09-01_A0", title: "A0", fullTitle: "AAA A0", submitted: true,
+        submissions: [{ title: "Mine.pdf", href: "/files/S/assignments/AAA/09-01_A0/my-submission/Mine.pdf", ext: "pdf" }] }] });
+  const fresh = buildPrompt({ root: ".", semId: "S", data: open, action: "make-homework", params: { assignment: "AAA/10-05_A2" }, first: false });
+  assert.match(fresh, /make-homework skill/);
+  assert.match(fresh, /`semesters\/S\/assignments\/AAA\/10-05_A2\/brief\.pdf`/);
+  assert.match(fresh, /Save the tasks as `semesters\/S\/assignments\/AAA\/10-05_A2\/homework\/tasks\.json`/);
+  assert.match(fresh, /node packages\/ai\/validate\.mjs semesters\/S\/assignments\/AAA\/10-05_A2\/homework\/tasks\.json/);
+  assert.match(fresh, /no answers/i);
+  assert.doesNotMatch(fresh, /answers\.json/);
+
+  const done = buildPrompt({ root: ".", semId: "S", data: open, action: "make-homework", params: { assignment: "AAA/09-01_A0" }, first: false });
+  assert.match(done, /`semesters\/S\/assignments\/AAA\/09-01_A0\/my-submission\/Mine\.pdf`/);
+  assert.match(done, /`semesters\/S\/assignments\/AAA\/09-01_A0\/homework\/answers\.json`/);
+  assert.match(done, /exactly as (I|the student) wrote/i);
+  assert.match(done, /validate\.mjs semesters\/S\/assignments\/AAA\/09-01_A0\/homework\/tasks\.json semesters\/S\/assignments\/AAA\/09-01_A0\/homework\/answers\.json/);
+  // one that has an interactive version already is left alone
+  assert.throws(() => buildPrompt({ root: ".", semId: "S", data: hw, action: "make-homework", params: { assignment: "AAA/09-28_A1" } }), /already has an interactive version/);
+  assert.equal(listActions(join(dirname(fileURLToPath(import.meta.url)), "../../..")).find((a) => a.id === "make-homework")?.title, "Make it interactive");
+});

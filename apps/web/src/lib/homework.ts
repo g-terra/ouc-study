@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { applyAnswer, type HomeworkAnswers, type HomeworkCheck, type HomeworkTask } from "@ouc/content/homework";
 import { refreshAi, token } from "./ai";
+import { refreshData } from "./data";
 
 export interface HomeworkState { state: "loading" | "ok" | "unavailable"; answers: Record<string, HomeworkAnswers>; checks: Record<string, HomeworkCheck> }
 
@@ -79,25 +80,30 @@ export async function makePdf(sem: string, assignment: string, title: string, na
 export const printHref = (sem: string, assignment: string, name: string) =>
   `/print/homework/${[sem, ...assignment.split("/")].map(encodeURIComponent).join("/")}?name=${encodeURIComponent(name)}`;
 
-// ---------- Check my answers: the AI checks them in the background (/api/ai/homework-check) ----------
-export interface CheckJob { id: string; chatId?: string; sem: string; assignment: string; started: string; running: boolean; ok?: boolean; error?: string }
-let jobs: CheckJob[] = [];
+// ---------- homework in the background, with no chat (/api/ai/homework-check, /api/ai/homework-make) ----------
+// kind "check": Check my answers (homework/check.json); kind "make": Make it interactive (homework/tasks.json)
+export interface HomeworkJob { id: string; kind: "check" | "make"; chatId?: string; sem: string; assignment: string; started: string; running: boolean; ok?: boolean; error?: string }
+let jobs: HomeworkJob[] = [];
 let dismissed = new Set<string>();
 const jobListeners = new Set<() => void>();
 let jobTimer: number | undefined;
 async function pollJobs() {
-  const j = await fetch("/api/ai/homework-check", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const next: CheckJob[] = j?.jobs ?? [];
-  // a check just finished: show it
-  for (const n of next) if (n.ok && jobs.find((o) => o.id === n.id)?.running) load(n.sem);
+  const get = (kind: string) => fetch(`/api/ai/homework-${kind}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const [check, make] = await Promise.all([get("check"), get("make")]);
+  const next: HomeworkJob[] = [...(check?.jobs ?? []).map((j: HomeworkJob) => ({ ...j, kind: "check" })), ...(make?.jobs ?? []).map((j: HomeworkJob) => ({ ...j, kind: "make" }))];
+  // one just finished: show it (a check comes with the answers; new tasks with the app data)
+  for (const n of next) {
+    if (!n.ok || !jobs.find((o) => o.id === n.id)?.running) continue;
+    if (n.kind === "make") refreshData(); else load(n.sem);
+  }
   jobs = next;
   jobListeners.forEach((l) => l());
   window.clearTimeout(jobTimer);
   jobTimer = jobs.some((x) => x.running) ? window.setTimeout(pollJobs, 2000) : undefined;
 }
 
-/** The checks running for an assignment, and the last one that failed (until dismissed); `all` keeps the finished ones too. */
-export function useCheckJobs(sem: string, assignment?: string, all = false): CheckJob[] {
+/** The jobs running for an assignment, and the last that failed (until dismissed); `all` keeps the finished ones too. */
+function useJobs(kind: HomeworkJob["kind"], sem: string, assignment?: string, all = false): HomeworkJob[] {
   const [, tick] = useState(0);
   useEffect(() => {
     const l = () => tick((n) => n + 1);
@@ -105,16 +111,21 @@ export function useCheckJobs(sem: string, assignment?: string, all = false): Che
     if (jobListeners.size === 1) pollJobs();
     return () => { jobListeners.delete(l); };
   }, []);
-  return jobs.filter((j) => j.sem === sem && (!assignment || j.assignment === assignment) && (all || j.running || (!j.ok && !dismissed.has(j.id))));
+  return jobs.filter((j) => j.kind === kind && j.sem === sem && (!assignment || j.assignment === assignment) && (all || j.running || (!j.ok && !dismissed.has(j.id))));
 }
-export const dismissCheck = (id: string) => { dismissed = new Set([...dismissed, id]); jobListeners.forEach((l) => l()); };
+export const useCheckJobs = (sem: string, assignment?: string, all = false) => useJobs("check", sem, assignment, all);
+export const useMakeJobs = (sem: string, assignment?: string, all = false) => useJobs("make", sem, assignment, all);
+export const dismissJob = (id: string) => { dismissed = new Set([...dismissed, id]); jobListeners.forEach((l) => l()); };
 
-/** Asks the AI to check the answers in the background. Throws Error(message) if it can't start. */
-export async function checkAnswers(sem: string, assignment: string): Promise<void> {
-  const res = await fetch("/api/ai/homework-check", { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ sem, assignment }) }).catch(() => null);
+async function startJob(kind: HomeworkJob["kind"], sem: string, assignment: string): Promise<void> {
+  const res = await fetch(`/api/ai/homework-${kind}`, { method: "POST", headers: { "Content-Type": "application/json", "X-OUC-AI": await token() }, body: JSON.stringify({ sem, assignment }) }).catch(() => null);
   if (res?.status === 403) refreshAi(true);   // the app server restarted: get a new token
   const j = await res?.json().catch(() => null);
   if (!res?.ok) throw new Error(j?.error ?? "Couldn't start the AI. Is the app running on your computer?");
-  jobs = [...jobs.filter((x) => !j.jobs.some((n: CheckJob) => n.id === x.id)), ...j.jobs];
+  jobs = [...jobs.filter((x) => !j.jobs.some((n: HomeworkJob) => n.id === x.id)), ...j.jobs.map((n: HomeworkJob) => ({ ...n, kind }))];
   pollJobs();
 }
+/** Asks the AI to check the answers in the background. Throws Error(message) if it can't start. */
+export const checkAnswers = (sem: string, assignment: string) => startJob("check", sem, assignment);
+/** Asks the AI to make the interactive version in the background. Throws Error(message) if it can't start. */
+export const makeInteractive = (sem: string, assignment: string) => startJob("make", sem, assignment);

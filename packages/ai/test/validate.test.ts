@@ -43,7 +43,7 @@ test("a quiz is checked against docs/QUIZ_FORMAT.md, with the course from its fo
   assert.match(validateQuiz(quiz, "semesters/S/notes/AAA/quiz.json").errors[0], /quizzes\/<COURSE CODE>/);
 });
 
-test("homework files: the tasks against docs/HOMEWORK_FORMAT.md, and a check against the tasks next to it", () => {
+test("homework files: the tasks against docs/HOMEWORK_FORMAT.md, answers and a check against the tasks next to them", () => {
   const tasks = JSON.stringify({ tasks: [{ id: "1", kind: "written", question: "Why?" }, { id: "2", kind: "choice", question: "Which?", options: ["A", "B"] }] });
   const sibling = (name: string) => (name === "tasks.json" ? tasks : null);
   assert.deepEqual(validateHomework(tasks, "semesters/S/assignments/AAA/09-28_A1/homework/tasks.json", sibling).errors, []);
@@ -52,4 +52,6 @@ test("homework files: the tasks against docs/HOMEWORK_FORMAT.md, and a check aga
   assert.deepEqual(validateHomework(check, "x/homework/check.json", sibling).errors, []);
   assert.match(validateHomework('{"tasks":{"1":{"verdict":"right","note":"ok"}}}', "x/homework/check.json", sibling).errors[0]!, /Task 2.*missing/);
   assert.match(validateHomework(check, "x/homework/check.json", () => null).errors[0]!, /tasks\.json/);
+  assert.deepEqual(validateHomework(JSON.stringify({ answers: { "1": { text: "<p>Mine.</p>", done: true } } }), "x/homework/answers.json", sibling).errors, []);
+  assert.match(validateHomework(JSON.stringify({ answers: { "2": { choice: 5 } } }), "x/homework/answers.json", sibling).errors[0]!, /choice/);
 });
