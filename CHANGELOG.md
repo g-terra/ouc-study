@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.34.0](https://github.com/g-terra/ouc-study/compare/v0.33.0...v0.34.0) (2026-10-23)
+
+
+### Features
+
+* **ai:** homework tutor on the current task, and a lenient AI check of the answers ([#168](https://github.com/g-terra/ouc-study/issues/168)) ([0604327](https://github.com/g-terra/ouc-study/commit/0604327f56e73ebaf4384389850c1e7639d95c07))
+* **ai:** make the interactive version of an assignment, from the eClass task or the submitted work ([#176](https://github.com/g-terra/ouc-study/issues/176)) ([d7ed352](https://github.com/g-terra/ouc-study/commit/d7ed352ab03c800c0afa7688e1dafb80a57910e9))
+* **backup:** back up class videos as smaller copies and split big files ([#171](https://github.com/g-terra/ouc-study/issues/171)) ([21973ae](https://github.com/g-terra/ouc-study/commit/21973ae9bf6ec359fc0095812b84384f51ae2800))
+* **backup:** back up from Settings, with a one-time prompt and automatic runs after sync ([#172](https://github.com/g-terra/ouc-study/issues/172)) ([f1d9045](https://github.com/g-terra/ouc-study/commit/f1d90451442326f1030c5a40f95815a849043e7d))
+* **backup:** back up to Google Drive ([#169](https://github.com/g-terra/ouc-study/issues/169)) ([81ca7d2](https://github.com/g-terra/ouc-study/commit/81ca7d2e299aa81a2cec397d0fdbe472111c6dc0))
+* **backup:** restore a backup, `ouc backup`, and a backup step in setup ([#173](https://github.com/g-terra/ouc-study/issues/173)) ([7e0edda](https://github.com/g-terra/ouc-study/commit/7e0eddafb491df9500c71866a8d506f68802b7e6))
+* **backup:** show how to get a GitHub token, and live progress while backing up ([#174](https://github.com/g-terra/ouc-study/issues/174)) ([8ad9938](https://github.com/g-terra/ouc-study/commit/8ad99385aa1507b47fe6e39a043a00a80f210e6d))
+* **backup:** sign in to GitHub and make the private backup repo ([#167](https://github.com/g-terra/ouc-study/issues/167)) ([4806f10](https://github.com/g-terra/ouc-study/commit/4806f1036ec8999eab11160d58610388186ab1bf))
+
+
+### Bug Fixes
+
+* **backup:** push big GitHub backups in batches and retry a dropped connection ([#175](https://github.com/g-terra/ouc-study/issues/175)) ([0506928](https://github.com/g-terra/ouc-study/commit/05069285f899bd4869d3e224f2c238ec3942d15a))
+* **sync:** decode HTML entities in assignment names before making their folder ([#177](https://github.com/g-terra/ouc-study/issues/177)) ([eacdb83](https://github.com/g-terra/ouc-study/commit/eacdb83a8c3171f514cb2f063a99953bb603fcae))
+
 ## [0.33.0](https://github.com/g-terra/ouc-study/compare/v0.32.0...v0.33.0) (2026-10-22)
 
 
