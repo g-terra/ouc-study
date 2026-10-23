@@ -12,24 +12,23 @@ export interface GithubConfig {
   /** where to push instead of github.com/<repo> (tests, GitHub Enterprise) */
   remote?: string;
 }
-export interface DriveConfig {
-  target: "drive";
-  refreshToken: string;
-  email?: string;
-}
-/** What goes in and when: the same for both targets. */
+/** What goes in and when. */
 export interface BackupChoices {
   /** after each eClass sync (default on) */
   auto?: boolean;
   courseFiles?: boolean;
   videos?: boolean;
 }
-export type BackupConfig = (GithubConfig | DriveConfig) & BackupChoices;
+export type BackupConfig = GithubConfig & BackupChoices;
 
 const file = (root: string) => join(root, ".ouc", "backup.json");
 
+/** null when not set up (a Google Drive setup from an older version counts as not set up) */
 export function loadBackupConfig(root: string): BackupConfig | null {
-  try { return JSON.parse(readFileSync(file(root), "utf8")); } catch { return null; }
+  try {
+    const cfg = JSON.parse(readFileSync(file(root), "utf8"));
+    return cfg?.target === "github" ? cfg : null;
+  } catch { return null; }
 }
 
 export function saveBackupConfig(root: string, cfg: BackupConfig) {

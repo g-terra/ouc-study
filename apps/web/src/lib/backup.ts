@@ -2,17 +2,17 @@
 import type { BackupProgress } from "@ouc/backup/progress";
 import { daysBetween, fmtShort, fmtTime } from "./dates.ts";
 
-export interface BackupStatus { ok: boolean; target?: "github" | "drive"; at: string; summary: string; files: number; bytes: number; error?: string; lastGood?: string }
+export interface BackupStatus { ok: boolean; target?: "github"; at: string; summary: string; files: number; bytes: number; error?: string; lastGood?: string }
 export interface BackupInfo {
-  setup: null | { target: "github"; repo: string; login: string } | { target: "drive"; email?: string };
+  setup: null | { target: "github"; repo: string; login: string };
   choices: { auto: boolean; courseFiles: boolean; videos: boolean };
   status: BackupStatus | null;
   running: boolean;
   /** how far the running backup has got */
   progress?: BackupProgress | null;
   prompt: "show" | "hide";
-  signIn: null | { kind: "github" | "google"; userCode?: string; verificationUri?: string; url?: string; error?: string };
-  can: { githubDevice: boolean; google: boolean };
+  signIn: null | { kind: "github"; userCode?: string; verificationUri?: string; error?: string };
+  can: { githubDevice: boolean };
 }
 
 export function backupWhen(iso: string, now = new Date()): string {

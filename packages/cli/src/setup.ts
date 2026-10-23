@@ -20,7 +20,7 @@ import { findConverter } from "../../ai/src/review.ts";
 import { findEngine, installWhisper } from "../../ai/src/transcribe.ts";
 import { loadMediaConfig } from "../../eclass-sync/src/media.ts";
 import { backupStep, restoreStep, terminal } from "./backup.ts";
-import { githubClientId, googleClient } from "../../backup/src/clients.ts";
+import { githubClientId } from "../../backup/src/clients.ts";
 import { loadBackupConfig } from "../../backup/src/config.ts";
 
 const { c } = ui;
@@ -166,16 +166,16 @@ async function main() {
 
   // ---- backup (before anything is made, so a new computer can get it all back first) ----
   if (!DRY) {
-    ui.step(STEPS, "Back up your study data", "a private GitHub repo or Google Drive");
+    ui.step(STEPS, "Back up your study data", "a private GitHub repo");
     const was = loadBackupConfig(ROOT);
-    if (was) ui.ok(`Backups go to ${was.target === "github" ? `${was.repo} on GitHub` : "your Google Drive"} ${c.gray("(change it in Settings › Backup)")}`);
+    if (was) ui.ok(`Backups go to ${was.repo} on GitHub ${c.gray("(change it in Settings › Backup)")}`);
     else if (!YES) {
       // nothing made yet on this computer: offer to bring a backup back
       const fresh = !existsSync(join(ROOT, "memory")) && !existsSync(join(ROOT, "STUDENT.md"));
       ui.info("Keeps a copy of your notes, course files, class videos, quizzes, homework answers and progress.");
-      if (await backupStep(ROOT, terminal, { githubClientId: githubClientId(), google: googleClient() })
+      if (await backupStep(ROOT, terminal, { githubClientId: githubClientId() })
         && fresh && (await confirm("Restore your study data from this backup now? (for a new computer)", false))) {
-        await restoreStep(ROOT, terminal, { google: googleClient() });
+        await restoreStep(ROOT, terminal);
       }
     }
   }

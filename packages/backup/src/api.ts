@@ -4,7 +4,6 @@
  *   POST /api/backup/run               back up now (answers when it's done); ?auto=1 after a sync: only when set up and left on
  *   POST /api/backup/github/start      sign in to GitHub with a code → { userCode, verificationUri }; GET shows when it's done
  *   POST /api/backup/github/token      { token } sign in with a pasted token
- *   POST /api/backup/google/start      → { url } to open; Google comes back to a one-off local page
  *   POST /api/backup/choices           { auto?, courseFiles?, videos? }
  *   POST /api/backup/prompt            { action: "later" | "never" }
  *   POST /api/backup/disconnect        forgets the sign-in (the backup itself stays where it is)
@@ -12,10 +11,8 @@
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { connectGithub, loadBackupConfig, saveBackupConfig, type BackupChoices, type BackupConfig } from "./config.ts";
-import { exchangeCode, googleAuthUrl, pkce, waitForGoogleCode } from "./drive.ts";
 import { startDeviceLogin, waitForDeviceToken } from "./github.ts";
 import { backupProgress, backupRunning } from "./now.ts";
 import type { BackupStatus } from "./run.ts";
@@ -26,7 +23,6 @@ export interface BackupApiOptions {
   backup: (root: string) => Promise<BackupStatus>;
   /** the OAuth app for "Sign in with GitHub"; "" offers only the token route */
   githubClientId: string;
-  google: { clientId: string; clientSecret: string } | null;
   githubApi?: string;
   githubBase?: string;
   /** false: never show the one-time prompt (the smoke tests) */
@@ -41,12 +37,12 @@ export function createBackupApi(o: BackupApiOptions) {
   const now = o.now ?? (() => new Date());
   const promptFile = join(o.root, ".ouc", "backup-prompt.json");
   const statusFile = join(o.root, ".ouc", "backup-status.json");
-  // a sign-in in progress (GitHub code or Google page), so the page can show it and its outcome
-  let signIn: { kind: "github" | "google"; userCode?: string; verificationUri?: string; url?: string; error?: string } | null = null;
+  // a GitHub sign-in in progress (the code to type), so the page can show it and its outcome
+  let signIn: { kind: "github"; userCode?: string; verificationUri?: string; error?: string } | null = null;
 
   const readJson = <T>(p: string): T | null => { try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; } };
   const choicesOf = (c: BackupConfig | null) => ({ auto: c?.auto ?? true, courseFiles: c?.courseFiles ?? true, videos: c?.videos ?? true });
-  const setupOf = (c: BackupConfig | null) => !c ? null : c.target === "github" ? { target: c.target, repo: c.repo, login: c.login } : { target: c.target, email: c.email };
+  const setupOf = (c: BackupConfig | null) => c && { target: c.target, repo: c.repo, login: c.login };
   function prompt(): "show" | "hide" {
     if (o.askToSetUp === false || loadBackupConfig(o.root)) return "hide";
     const p = readJson<{ never?: boolean; snoozedUntil?: string }>(promptFile);
@@ -94,7 +90,7 @@ export function createBackupApi(o: BackupApiOptions) {
       if (req.method === "GET" && url.pathname === "/api/backup") {
         return send(res, {
           setup: setupOf(cfg), choices: choicesOf(cfg), status: readJson<BackupStatus>(statusFile), running: backupRunning(o.root), progress: backupProgress(o.root),
-          prompt: prompt(), signIn, can: { githubDevice: !!o.githubClientId, google: !!o.google },
+          prompt: prompt(), signIn, can: { githubDevice: !!o.githubClientId },
         });
       }
       if (req.method !== "POST") return send(res, { error: "Not found" }, 404);
@@ -119,19 +115,6 @@ export function createBackupApi(o: BackupApiOptions) {
             .then((token) => connectGithub({ root: o.root, token, api: o.githubApi }))
             .then((gh) => connected(gh, before), (e: Error) => { signIn = { kind: "github", error: e.message }; });
           return send(res, signIn);
-        }
-        case "/api/backup/google/start": {
-          const google = o.google;
-          if (!google) return send(res, { error: "Google Drive isn't available in this version of the app." }, 409);
-          const { verifier, challenge } = pkce();
-          const state = randomBytes(16).toString("hex");
-          const back = await waitForGoogleCode({ state });
-          const page = googleAuthUrl({ clientId: google.clientId, redirectUri: back.redirectUri, challenge, state });
-          signIn = { kind: "google", url: page };
-          back.code
-            .then((code) => exchangeCode({ ...google, code, verifier, redirectUri: back.redirectUri }))
-            .then((t) => connected({ target: "drive", refreshToken: t.refreshToken }, before), (e: Error) => { signIn = { kind: "google", error: e.message }; });
-          return send(res, { url: page });
         }
         case "/api/backup/choices":
           if (!cfg) return send(res, { error: "Backup isn't set up yet." }, 409);

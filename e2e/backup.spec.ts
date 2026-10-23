@@ -1,5 +1,5 @@
 // Backups: Settings › Backup (connect GitHub with a token, Back up now, the choices), the one-time prompt
-// and the bar when a backup failed. /api/backup is mocked: no GitHub or Google in tests.
+// and the bar when a backup failed. /api/backup is mocked: no GitHub in tests.
 import { expect, test, type Page } from "@playwright/test";
 
 const SETTINGS = "/v2/2026-Demo/settings";
@@ -14,7 +14,7 @@ test.afterEach(async () => expect(errors, "browser errors").toEqual([]));
 
 const base = {
   setup: null, choices: { auto: true, courseFiles: true, videos: true }, status: null, running: false,
-  prompt: "hide", signIn: null, can: { githubDevice: false, google: false },
+  prompt: "hide", signIn: null, can: { githubDevice: false },
 };
 /** a small stand-in for /api/backup that remembers what the page did */
 async function mockBackup(page: Page, start: Record<string, unknown> = {}) {
@@ -43,7 +43,7 @@ test("backup is set up from Settings with a GitHub token, then backs up now and 
   await page.goto(SETTINGS);
   const section = page.getByRole("region", { name: "Backup" });
   await expect(section.getByRole("heading", { name: "A private GitHub repo" })).toBeVisible();
-  await expect(section.getByText("Not available in this version of the app yet.")).toBeVisible();
+  await expect(section.getByText(/Google Drive/)).toHaveCount(0);
   await section.getByLabel(/GitHub token/).fill("github_pat_x");
   await section.getByRole("button", { name: "Connect GitHub" }).click();
   await expect(section.getByTestId("backup-status")).toContainText("1,214 files · 306 MB");

@@ -8,10 +8,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { gitBackup } from "../src/git.ts";
-import { driveBackup, driveFiles } from "../src/drive.ts";
 import { prepareSources } from "../src/media.ts";
 import { githubFiles, restoreFiles, type RemoteFile } from "../src/restore.ts";
-import { fakeDrive } from "./fixtures/fake-drive.ts";
 
 function study(files: Record<string, string | Buffer> = {}) {
   const root = mkdtempSync(join(tmpdir(), "ouc-restore-"));
@@ -84,36 +82,4 @@ test("only the study files a backup takes can be restored (never code, never out
   const r = await restoreFiles(here.root, [f("../outside.md"), f("apps/web/src/App.tsx"), f(".eclass-token"), f("semesters/S/../../x.md"), f("memory/ok.md")], {});
   assert.deepEqual(saved, ["memory/ok.md"]);
   assert.deepEqual(r.skipped.sort(), ["../outside.md", ".eclass-token", "apps/web/src/App.tsx", "semesters/S/../../x.md"].sort());
-});
-
-test("a Drive backup comes back, and the next backup from the new computer uploads nothing again", async () => {
-  const d = await fakeDrive();
-  try {
-    const old = study({ "semesters/S/notes/n.md": "note", "memory/progress.md": "p" });
-    await driveBackup({ root: old.root, accessToken: "acc", api: d.base, files: ["memory/progress.md", "semesters/S/notes/n.md"] });
-    const putsBefore = d.puts.length;
-
-    const fresh = study();
-    const listing = await driveFiles({ root: fresh.root, accessToken: "acc", api: d.base });
-    const r = await restoreFiles(fresh.root, listing.files, {});
-    listing.remember(r);
-    assert.deepEqual(r.restored.sort(), ["memory/progress.md", "semesters/S/notes/n.md"]);
-    assert.equal(fresh.read("semesters/S/notes/n.md").toString(), "note");
-
-    const next = await driveBackup({ root: fresh.root, accessToken: "acc", api: d.base, files: ["memory/progress.md", "semesters/S/notes/n.md"] });
-    assert.equal(next.uploaded, 0);
-    assert.equal(d.puts.length, putsBefore);
-  } finally { d.close(); }
-});
-
-test("files moved to _removed on Drive don't come back", async () => {
-  const d = await fakeDrive();
-  try {
-    const old = study({ "semesters/S/x.md": "x", "memory/y.md": "y" });
-    await driveBackup({ root: old.root, accessToken: "acc", api: d.base, files: ["memory/y.md", "semesters/S/x.md"] });
-    await driveBackup({ root: old.root, accessToken: "acc", api: d.base, files: ["memory/y.md"] });
-    const fresh = study();
-    const listing = await driveFiles({ root: fresh.root, accessToken: "acc", api: d.base });
-    assert.deepEqual(listing.files.map((f) => f.path), ["memory/y.md"]);
-  } finally { d.close(); }
 });
