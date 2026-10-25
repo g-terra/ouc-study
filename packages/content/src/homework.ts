@@ -62,7 +62,7 @@ export function parseHomework(src: string | Raw): { homework: Homework | null; p
       const options = Array.isArray(t.options) ? (t.options as unknown[]).map(str) : [];
       if (options.length < 2 || options.length > 8 || options.some((o) => !o)) return problems.push(`${at}: "options" must be a list of 2 to 8 texts.`);
       task.options = options;
-      if (t.multiple === true || MANY.test(question)) task.multiple = true;
+      if (t.multiple === true || (t.multiple !== false && MANY.test(question))) task.multiple = true;
     }
     tasks.push(task);
   });
@@ -74,6 +74,35 @@ export function parseHomework(src: string | Raw): { homework: Homework | null; p
 export function pickedOptions(t: HomeworkTask, a: TaskAnswer | undefined): number[] {
   if (t.multiple && Array.isArray(a?.choices)) return a.choices;
   return a?.choice !== undefined ? [a.choice] : [];
+}
+
+/** What a task can be changed to in the app: one option, several options, or typed. */
+export const TASK_TYPES = { written: "Written", calculation: "Calculation", choice: "One choice", multiple: "Several answers" } as const;
+export type TaskType = keyof typeof TASK_TYPES;
+export const taskType = (t: HomeworkTask): TaskType => (t.multiple ? "multiple" : t.kind);
+
+/**
+ * Changes one task's type in a tasks file ({ task, type, options? }), to fix what the AI got wrong. Choice types need
+ * options (the task's own, or new ones); the rest of the file is kept. Returns the new file (the old one is left alone).
+ */
+export function retypeTask(raw: Raw, patch: unknown): Raw {
+  const p = (patch ?? {}) as Record<string, unknown>;
+  const type = p.type as TaskType;
+  if (!Object.hasOwn(TASK_TYPES, String(type))) bad("Bad type.");
+  const list: Raw[] = Array.isArray(raw?.tasks) ? raw.tasks : [];
+  const at = list.findIndex((t, i) => (typeof t?.id === "string" && t.id.trim() ? t.id.trim() : String(i + 1)) === p.task);
+  if (at < 0) bad("No such task.");
+  const { options: old, multiple: _m, ...rest } = list[at];
+  const task: Raw = { ...rest, kind: type === "multiple" ? "choice" : type };
+  if (task.kind === "choice") {
+    const options = (Array.isArray(p.options) ? p.options : Array.isArray(old) ? old : []).map((o: unknown) => (typeof o === "string" ? o.trim() : "")).filter(Boolean);
+    if (options.length < 2 || options.length > 8) bad("Give 2 to 8 options, one per line.");
+    Object.assign(task, { options, multiple: type === "multiple" });
+  }
+  const next = { ...raw, tasks: list.map((t, i) => (i === at ? task : t)) };
+  const { problems } = parseHomework(next);
+  if (problems.length) bad(problems[0]!);
+  return next;
 }
 
 /** What the timeline calls a task. */

@@ -87,6 +87,35 @@ test("an answer that starts with a picture opens as a picture, not as code, afte
   await expect(box).toHaveText("after the picture");
 });
 
+test("a task's type can be changed in the app when the AI got it wrong, and changed back", async ({ page }) => {
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  const timeline = page.getByRole("navigation", { name: "Tasks" });
+  await timeline.getByRole("button", { name: /Good habits/ }).click();
+  await expect(page.getByRole("checkbox")).toHaveCount(3);
+  await page.getByRole("button", { name: "Wrong type? Change it" }).click();
+  const form = page.getByRole("region", { name: "Change the task's type" });
+  await expect(form.getByRole("combobox", { name: "Type" })).toHaveValue("multiple");
+  await form.getByRole("combobox", { name: "Type" }).selectOption("choice");
+  await expect(form.getByRole("textbox", { name: "Options, one per line" })).toHaveValue("Spaced practice\nCramming the night before\nTesting yourself");
+  await form.getByRole("button", { name: "Save type" }).click();
+  await expect(form).toBeHidden();
+  await expect(page.getByRole("radio")).toHaveCount(3, { timeout: 10_000 });
+  await expect(timeline.getByRole("button", { name: /Good habits/ })).toContainText("Multiple choice");
+  // a written task needs its options to become a choice
+  await timeline.getByRole("button", { name: /Your demo week/ }).click();
+  await page.getByRole("button", { name: "Wrong type? Change it" }).click();
+  await form.getByRole("combobox", { name: "Type" }).selectOption("choice");
+  await form.getByRole("button", { name: "Save type" }).click();
+  await expect(form.getByRole("alert")).toHaveText("Give 2 to 8 options, one per line.");
+  await form.getByRole("button", { name: "Cancel" }).click();
+  // and back
+  await timeline.getByRole("button", { name: /Good habits/ }).click();
+  await page.getByRole("button", { name: "Wrong type? Change it" }).click();
+  await form.getByRole("combobox", { name: "Type" }).selectOption("multiple");
+  await form.getByRole("button", { name: "Save type" }).click();
+  await expect(page.getByRole("checkbox")).toHaveCount(3, { timeout: 10_000 });
+});
+
 test("answers can have bold, colours and formulas, and keep them after a reload", async ({ page }) => {
   await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
   await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Demo sum/ }).click();
@@ -123,6 +152,22 @@ test("answers can have bold, colours and formulas, and keep them after a reload"
 
 // a 1×1 PNG
 const PIXEL = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+
+test("a paragraph can be centred, and stays centred after a reload and in the PDF", async ({ page }) => {
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Demo sum/ }).click();
+  const box = page.getByRole("textbox", { name: "Your answer" });
+  await box.fill("The result");
+  await page.getByRole("button", { name: "Centre" }).click();
+  await expect(page.getByRole("button", { name: "Centre" })).toHaveAttribute("aria-pressed", "true");
+  await expect(box.locator("p").first()).toHaveCSS("text-align", "center");
+  await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  await page.reload();
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Demo sum/ }).click();
+  await expect(page.getByRole("textbox", { name: "Your answer" }).locator("p").first()).toHaveCSS("text-align", "center");
+  await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student");
+  await expect(page.locator(".answer-text p", { hasText: "The result" })).toHaveCSS("text-align", "center");
+});
 
 test("a picture can be added to an answer and is still there after a reload", async ({ page }) => {
   await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);

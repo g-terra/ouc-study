@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { Assignment, SemesterData } from "@ouc/content/types";
-import { checkCounts, homeworkProgress, pickedOptions, taskLabel, type HomeworkAnswers, type HomeworkCheck, type HomeworkTask, type TaskAnswer, type Verdict } from "@ouc/content/homework";
+import { TASK_TYPES, checkCounts, homeworkProgress, pickedOptions, taskLabel, taskType, type TaskType, type HomeworkAnswers, type HomeworkCheck, type HomeworkTask, type TaskAnswer, type Verdict } from "@ouc/content/homework";
 import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { mdToHtml } from "../lib/markdown";
 import { browserStore, clearDraft, draftKey, keepDraft, restoreDraft } from "../lib/homework-drafts";
-import { checkAnswers, dismissJob, dropPolish, makeInteractive, makePdf, polishAnswer, printHref, saveAnswer, uploadPicture, useCheckJobs, useHomework, useMakeJobs, usePolishJobs, type AnswerPatch, type HomeworkJob } from "../lib/homework";
+import { checkAnswers, dismissJob, dropPolish, makeInteractive, makePdf, polishAnswer, printHref, retypeTask, saveAnswer, uploadPicture, useCheckJobs, useHomework, useMakeJobs, usePolishJobs, type AnswerPatch, type HomeworkJob } from "../lib/homework";
 import { isEmptyAnswer } from "../lib/answer-html";
 import { useAiStatus } from "../lib/ai";
 import { useConnection } from "../lib/connection";
@@ -152,6 +152,7 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
               send={`Help me with task ${i + 1}${task.title ? ` (${task.title})` : ""}: ${task.question}`}>Ask AI about this task</AskAiButton>
           </div>
           <div className="md font-serif text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(task.question) }} />
+          <ChangeType key={task.id} sem={data.id} assignment={id} task={task} />
 
           {task.kind === "choice" ? (
             <>
@@ -216,6 +217,51 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** Change type: fixes a task the AI made as the wrong kind (written, calculation, one choice, several answers). */
+function ChangeType({ sem, assignment, task }: { sem: string; assignment: string; task: HomeworkTask }) {
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<TaskType>(taskType(task));
+  const [options, setOptions] = useState((task.options ?? []).join("\n"));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!open) {
+    return (
+      <button type="button" onClick={() => { setType(taskType(task)); setOptions((task.options ?? []).join("\n")); setError(null); setOpen(true); }}
+        className="justify-self-start text-xs text-muted underline-offset-2 hover:text-ink hover:underline">Wrong type? Change it</button>
+    );
+  }
+  const choice = type === "choice" || type === "multiple";
+  const save = async () => {
+    setBusy(true); setError(null);
+    try {
+      await retypeTask(sem, assignment, task.id, type, choice ? options.split("\n").map((o) => o.trim()).filter(Boolean) : undefined);
+      setOpen(false);
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+  return (
+    <section aria-label="Change the task's type" className="grid gap-2 rounded-xl border border-line bg-surface-2/50 p-3 text-sm">
+      <label className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">Type</span>
+        <select value={type} onChange={(e) => setType(e.target.value as TaskType)} className="min-h-9 rounded-lg border border-line bg-surface px-2">
+          {(Object.keys(TASK_TYPES) as TaskType[]).map((t) => <option key={t} value={t}>{TASK_TYPES[t]}</option>)}
+        </select>
+      </label>
+      {choice && (
+        <label className="grid gap-1">
+          <span className="font-semibold">Options, one per line</span>
+          <textarea value={options} onChange={(e) => setOptions(e.target.value)} rows={4} className="rounded-lg border border-line bg-surface px-3 py-2" />
+        </label>
+      )}
+      <p className="text-xs text-muted">Your answer to this task is kept.</p>
+      {error && <div role="alert" className="rounded-lg bg-bad-bg px-3 py-2 text-bad">{error}</div>}
+      <div className="flex gap-2">
+        <button type="button" disabled={busy} onClick={save} className="min-h-9 rounded-full bg-ink px-4 font-semibold text-bg disabled:opacity-60">{busy ? "Saving…" : "Save type"}</button>
+        <button type="button" onClick={() => setOpen(false)} className="min-h-9 rounded-full border border-line px-4">Cancel</button>
+      </div>
+    </section>
   );
 }
 

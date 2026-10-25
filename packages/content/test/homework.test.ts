@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyAnswer, checkCounts, homeworkProgress, parseAnswers, parseCheck, parseHomework, pickedOptions, taskLabel } from "../src/homework.ts";
-import { allAnswers, allChecks, allPolish, discardPolish, homeworkDir, polishFile, readAnswers, readHomework, readPolish, saveAnswer, saveImage } from "../src/homework-store.ts";
+import { applyAnswer, checkCounts, homeworkProgress, parseAnswers, parseCheck, parseHomework, pickedOptions, retypeTask, taskLabel } from "../src/homework.ts";
+import { allAnswers, allChecks, allPolish, discardPolish, homeworkDir, saveTaskType, polishFile, readAnswers, readHomework, readPolish, saveAnswer, saveImage } from "../src/homework-store.ts";
 
 const TASKS = {
   title: "Assignment 3",
@@ -228,4 +228,35 @@ test("the options picked are read the same way for one or more answers", () => {
   assert.deepEqual(pickedOptions(tasks[0]!, { choice: 1 }), [1]); // picked before the task took more than one
   assert.deepEqual(pickedOptions(tasks[1]!, { choice: 1 }), [1]);
   assert.deepEqual(pickedOptions(tasks[1]!, {}), []);
+});
+
+test("a task's type can be changed, keeping everything else in the file", () => {
+  const raw = { title: "A3", extra: 1, tasks: [
+    { id: "1", kind: "written", question: "Pick one: (a) x (b) y", note: "kept" },
+    { id: "2", kind: "choice", question: "Which ones? (there can be more than one answer)", options: ["A", "B"] },
+  ] };
+  const one = retypeTask(raw, { task: "1", type: "choice", options: [" x ", "y", ""] });
+  assert.deepEqual(one.tasks[0], { id: "1", kind: "choice", question: "Pick one: (a) x (b) y", note: "kept", options: ["x", "y"], multiple: false });
+  assert.equal(one.extra, 1);
+  assert.equal(raw.tasks[0]!.kind, "written"); // the old object is left alone
+  // a question that says "more than one answer" can still be made single choice
+  const single = retypeTask(raw, { task: "2", type: "choice" });
+  assert.equal(parseHomework(single).homework!.tasks[1]!.multiple, undefined);
+  assert.equal(parseHomework(retypeTask(raw, { task: "2", type: "multiple" })).homework!.tasks[1]!.multiple, true);
+  const written = retypeTask(raw, { task: "2", type: "calculation" });
+  assert.deepEqual(written.tasks[1], { id: "2", kind: "calculation", question: "Which ones? (there can be more than one answer)" });
+  assert.throws(() => retypeTask(raw, { task: "1", type: "choice" }), /2 to 8/);
+  assert.throws(() => retypeTask(raw, { task: "9", type: "written" }), /No such task/);
+  assert.throws(() => retypeTask(raw, { task: "1", type: "essay" }), /Bad type/);
+});
+
+test("changing a task's type is saved in tasks.json, and answers stay", () => {
+  const dir = semester();
+  saveAnswer(dir, { assignment: "AAA/10-26_Assignment-3", task: "1", text: "kept" });
+  const hw = saveTaskType(dir, { assignment: "AAA/10-26_Assignment-3", task: "1", type: "multiple", options: ["A", "B", "C"] });
+  assert.equal(hw.tasks[0]!.kind, "choice");
+  assert.equal(hw.tasks[0]!.multiple, true);
+  assert.deepEqual(readHomework(dir, "AAA/10-26_Assignment-3")!.homework!.tasks[0]!.options, ["A", "B", "C"]);
+  assert.equal(readAnswers(dir, "AAA/10-26_Assignment-3")["1"]!.text, "kept");
+  assert.throws(() => saveTaskType(dir, { assignment: "AAA/nope", task: "1", type: "written" }), /no interactive version/);
 });

@@ -30,7 +30,7 @@ An assignment's **interactive version** lives next to it, in `semesters/<semeste
 | `question` | yes | The task as the brief asks it, in Markdown. Maths in LaTeX: `$…$` inline, `$$…$$` on its own line. Tables and lists are fine. |
 | `title` | no | A few words for the timeline. Without it the task is called "Task N". |
 | `options` | `choice` only | 2 to 8 option texts, in the brief's order. Nothing marks the right one. |
-| `multiple` | `choice` only | `true` when more than one option can be right (the brief says "more than one answer", "select all that apply"…): the student ticks several. A question that says so in its wording counts as `multiple` even without it. |
+| `multiple` | `choice` only | `true` when more than one option can be right (the brief says "more than one answer", "select all that apply"…): the student ticks several. A question that says so in its wording counts as `multiple` unless it says `"multiple": false`. The student can change a task's type in the app (**Wrong type? Change it**), which rewrites these fields. |
 | `title` (top) | no | The assignment's name as the brief gives it. |
 
 A file with problems isn't used: the app shows what to fix on the homework page.

@@ -8,7 +8,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { applyAnswer, parseCheck, parseHomework, type Homework, type HomeworkAnswers, type HomeworkCheck } from "./homework.ts";
+import { applyAnswer, parseCheck, parseHomework, retypeTask, type Homework, type HomeworkAnswers, type HomeworkCheck } from "./homework.ts";
 
 const SEGMENT = /^(?!\.)[^/\\]{1,120}$/;
 
@@ -97,6 +97,17 @@ export function saveAnswer(semDir: string, body: unknown, now = new Date()): Hom
   writeFileSync(`${f}.tmp`, `${JSON.stringify({ answers }, null, 1)}\n`);
   renameSync(`${f}.tmp`, f);
   return answers;
+}
+
+/** Changes one task's type in tasks.json ({ assignment, task, type, options? }, see retypeTask); returns the homework as now read. */
+export function saveTaskType(semDir: string, body: unknown): Homework {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const f = join(homeworkDir(semDir, String(b.assignment ?? "")), "tasks.json");
+  if (!existsSync(f)) throw Object.assign(new Error("This assignment has no interactive version."), { code: 404 });
+  const next = retypeTask(JSON.parse(readFileSync(f, "utf8")), b);
+  writeFileSync(`${f}.tmp`, `${JSON.stringify(next, null, 1)}\n`);
+  renameSync(`${f}.tmp`, f);
+  return parseHomework(next).homework!;
 }
 
 export const MAX_IMAGE = 10 * 1024 * 1024;

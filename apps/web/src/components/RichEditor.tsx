@@ -6,11 +6,12 @@ import StarterKit from "@tiptap/starter-kit";
 import { Color, TextStyle } from "@tiptap/extension-text-style";
 import Highlight from "@tiptap/extension-highlight";
 import Image from "@tiptap/extension-image";
+import TextAlign from "@tiptap/extension-text-align";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import katex from "katex";
 import { FORMULA_SNIPPETS, insertSnippet, toEditorHtml } from "../lib/answer-html";
-import { Code, ImagePlus, List, ListOrdered, SquareCode } from "./icons";
+import { AlignCenter, AlignLeft, AlignRight, Code, ImagePlus, List, ListOrdered, SquareCode } from "./icons";
 import { cx } from "./ui";
 
 const tex = (latex: string, display = false) => katex.renderToString(latex, { displayMode: display, throwOnError: false, strict: false });
@@ -44,6 +45,7 @@ const lowlight = createLowlight(common);
 const EXTENSIONS = [
   StarterKit.configure({ heading: false, codeBlock: false, horizontalRule: false, link: false }),
   TextStyle, Color, Highlight, Formula, CodeBlockLowlight.configure({ lowlight }), Image.configure({ allowBase64: false }),
+  TextAlign.configure({ types: ["paragraph"], alignments: ["left", "center", "right"] }),
 ];
 
 /** An answer shown as the editor shows it (formulas drawn, code coloured), but not editable: for the print page. */
@@ -117,7 +119,7 @@ function Toolbar({ editor, onFormula, onPictures }: { editor: Editor; onFormula:
     editor,
     selector: ({ editor: e }) => ({
       bold: e.isActive("bold"), italic: e.isActive("italic"), underline: e.isActive("underline"), highlight: e.isActive("highlight"),
-      bullet: e.isActive("bulletList"), ordered: e.isActive("orderedList"), code: e.isActive("code"), codeBlock: e.isActive("codeBlock"), color: (e.getAttributes("textStyle").color as string | undefined) ?? null,
+      bullet: e.isActive("bulletList"), ordered: e.isActive("orderedList"), code: e.isActive("code"), align: (["center", "right"] as const).find((a) => e.isActive({ textAlign: a })) ?? "left", codeBlock: e.isActive("codeBlock"), color: (e.getAttributes("textStyle").color as string | undefined) ?? null,
     }),
   });
   // buttons keep the focus (and the cursor) in the answer
@@ -142,6 +144,11 @@ function Toolbar({ editor, onFormula, onPictures }: { editor: Editor; onFormula:
       {sep}
       <button type="button" aria-label="Bulleted list" aria-pressed={on.bullet} onMouseDown={keep} onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(on.bullet)}><List aria-hidden className="size-4" /></button>
       <button type="button" aria-label="Numbered list" aria-pressed={on.ordered} onMouseDown={keep} onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(on.ordered)}><ListOrdered aria-hidden className="size-4" /></button>
+      {sep}
+      {([["Align left", "left", AlignLeft], ["Centre", "center", AlignCenter], ["Align right", "right", AlignRight]] as const).map(([name, a, Icon]) => (
+        <button key={a} type="button" aria-label={name} aria-pressed={on.align === a} onMouseDown={keep}
+          onClick={() => editor.chain().focus().setTextAlign(a).run()} className={btn(on.align === a)}><Icon aria-hidden className="size-4" /></button>
+      ))}
       {sep}
       <button type="button" aria-label="Inline code" aria-pressed={on.code} onMouseDown={keep} onClick={() => editor.chain().focus().toggleCode().run()} className={btn(on.code)}><Code aria-hidden className="size-4" /></button>
       <button type="button" aria-label="Code block" aria-pressed={on.codeBlock} onMouseDown={keep} onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={btn(on.codeBlock)}><SquareCode aria-hidden className="size-4" /></button>
