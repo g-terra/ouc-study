@@ -78,6 +78,22 @@ test("ouc update installs dependencies that are missing even when this update di
   } finally { done(); }
 });
 
+test("ouc update stops the running app before reinstalling the dependencies, and only then", () => {
+  // npm ci empties node_modules: a running app's Vite then fails to load its packages (UNLOADABLE_DEPENDENCY)
+  const { dev, student, done } = setup();
+  try {
+    release(dev, "0.2.0", { "package-lock.json": '{"v":2}' }); sh(dev, "tag", "v0.2.0"); sh(dev, "push", "-q", "--tags", "origin", "main");
+    const { calls, run } = recorder();
+    assert.equal(applyUpdate(student, { run, beforeInstall: () => calls.push("stop the app") }).changed, true);
+    assert.deepEqual(calls, ["stop the app", "npm ci --no-audit --no-fund"]);
+    // a change that leaves package.json and the lockfile alone
+    writeFileSync(join(dev, "notes.txt"), "no new packages"); sh(dev, "add", "-A"); sh(dev, "commit", "-qm", "notes"); sh(dev, "tag", "v0.2.1"); sh(dev, "push", "-q", "--tags", "origin", "main");
+    calls.length = 0;
+    assert.equal(applyUpdate(student, { run, beforeInstall: () => calls.push("stop the app") }).changed, true);
+    assert.deepEqual(calls, []);   // nothing to reinstall: the app keeps running
+  } finally { done(); }
+});
+
 test("ouc update never touches local code edits", () => {
   const { dev, student, done } = setup();
   try {
