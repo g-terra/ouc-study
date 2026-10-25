@@ -188,7 +188,12 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
 
           {check?.tasks[task.id] && (
             <section aria-label="AI check of this task" className="grid gap-1.5 rounded-xl border border-line bg-surface-2/50 p-3 text-sm">
-              <div className="flex items-center gap-2"><Sparkles aria-hidden className="size-4 text-accent" /><span className="font-semibold">AI check</span><VerdictTag v={check.tasks[task.id]!.verdict} /></div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Sparkles aria-hidden className="size-4 text-accent" /><span className="font-semibold">AI check</span><VerdictTag v={check.tasks[task.id]!.verdict} />
+                {/* think it's wrong, or missed something? argue it out; the AI corrects the check when you're right */}
+                <AskAiButton action="discuss-check" params={{ course: a.code, assignment: id, task: task.id }} className="ml-auto py-1 text-xs"
+                  send={`I'd like to discuss your check of task ${i + 1}${task.title ? ` (${task.title})` : ""}: you said "${VERDICT[check.tasks[task.id]!.verdict].label}".`}>Discuss</AskAiButton>
+              </div>
               <Markdown text={check.tasks[task.id]!.note} sem={data.id} diagrams={false} className="text-sm" />
             </section>
           )}

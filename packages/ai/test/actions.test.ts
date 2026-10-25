@@ -171,6 +171,19 @@ test("the homework tutor knows the task being answered and where the answers are
   assert.throws(() => buildPrompt({ root: ".", semId: "S", data: hw, action: "homework-tutor", params: { assignment: "AAA/nope" } }), /isn't in the app data/);
 });
 
+test("discussing a task's check: reads the check and the answer, and may correct only that task's entry", () => {
+  const p = buildPrompt({ root: ".", semId: "S", data: hw, action: "discuss-check", params: { assignment: "AAA/09-28_A1", task: "2" }, first: false });
+  assert.match(p, /discuss-check skill/);
+  assert.match(p, /task 2 of 2, id "2"/);
+  assert.match(p, /`semesters\/S\/assignments\/AAA\/09-28_A1\/homework\/check\.json`/);
+  assert.match(p, /update only that task's verdict and note/);
+  assert.match(p, /node packages\/ai\/validate\.mjs semesters\/S\/assignments\/AAA\/09-28_A1\/homework\/check\.json/);
+  assert.match(p, /Never give me the answer/);
+  assert.throws(() => buildPrompt({ root: ".", semId: "S", data: hw, action: "discuss-check", params: { assignment: "AAA/09-28_A1" } }), /which task's check/);
+  const acts = listActions(join(dirname(fileURLToPath(import.meta.url)), "../../.."));
+  assert.equal(acts.find((a) => a.id === "discuss-check")?.title, "Discuss a check");
+});
+
 test("checking the homework: lenient, saved as check.json and validated", () => {
   const p = buildPrompt({ root: ".", semId: "S", data: hw, action: "check-homework", params: { assignment: "AAA/09-28_A1" }, first: false });
   assert.match(p, /check-homework skill/);

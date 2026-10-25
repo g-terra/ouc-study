@@ -69,7 +69,7 @@ Never invent progress.
 
 ## Agents & skills
 
-Skills (`ai/skills/*/SKILL.md`, standard Agent Skills format): `sync-eclass`, `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `make-quiz`, `assignment-helper`, `assignment-prep`, `assignment-review`, `important-dates`, `make-homework`, `homework-tutor`, `check-homework`, `polish-answer`.
+Skills (`ai/skills/*/SKILL.md`, standard Agent Skills format): `sync-eclass`, `plan-week`, `make-notes`, `research-topic`, `find-material`, `quiz-me`, `make-quiz`, `assignment-helper`, `assignment-prep`, `assignment-review`, `important-dates`, `make-homework`, `homework-tutor`, `check-homework`, `polish-answer`, `discuss-check`.
 Agents (`ai/agents/*.md`): **note-taker**, **study-planner**, **researcher**, **tutor**, **assignment-reviewer**. Claude Code gets them as subagents in `.claude/agents/`, opencode in `.opencode/agents/`; Codex gets each one as a skill of the same name in `.agents/skills/` (where opencode also finds the skills).
 When a request matches a skill, follow its `SKILL.md`. If the installed copies are missing, run `ouc ai install` (or read them straight from `ai/`).
 **Edit skills in `ai/` only**; the copies in `.claude/`, `.agents/` and `.opencode/agents/` are regenerated.
