@@ -15,18 +15,18 @@ test.afterEach(async () => expect(errors, "browser errors").toEqual([]));
 
 test("answer a homework task by task, see the counter move, and find the answers again after a reload", async ({ page }) => {
   await page.goto(`${SEM}/courses/DEMO101#work`);
-  await expect(page.getByTestId("homework-count")).toHaveText("0 of 3 done");
+  await expect(page.getByTestId("homework-count")).toHaveText("0 of 4 done");
   await page.getByRole("link", { name: "Answer Assignment 1 in the app" }).click();
 
   await expect(page.getByRole("heading", { level: 1, name: "Assignment 1" })).toBeVisible();
   const timeline = page.getByRole("navigation", { name: "Tasks" });
-  await expect(timeline.getByRole("button")).toHaveCount(3);
-  await expect(page.getByTestId("homework-progress")).toHaveText("0 of 3 done · 3 left");
+  await expect(timeline.getByRole("button")).toHaveCount(4);
+  await expect(page.getByTestId("homework-progress")).toHaveText("0 of 4 done · 4 left");
   await expect(page.getByText("What was new to you?")).toBeVisible();
 
   await page.getByRole("textbox", { name: "Your answer" }).fill("I liked seeing the app with made-up data.");
   await page.getByRole("button", { name: "Done, next task" }).click();
-  await expect(page.getByTestId("homework-progress")).toHaveText("1 of 3 done · 2 left");
+  await expect(page.getByTestId("homework-progress")).toHaveText("1 of 4 done · 3 left");
 
   // task 2: multiple choice, with the optional why
   await expect(page.getByText("Which part of the demo week did you like most?")).toBeVisible();
@@ -34,7 +34,7 @@ test("answer a homework task by task, see the counter move, and find the answers
   await page.getByRole("button", { name: "Add why I picked it" }).click();
   await page.getByRole("textbox", { name: "Why I picked it" }).fill("It was short.");
   await page.getByRole("button", { name: "Done, next task" }).click();
-  await expect(page.getByTestId("homework-progress")).toHaveText("2 of 3 done · 1 left");
+  await expect(page.getByTestId("homework-progress")).toHaveText("2 of 4 done · 2 left");
 
   // task 3 shows its maths, and the timeline jumps back
   await expect(page.locator(".katex").first()).toBeVisible();
@@ -42,7 +42,7 @@ test("answer a homework task by task, see the counter move, and find the answers
   await expect(page.getByRole("radio", { name: "The welcome video" })).toHaveAttribute("aria-checked", "true");
 
   await page.reload();
-  await expect(page.getByTestId("homework-progress")).toHaveText("2 of 3 done · 1 left");
+  await expect(page.getByTestId("homework-progress")).toHaveText("2 of 4 done · 2 left");
   await timeline.getByRole("button", { name: /Your demo week/ }).click();
   await expect(page.getByRole("textbox", { name: "Your answer" })).toHaveText("I liked seeing the app with made-up data.");
   await timeline.getByRole("button", { name: /Favourite part/ }).click();
@@ -50,7 +50,41 @@ test("answer a homework task by task, see the counter move, and find the answers
 
   // the course shows the count too
   await page.goto(`${SEM}/courses/DEMO101#work`);
-  await expect(page.getByTestId("homework-count")).toHaveText("2 of 3 done");
+  await expect(page.getByTestId("homework-count")).toHaveText("2 of 4 done");
+});
+
+test("a task that takes more than one answer lets several options be picked, and keeps them after a reload", async ({ page }) => {
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Good habits/ }).click();
+  const group = page.getByRole("group", { name: "Your choices (more than one can be right)" });
+  await group.getByRole("checkbox", { name: "Spaced practice" }).click();
+  await group.getByRole("checkbox", { name: "Testing yourself" }).click();
+  await expect(group.getByRole("checkbox", { checked: true })).toHaveCount(2);
+  await group.getByRole("checkbox", { name: "Spaced practice" }).click();
+  await group.getByRole("checkbox", { name: "Spaced practice" }).click();
+  await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  await page.reload();
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Good habits/ }).click();
+  await expect(group.getByRole("checkbox", { checked: true })).toHaveText([/Spaced practice/, /Testing yourself/]);
+  await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student");
+  await expect(page.getByText("Answers: A, C.")).toBeVisible();
+});
+
+test("an answer that starts with a picture opens as a picture, not as code, after moving away and back", async ({ page }) => {
+  const html = '<img src="/files/2026-Demo/assignments/DEMO101/09-28_Assignment-1/homework/images/0000000000000000.png" alt="image.png"><p>after the picture</p>';
+  await page.route("**/api/homework?*", async (route) => {
+    const res = await route.fetch();
+    const data = await res.json();
+    data.answers["DEMO101/09-28_Assignment-1"] = { 1: { text: html } };
+    return route.fulfill({ response: res, json: data });
+  });
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  const timeline = page.getByRole("navigation", { name: "Tasks" });
+  await timeline.getByRole("button", { name: /Favourite part/ }).click();
+  await timeline.getByRole("button", { name: /Your demo week/ }).click();
+  const box = page.getByRole("textbox", { name: "Your answer" });
+  await expect(box.locator("img")).toHaveCount(1);
+  await expect(box).toHaveText("after the picture");
 });
 
 test("answers can have bold, colours and formulas, and keep them after a reload", async ({ page }) => {
@@ -154,9 +188,12 @@ test("the print page shows the name, the title, every task in full and the answe
   await expect(page.getByRole("heading", { level: 1, name: "Assignment 1" })).toBeVisible();
   await expect(page.getByTestId("print-name")).toHaveText("Demo Student");
   await expect(page.getByText("DEMO101 · Introduction to Demo Studies")).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2 })).toHaveText([/Task 1/, /Task 2/, /Task 3/]);
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText([/Task 1/, /Task 2/, /Task 3/, /Task 4/]);
   await expect(page.getByText("Which part of the demo week did you like most?")).toBeVisible();
   await expect(page.locator(".katex").first()).toBeVisible();
+  // a long homework's last page is white below the answers too (the page behind the paper is the app's background)
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator("html")).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 
 test("Make PDF saves a PDF with the student's eClass name into the assignment's folder, without asking for it", async ({ page }) => {
@@ -245,6 +282,25 @@ test("Check my answers runs in the background, then shows a verdict on each task
   await expect(timeline.getByText("Not right yet")).toBeVisible();
   await timeline.getByRole("button", { name: /Demo sum/ }).click();
   await expect(page.getByRole("region", { name: "AI check of this task" })).toContainText("same denominator");
+});
+
+test("the last task's button completes the homework and starts the AI check of every answer", async ({ page }) => {
+  await aiReady(page);
+  const job = { id: "j3", chatId: "c1", sem: "2026-Demo", assignment: "DEMO101/09-28_Assignment-1", started: "2026-09-15T10:00:00Z", running: true };
+  let posted = false;
+  await page.route("**/api/ai/homework-check", (route) => {
+    if (route.request().method() === "POST") { posted = true; return route.fulfill({ json: { jobs: [job] } }); }
+    return route.fulfill({ json: { jobs: posted ? [job] : [] } });
+  });
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  const timeline = page.getByRole("navigation", { name: "Tasks" });
+  await timeline.getByRole("button", { name: /Demo sum/ }).click();
+  await expect(page.getByRole("button", { name: "Complete and review" })).toHaveCount(0);
+  await timeline.getByRole("button", { name: /Good habits/ }).click();
+  await page.getByRole("button", { name: "Complete and review" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "The AI is checking your answers…" })).toBeVisible();
+  await expect(page.getByText("Done", { exact: true })).toBeVisible();
+  expect(posted).toBe(true);
 });
 
 test("a check that fails says why, with no chat", async ({ page }) => {

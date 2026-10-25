@@ -5,10 +5,13 @@
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// what an answer the editor saved starts with: a paragraph, list, picture, code block, formula…
+const EDITOR_HTML = /^\s*<(p|h\d|ul|ol|li|blockquote|img|pre|code|span|strong|em|b|i|u|s|mark|br|div)[\s>/]/i;
+
 /** What the editor opens: answers it saved are HTML already; plain answers (from before the editor) become paragraphs. */
 export function toEditorHtml(text: string | undefined): string {
   const t = text ?? "";
-  if (!t.trim() || /^\s*<(p|h\d|ul|ol|blockquote)[\s>]/i.test(t)) return t.trim() ? t : "";
+  if (!t.trim() || EDITOR_HTML.test(t)) return t.trim() ? t : "";
   return t.split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
 }
 

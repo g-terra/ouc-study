@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyAnswer, checkCounts, homeworkProgress, parseAnswers, parseCheck, parseHomework, taskLabel } from "../src/homework.ts";
+import { applyAnswer, checkCounts, homeworkProgress, parseAnswers, parseCheck, parseHomework, pickedOptions, taskLabel } from "../src/homework.ts";
 import { allAnswers, allChecks, allPolish, discardPolish, homeworkDir, polishFile, readAnswers, readHomework, readPolish, saveAnswer, saveImage } from "../src/homework-store.ts";
 
 const TASKS = {
@@ -188,4 +188,44 @@ test("the AI's academic wording of an answer is read per task, for the whole sem
   assert.ok(!existsSync(f));
   assert.deepEqual(readPolish(dir, id), {});
   assert.throws(() => polishFile(dir, id, "../x"), /Bad task/);
+});
+
+test("a choice task that takes more than one answer says so, from the file or from its question", () => {
+  const { homework, problems } = parseHomework({ tasks: [
+    { id: "1", kind: "choice", question: "Pick the true ones.", options: ["A", "B", "C"], multiple: true },
+    { id: "2", kind: "choice", question: "Rall argued that (there can be more than one answer):", options: ["A", "B"] },
+    { id: "3", kind: "choice", question: "Select all that apply.", options: ["A", "B"] },
+    { id: "4", kind: "choice", question: "Which one?", options: ["A", "B"] },
+    { id: "5", kind: "written", question: "Name more than one answer you'd accept." },
+  ] });
+  assert.deepEqual(problems, []);
+  assert.deepEqual(homework!.tasks.map((t) => t.multiple ?? false), [true, true, true, false, false]);
+});
+
+test("a task with more than one answer saves the picked options, in order", () => {
+  const { tasks } = parseHomework({ tasks: [
+    { id: "m", kind: "choice", question: "Q", options: ["A", "B", "C"], multiple: true },
+    { id: "s", kind: "choice", question: "Q", options: ["A", "B"] },
+  ] }).homework!;
+  const now = new Date("2026-10-25T10:00:00Z");
+  let a = applyAnswer(tasks, { m: { choice: 1 } }, { task: "m", choices: [2, 0, 2] }, now);
+  assert.deepEqual(a.m, { choices: [0, 2], updated: now.toISOString() });
+  a = applyAnswer(tasks, a, { task: "m", choices: [] }, now);
+  assert.deepEqual(a.m, { choices: [], updated: now.toISOString() });
+  assert.equal(applyAnswer(tasks, a, { task: "m", choices: null }, now).m!.choices, undefined);
+  assert.throws(() => applyAnswer(tasks, a, { task: "m", choices: [3] }, now), /Bad choice/);
+  assert.throws(() => applyAnswer(tasks, a, { task: "m", choices: 1 }, now), /Bad choice/);
+  assert.throws(() => applyAnswer(tasks, a, { task: "s", choices: [0, 1] }, now), /only one/);
+  assert.equal(parseAnswers({ answers: { m: { choices: [1, 2] } } }, tasks).answers.m!.choices!.join(), "1,2");
+});
+
+test("the options picked are read the same way for one or more answers", () => {
+  const { tasks } = parseHomework({ tasks: [
+    { id: "m", kind: "choice", question: "Q", options: ["A", "B", "C"], multiple: true },
+    { id: "s", kind: "choice", question: "Q", options: ["A", "B"] },
+  ] }).homework!;
+  assert.deepEqual(pickedOptions(tasks[0]!, { choices: [0, 2] }), [0, 2]);
+  assert.deepEqual(pickedOptions(tasks[0]!, { choice: 1 }), [1]); // picked before the task took more than one
+  assert.deepEqual(pickedOptions(tasks[1]!, { choice: 1 }), [1]);
+  assert.deepEqual(pickedOptions(tasks[1]!, {}), []);
 });

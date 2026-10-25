@@ -39,7 +39,7 @@ export function useHomework(sem: string): HomeworkState {
   return store.get(sem) ?? { state: "loading", answers: {}, checks: {}, polish: {} };
 }
 
-export type AnswerPatch = { task: string; text?: string; choice?: number | null; why?: string; done?: boolean; aiEdited?: boolean };
+export type AnswerPatch = { task: string; text?: string; choice?: number | null; choices?: number[] | null; why?: string; done?: boolean; aiEdited?: boolean };
 
 // the newest save per assignment: an older save's reply must not undo a newer change shown already
 const latest = new Map<string, number>();

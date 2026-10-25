@@ -31,3 +31,11 @@ test("a symbol button puts its LaTeX at the cursor and leaves the cursor in its 
   const alpha = FORMULA_SNIPPETS.find((s) => s.label === "alpha")!;
   assert.deepEqual(insertSnippet("2", 1, 1, alpha.tex), { value: "2\\alpha ", caret: 8 });
 });
+
+test("an answer the editor saved opens as it was, whatever it starts with", () => {
+  for (const html of [
+    '<img src="/files/x/homework/images/a.png" alt="image.png"><p>according to the equation</p>',
+    "<pre><code>x = 1</code></pre><p>so</p>",
+    '<span data-latex="x"></span>',
+  ]) assert.equal(toEditorHtml(html), html);
+});

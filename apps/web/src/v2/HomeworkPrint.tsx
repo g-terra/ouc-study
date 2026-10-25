@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { taskLabel } from "@ouc/content/homework";
+import { pickedOptions, taskLabel } from "@ouc/content/homework";
 import { Loading, Problem, courseMap, useSemester } from "../lib/data";
 import { useHomework } from "../lib/homework";
 import { mdToHtml } from "../lib/markdown";
@@ -53,9 +53,17 @@ export function HomeworkPrint({ sem, id }: { sem: string; id: string }) {
               <div className="md mb-3 italic text-[#4a4741]" dangerouslySetInnerHTML={{ __html: mdToHtml(t.question, sem) }} />
               {t.kind === "choice" ? (
                 <>
-                  {ans.choice !== undefined && t.options?.[ans.choice] !== undefined
-                    ? <p><b>Answer: {LETTERS[ans.choice]}.</b> {t.options[ans.choice]}</p>
-                    : <p className="text-[#6e6a62]">No answer.</p>}
+                  {(() => {
+                    const picked = pickedOptions(t, ans).filter((n) => t.options?.[n] !== undefined);
+                    if (!picked.length) return <p className="text-[#6e6a62]">No answer.</p>;
+                    if (picked.length === 1) return <p><b>Answer: {LETTERS[picked[0]!]}.</b> {t.options![picked[0]!]}</p>;
+                    return (
+                      <>
+                        <p><b>Answers: {picked.map((n) => LETTERS[n]).join(", ")}.</b></p>
+                        <ul className="ml-5 list-disc">{picked.map((n) => <li key={n}>{LETTERS[n]}. {t.options![n]}</li>)}</ul>
+                      </>
+                    );
+                  })()}
                   {ans.why && <div className="mt-2 border-l-2 border-[#e4e0d6] pl-3"><span className="text-[#6e6a62]">Why: </span><AnswerView html={ans.why} /></div>}
                 </>
               ) : ans.text ? <AnswerView html={ans.text} className="font-sans" /> : <p className="text-[#6e6a62]">No answer.</p>}

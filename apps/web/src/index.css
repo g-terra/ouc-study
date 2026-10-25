@@ -185,6 +185,6 @@ body { @apply bg-bg text-ink font-sans antialiased; }
 /* the homework PDF (v2/HomeworkPrint.tsx), printed by Chrome or the print window */
 @media print {
   @page { margin: 12mm; }
-  body:has(.homework-print) { background: white; }
+  html:has(.homework-print), body:has(.homework-print) { background: white; }
   .homework-print > div { padding: 0; max-width: none; }
 }
