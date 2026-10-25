@@ -6,11 +6,12 @@ import { courseMap } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { mdToHtml } from "../lib/markdown";
 import { browserStore, clearDraft, draftKey, keepDraft, restoreDraft } from "../lib/homework-drafts";
-import { checkAnswers, dismissJob, makeInteractive, makePdf, printHref, saveAnswer, uploadPicture, useCheckJobs, useHomework, useMakeJobs, type AnswerPatch, type HomeworkJob } from "../lib/homework";
+import { checkAnswers, dismissJob, dropPolish, makeInteractive, makePdf, polishAnswer, printHref, saveAnswer, uploadPicture, useCheckJobs, useHomework, useMakeJobs, usePolishJobs, type AnswerPatch, type HomeworkJob } from "../lib/homework";
+import { isEmptyAnswer } from "../lib/answer-html";
 import { useAiStatus } from "../lib/ai";
 import { useConnection } from "../lib/connection";
 import { Card, Empty, cx } from "../components/ui";
-import { RichEditor } from "../components/RichEditor";
+import { AnswerView, RichEditor } from "../components/RichEditor";
 import { AskAiButton, Markdown } from "../components/Assistant";
 import { WorkLink } from "../components/MakeQuiz";
 import { Check, FileText, Settings, Sparkles, TriangleAlert, X } from "../components/icons";
@@ -50,7 +51,9 @@ function Pieces({ tasks, answers }: { tasks: HomeworkTask[]; answers: Record<str
 export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
   const a = data.assignments.find((x) => x.id === id);
   const course = a ? courseMap(data)[a.code] : undefined;
-  const { answers: all, checks, state } = useHomework(data.id);
+  const { answers: all, checks, polish, state } = useHomework(data.id);
+  // bumped when a kept wording replaces the answer, so the box starts again from it
+  const [version, setVersion] = useState(0);
   const answers = all[id] ?? {};
   const check = checks[id];
   const tasks = a?.homework?.tasks ?? [];
@@ -164,7 +167,14 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
               <Why key={task.id} value={ans.why} draft={draftKey(data.id, id, task.id, "why")} onSave={(why) => save({ why })} onDirty={dirty} upload={upload} onError={setError} />
             </>
           ) : (
-            <TextAnswer key={task.id} label="Your answer" value={ans.text} draft={draftKey(data.id, id, task.id, "text")} onSave={(text) => save({ text })} onDirty={dirty} upload={upload} onError={setError} />
+            <>
+              <TextAnswer key={`${task.id}-${version}`} label="Your answer" value={ans.text} draft={draftKey(data.id, id, task.id, "text")} onSave={(text) => save({ text })} onDirty={dirty} upload={upload} onError={setError} />
+              <Polish sem={data.id} assignment={id} task={task.id} answer={ans} offer={polish[id]?.[task.id]?.text}
+                onKeep={async (text) => {
+                  try { browserStore()?.removeItem(draftKey(data.id, id, task.id, "text")); } catch {}
+                  if (await save({ text, aiEdited: true })) { setVersion((v) => v + 1); await dropPolish(data.id, id, task.id); }
+                }} />
+            </>
           )}
 
           {check?.tasks[task.id] && (
@@ -272,6 +282,46 @@ function TextAnswer({ label, value, draft, onSave, onDirty, upload, onError, min
       <RichEditor label={label} value={restored ?? value} minHeight={minHeight} upload={upload} onError={onError}
         onChange={(html) => { keepDraft(browserStore(), draft, html); pending.current = html; onDirty(); clearTimeout(timer.current); timer.current = setTimeout(flush, 700); }} />
       {restored !== null && <p data-testid="draft-restored" className="text-xs text-muted">Brought back what you typed before the page closed.</p>}
+    </div>
+  );
+}
+
+/**
+ * Make it more academic: the AI rewords the answer in the background (same ideas, the student's voice); its wording
+ * shows next to the answer to keep or turn down. A kept one is tagged "AI-edited wording".
+ */
+function Polish({ sem, assignment, task, answer, offer, onKeep }: { sem: string; assignment: string; task: string; answer: TaskAnswer; offer?: string; onKeep: (text: string) => Promise<void> }) {
+  const ai = useAiStatus();
+  const jobs = usePolishJobs(sem, assignment, task);
+  const [error, setError] = useState<string | null>(null);
+  const busy = jobs.some((j) => j.running);
+  const empty = isEmptyAnswer(answer.text);
+  return (
+    <div className="grid gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {answer.aiEdited && <span className="rounded-full bg-info-bg px-2 py-0.5 text-xs font-semibold text-info">AI-edited wording</span>}
+        {ai.state !== "unavailable" && !offer && (
+          <button type="button" disabled={busy || empty} title={empty ? "Write your answer first" : undefined} onClick={() => { setError(null); polishAnswer(sem, assignment, task).catch((e: Error) => setError(e.message)); }}
+            className="ml-auto flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium hover:border-muted disabled:opacity-60">
+            <Sparkles aria-hidden className="size-4 text-accent" />{busy ? "Rewording…" : "Make it more academic"}
+          </button>
+        )}
+      </div>
+      {error && <div role="alert" className="rounded-xl bg-bad-bg px-3 py-2 text-sm text-bad">{error}</div>}
+      <JobRows sem={sem} jobs={jobs} running="The AI is rewording your answer…" failed="Your answer wasn't reworded" />
+      {offer && (
+        <section aria-label="More academic wording" className="grid gap-3 rounded-xl border border-line bg-surface-2/50 p-3 text-sm">
+          <p className="text-muted">The AI's wording of your answer: same ideas, more academic. Read it through; keep it only if it still says what you meant.</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid content-start gap-1"><b className="text-xs uppercase tracking-wide text-muted">Yours</b><AnswerView html={answer.text ?? ""} /></div>
+            <div className="grid content-start gap-1"><b className="text-xs uppercase tracking-wide text-muted">More academic</b><AnswerView html={offer} /></div>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => void dropPolish(sem, assignment, task)} className="min-h-11 rounded-full border border-line px-4">Keep mine</button>
+            <button type="button" onClick={() => void onKeep(offer)} className="min-h-11 rounded-full bg-ink px-4 font-semibold text-bg">Use this wording</button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

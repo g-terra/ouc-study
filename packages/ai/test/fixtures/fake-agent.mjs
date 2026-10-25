@@ -33,6 +33,13 @@ if (tasksFile) {
   fs.mkdirSync(`${process.cwd()}/${tasksFile.replace(/\/tasks\.json$/, "")}`, { recursive: true });
   fs.writeFileSync(`${process.cwd()}/${tasksFile}`, JSON.stringify({ tasks: [{ id: "1", kind: "written", question: "Q?" }] }));
 }
+// a more academic wording of one answer
+const polish = prompt.match(/Save the new wording as `(\S+\.html)`/)?.[1];
+if (polish) {
+  const fs = await import("node:fs");
+  fs.mkdirSync(`${process.cwd()}/${polish.split("/").slice(0, -1).join("/")}`, { recursive: true });
+  fs.writeFileSync(`${process.cwd()}/${polish}`, "<p>Put more academically.</p>\n");
+}
 if (prompt.includes("FAIL")) { console.error("boom: something broke"); process.exit(3); }
 out({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: `${process.cwd()}/memory/progress.md` } }] } });
 out({ type: "assistant", message: { content: [{ type: "tool_use", name: "Write", input: { file_path: `${process.cwd()}/semesters/2026-Fall/plans/2026-W42.md`, content: "x" } }] } });

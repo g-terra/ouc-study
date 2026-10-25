@@ -611,3 +611,31 @@ test("interactive versions: Sync makes them for new assignments with a task, nev
   assert.ok(existsSync(join(sem, "assignments/AAA/done/homework/tasks.json")));
   assert.ok(!(await json(fetch(`${base}/api/ai/chats`))).chats.some((c: Ev) => c.id === jobs[0].chatId));
 });
+
+test("Make it more academic: the AI rewords one answer in the background into homework/polish/<task>.html", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  const dir = join(root, "semesters/S/assignments/AAA/09-28_A1/homework");
+  mkdirSync(dir, { recursive: true });
+  const tasks = [{ id: "1", kind: "written", question: "Why?" }, { id: "2", kind: "written", question: "How?" }];
+  writeFileSync(join(dir, "tasks.json"), JSON.stringify({ tasks }));
+  writeFileSync(join(dir, "answers.json"), JSON.stringify({ answers: { "1": { text: "<p>Cos it works.</p>" } } }));
+  writeFileSync(join(root, "semesters/S/semester.json"), JSON.stringify({ start: "2000-01-01", end: "2999-01-01", courses: [] }));
+  mkdirSync(join(root, "apps/web/public/data"), { recursive: true });
+  writeFileSync(join(root, "apps/web/public/data/S.json"), JSON.stringify({
+    courses: [{ code: "AAA", short: "AAA", title: "AAA course", weeks: [] }], notes: [],
+    assignments: [{ id: "AAA/09-28_A1", code: "AAA", title: "A1", fullTitle: "AAA A1", briefs: [], homework: { tasks } }],
+  }));
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  const post = (body: object) => fetch(`${base}/api/ai/homework-polish`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify(body) });
+  assert.equal((await post({ sem: "S", assignment: "AAA/09-28_A1", task: "2" })).status, 400);   // nothing written yet
+  assert.equal((await post({ sem: "S", assignment: "AAA/09-28_A1", task: "9" })).status, 400);   // no such task
+  const { jobs: [job] } = await json(post({ sem: "S", assignment: "AAA/09-28_A1", task: "1" }));
+  assert.deepEqual([job.kind, job.task, job.running], ["polish", "1", true]);
+  assert.equal((await post({ sem: "S", assignment: "AAA/09-28_A1", task: "1" })).status, 409);   // already on it
+  let jobs: Ev[] = [];
+  for (let i = 0; i < 100 && (!jobs.length || jobs[0].running); i++) { await new Promise((ok) => setTimeout(ok, 20)); jobs = (await json(fetch(`${base}/api/ai/homework-polish`))).jobs; }
+  assert.deepEqual([jobs[0].running, jobs[0].ok], [false, true]);
+  assert.match(readFileSync(join(dir, "polish/1.html"), "utf8"), /<p>/);
+  assert.ok(!(await json(fetch(`${base}/api/ai/chats`))).chats.some((c: Ev) => c.id === jobs[0].chatId));
+});

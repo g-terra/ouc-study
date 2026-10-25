@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyAnswer, checkCounts, homeworkProgress, parseAnswers, parseCheck, parseHomework, taskLabel } from "../src/homework.ts";
-import { allAnswers, allChecks, homeworkDir, readAnswers, readHomework, saveAnswer, saveImage } from "../src/homework-store.ts";
+import { allAnswers, allChecks, allPolish, discardPolish, homeworkDir, polishFile, readAnswers, readHomework, readPolish, saveAnswer, saveImage } from "../src/homework-store.ts";
 
 const TASKS = {
   title: "Assignment 3",
@@ -159,4 +159,33 @@ test("an answers file the AI fills in from a submission is checked against the t
   assert.ok(bad.some((p) => /"2".*choice/i.test(p)), bad.join("|"));
   assert.ok(bad.some((p) => /"9".*no such task/i.test(p)), bad.join("|"));
   assert.match(parseAnswers("[]", tasks).problems[0]!, /"answers"/);
+});
+
+test("an answer whose wording the AI made more academic is marked so, and the mark stays", () => {
+  const tasks = parseHomework(TASKS).homework!.tasks;
+  let a = applyAnswer(tasks, {}, { task: "1", text: "<p>My answer, put better.</p>", aiEdited: true });
+  assert.equal(a[1]!.aiEdited, true);
+  a = applyAnswer(tasks, a, { task: "1", text: "<p>My answer, put better, and more.</p>" });
+  assert.equal(a[1]!.aiEdited, true);
+  assert.throws(() => applyAnswer(tasks, a, { task: "1", aiEdited: "yes" }), /aiEdited/);
+});
+
+test("the AI's academic wording of an answer is read per task, for the whole semester, and can be dropped", () => {
+  const dir = semester();
+  const id = "AAA/10-26_Assignment-3";
+  assert.deepEqual(readPolish(dir, id), {});
+  const f = polishFile(dir, id, "1");
+  assert.match(f, /homework[\\/]polish[\\/]1\.html$/);
+  mkdirSync(join(homeworkDir(dir, id), "polish"), { recursive: true });
+  writeFileSync(f, "<p>Better put.</p>\n");
+  writeFileSync(join(homeworkDir(dir, id), "polish", "9.html"), "<p>No such task.</p>");
+  const p = readPolish(dir, id);
+  assert.deepEqual(Object.keys(p), ["1"]);
+  assert.equal(p[1]!.text, "<p>Better put.</p>");
+  assert.match(p[1]!.made, /^\d{4}-\d\d-\d\dT/);
+  assert.deepEqual(Object.keys(allPolish(dir)), [id]);
+  discardPolish(dir, id, "1");
+  assert.ok(!existsSync(f));
+  assert.deepEqual(readPolish(dir, id), {});
+  assert.throws(() => polishFile(dir, id, "../x"), /Bad task/);
 });

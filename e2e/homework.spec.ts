@@ -281,3 +281,56 @@ test("an assignment without an interactive version can have one made in the back
   await expect(page.getByRole("textbox", { name: "Message" })).toHaveCount(0);
   expect(posted).toBe(true);
 });
+
+test("Make it more academic rewords an answer in the background; kept, it replaces the answer and is tagged AI-edited", async ({ page }) => {
+  await aiReady(page);
+  const A = "DEMO101/09-28_Assignment-1";
+  const job = { id: "p1", kind: "polish", task: "1", chatId: "c1", sem: "2026-Demo", assignment: A, started: "2026-09-15T10:00:00Z", running: true };
+  let sent: Record<string, unknown> | undefined, done = false, dropped: Record<string, unknown> | undefined;
+  await page.route("**/api/ai/homework-polish", (route) => {
+    if (route.request().method() === "POST") { sent = route.request().postDataJSON(); return route.fulfill({ json: { jobs: [job] } }); }
+    return route.fulfill({ json: { jobs: done ? [{ ...job, running: false, ok: true }] : sent ? [job] : [] } });
+  });
+  await page.route("**/api/homework/polish", (route) => { dropped = route.request().postDataJSON(); return route.fulfill({ json: { ok: true } }); });
+  await page.route("**/api/homework?**", async (route) => {
+    const res = await route.fetch();
+    const polish = done && !dropped ? { [A]: { "1": { text: "<p>The demonstration week introduced several unfamiliar ideas.</p>", made: "2026-09-15T10:01:00Z" } } } : {};
+    return route.fulfill({ response: res, json: { ...(await res.json()), polish } });
+  });
+  await page.goto(`${SEM}/homework/${A}`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  await page.getByRole("textbox", { name: "Your answer" }).fill("Loads of new stuff this week.");
+  await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  await page.getByRole("button", { name: "Make it more academic" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "The AI is rewording your answer…" })).toBeVisible();
+  expect(sent).toMatchObject({ sem: "2026-Demo", assignment: A, task: "1" });
+  done = true;
+  const offer = page.getByRole("region", { name: "More academic wording" });
+  await expect(offer).toContainText("The demonstration week introduced several unfamiliar ideas.", { timeout: 10_000 });
+  await expect(offer).toContainText("Loads of new stuff this week.");
+  await offer.getByRole("button", { name: "Use this wording" }).click();
+  await expect(page.getByRole("textbox", { name: "Your answer" })).toHaveText("The demonstration week introduced several unfamiliar ideas.");
+  await expect(page.getByText("AI-edited wording")).toBeVisible();
+  expect(dropped).toMatchObject({ assignment: A, task: "1" });
+  await expect(offer).toHaveCount(0);
+});
+
+test("a more academic wording can be turned down, and the answer stays as written", async ({ page }) => {
+  await aiReady(page);
+  const A = "DEMO101/09-28_Assignment-1";
+  let dropped = false;
+  await page.route("**/api/homework/polish", (route) => { dropped = true; return route.fulfill({ json: { ok: true } }); });
+  await page.route("**/api/homework?**", async (route) => {
+    const res = await route.fetch();
+    const j = await res.json();
+    j.answers[A] = { ...(j.answers[A] ?? {}), "1": { text: "<p>My own words.</p>" } };
+    return route.fulfill({ response: res, json: { ...j, polish: dropped ? {} : { [A]: { "1": { text: "<p>Formal words.</p>", made: "2026-09-15T10:01:00Z" } } } } });
+  });
+  await page.goto(`${SEM}/homework/${A}`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  const offer = page.getByRole("region", { name: "More academic wording" });
+  await offer.getByRole("button", { name: "Keep mine" }).click();
+  await expect(offer).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Your answer" })).toHaveText("My own words.");
+  await expect(page.getByText("AI-edited wording")).toHaveCount(0);
+});

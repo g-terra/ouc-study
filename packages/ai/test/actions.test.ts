@@ -207,3 +207,16 @@ test("making the interactive version: a new assignment from its eClass task, a d
   assert.throws(() => buildPrompt({ root: ".", semId: "S", data: hw, action: "make-homework", params: { assignment: "AAA/09-28_A1" } }), /already has an interactive version/);
   assert.equal(listActions(join(dirname(fileURLToPath(import.meta.url)), "../../..")).find((a) => a.id === "make-homework")?.title, "Make it interactive");
 });
+
+test("making an answer more academic: only its wording, the student's ideas and voice kept, saved for the student to accept or not", () => {
+  const p = buildPrompt({ root: ".", semId: "S", data: hw, action: "polish-answer", params: { assignment: "AAA/09-28_A1", task: "1" }, first: false });
+  assert.match(p, /polish-answer skill/);
+  assert.match(p, /task 1 of 2 \("Bayes"\)/i);
+  assert.match(p, /`semesters\/S\/assignments\/AAA\/09-28_A1\/homework\/answers\.json`/);
+  assert.match(p, /Save the new wording as `semesters\/S\/assignments\/AAA\/09-28_A1\/homework\/polish\/1\.html`/);
+  assert.match(p, /no new (ideas|facts)/i);
+  assert.match(p, /own voice/i);
+  assert.throws(() => buildPrompt({ root: ".", semId: "S", data: hw, action: "polish-answer", params: { assignment: "AAA/09-28_A1" } }), /task/i);
+  const acts = listActions(join(dirname(fileURLToPath(import.meta.url)), "../../.."));
+  assert.equal(acts.find((a) => a.id === "polish-answer")?.title, "Make it more academic");
+});

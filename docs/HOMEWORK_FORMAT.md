@@ -4,6 +4,7 @@ An assignment's **interactive version** lives next to it, in `semesters/<semeste
 
 - `tasks.json`: the brief turned into tasks, written by an AI with the `make-homework` skill. The questions are the brief's own, in the brief's order; **the file never holds answers**. The app makes it in the background for every new assignment (not submitted yet) that has a brief or a task on eClass, after each sync (add `"autoHomework": false` to `.ouc/ai.json` to turn that off), and **Make it interactive** on an assignment's page makes one on request.
 - `answers.json`: the student's answers, written by the app as they type (`/api/homework`). For an assignment already submitted, the AI makes the tasks from the student's submission (`my-submission/`) and copies their answers into this file exactly as they wrote them, marked done.
+- `polish/<task id>.html`: the AI's more academic wording of one answer (**Make it more academic** under the answer, the `polish-answer` skill), the same ideas in the student's voice. The app shows it next to the answer: **Use this wording** replaces the answer and tags it `"aiEdited": true` (shown as "AI-edited wording"), **Keep mine** drops it.
 - `check.json`: the AI's check of the answers (**Check my answers**, or the `check-homework` skill): a verdict and a note per task. See [check.json](#checkjson).
 - **Make PDF** prints the tasks and answers to `my-submission/<title> - <name>.pdf` (the print page is `/print/homework/<semester>/<CODE>/<folder>?name=…`).
 
@@ -39,7 +40,7 @@ A file with problems isn't used: the app shows what to fix on the homework page.
 { "answers": { "2": { "choice": 0, "why": "Optional reason for the pick.", "done": true, "updated": "2026-10-22T21:40:00.000Z" } } }
 ```
 
-`text` is the written answer and `why` the optional reason for a picked option, both HTML from the app's editor (paragraphs, bold, italic, underline, colours, highlight, lists, `<code>` and `<pre><code>` blocks; a formula is `<span data-latex="\frac{1}{2}"></span>`; a picture is `<img src="/files/<semester>/assignments/<CODE>/<folder>/homework/images/<hash>.png">`, saved in the `images/` folder next to the answers). Older answers in plain text are still read. `choice` is the index of the picked option, `done` is set when the student marks the task done.
+`text` is the written answer and `why` the optional reason for a picked option, both HTML from the app's editor (paragraphs, bold, italic, underline, colours, highlight, lists, `<code>` and `<pre><code>` blocks; a formula is `<span data-latex="\frac{1}{2}"></span>`; a picture is `<img src="/files/<semester>/assignments/<CODE>/<folder>/homework/images/<hash>.png">`, saved in the `images/` folder next to the answers). Older answers in plain text are still read. `choice` is the index of the picked option, `done` is set when the student marks the task done. `aiEdited` is set once the student keeps the AI's more academic wording of the answer.
 
 ## check.json
 

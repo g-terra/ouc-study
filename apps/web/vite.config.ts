@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createAiApi } from "../../packages/ai/src/api.ts";
 import { addAttempt, readAttempts, removeCourseQuizzes, removeQuiz, resetAttempts } from "../../packages/content/src/quiz-store.ts";
 import { readProgress, setDone } from "../../packages/content/src/progress-store.ts";
-import { MAX_IMAGE, allAnswers, allChecks, homeworkDir, saveAnswer, saveImage } from "../../packages/content/src/homework-store.ts";
+import { MAX_IMAGE, allAnswers, allChecks, allPolish, discardPolish, homeworkDir, saveAnswer, saveImage } from "../../packages/content/src/homework-store.ts";
 import { NO_BROWSER, findBrowser, makeHomeworkPdf, pdfFileName } from "../../packages/ai/src/homework-pdf.ts";
 import { removeDate, saveDate } from "../../packages/content/src/dates.ts";
 import { search, semesterDocs } from "../../packages/content/src/search.ts";
@@ -251,12 +251,13 @@ function progressApi(): Plugin {
  * /api/homework?sem=… (GET): every assignment's homework answers, { answers: { "<CODE>/<folder>": { <task id>: answer } } }.
  * /api/homework (POST { sem, assignment, task, text?, choice?, why?, done? }): saves a change to one answer.
  * /api/homework/image?sem=…&assignment=CODE/folder (POST, the picture as the body): saves a picture added to an answer, { src }.
+ * /api/homework/polish (POST { sem, assignment, task }): drops the AI's more academic wording of an answer once kept or turned down.
  * /api/homework/pdf (POST { sem, assignment, title, name }): prints the homework's print page to my-submission/<title> - <name>.pdf, { pdf }.
  * Stored in assignments/<CODE>/<folder>/homework/ (answers.json, images/), see packages/content/src/homework-store.ts.
  */
 function homeworkApi(): Plugin {
   const handler: Connect.NextHandleFunction = (req, res, next) => {
-    if (!/^\/api\/homework(\/image|\/pdf)?(\?|$)/.test(req.url ?? "")) return next();
+    if (!/^\/api\/homework(\/image|\/pdf|\/polish)?(\?|$)/.test(req.url ?? "")) return next();
     const origin = req.headers.origin;
     if (!LOCAL.test(req.headers.host ?? "") || (origin && !LOCAL.test(origin.replace(/^https?:\/\//, "")))) return send(res, { error: "Forbidden" }, 403);
     const url = new URL(req.url!, "http://x");
@@ -278,7 +279,7 @@ function homeworkApi(): Plugin {
     }
     if (req.method === "GET") {
       const dir = semDir(new URL(req.url!, "http://x").searchParams.get("sem"));
-      return dir ? send(res, { answers: allAnswers(dir), checks: allChecks(dir) }) : send(res, { error: "No such semester." }, 404);
+      return dir ? send(res, { answers: allAnswers(dir), checks: allChecks(dir), polish: allPolish(dir) }) : send(res, { error: "No such semester." }, 404);
     }
     if (req.method !== "POST") return send(res, { error: "Not found" }, 404);
     let raw = "";
@@ -288,6 +289,10 @@ function homeworkApi(): Plugin {
         const body = JSON.parse(raw || "{}");
         const dir = semDir(body.sem);
         if (!dir) return send(res, { error: "No such semester." }, 404);
+        if (url.pathname === "/api/homework/polish") {
+          discardPolish(dir, String(body.assignment ?? ""), String(body.task ?? ""));
+          return send(res, { ok: true });
+        }
         if (url.pathname === "/api/homework/pdf") {
           const hw = homeworkDir(dir, String(body.assignment ?? ""));
           if (!existsSync(resolve(hw, "tasks.json"))) return send(res, { error: "This assignment has no interactive version." }, 404);
