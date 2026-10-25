@@ -33,12 +33,15 @@ const FIELDS: Record<string, Field[]> = {
   "make-homework": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "homework-tutor": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "check-homework": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
+  // started from a task's answer box on the homework page
+  "polish-answer": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
 };
 const TITLE: Record<string, string> = {
   "make-notes": "Make notes", "quiz-me": "Quiz me", "make-quiz": "Make a quiz", "plan-week": "Plan my week", "research-topic": "Research a topic",
   "find-material": "Find material", "assignment-helper": "Assignment help", "assignment-prep": "Prep an assignment",
   "assignment-review": "Review my draft", "sync-eclass": "Sync eClass", "important-dates": "Important dates",
   "make-homework": "Make it interactive", "homework-tutor": "Homework tutor", "check-homework": "Check my homework",
+  "polish-answer": "Make it more academic",
 };
 // What the app shows the student about each action (the skill's description is written for the AI: paths, trigger phrases)
 const SUMMARY: Record<string, string> = {
@@ -56,8 +59,9 @@ const SUMMARY: Record<string, string> = {
   "make-homework": "Turns an assignment into tasks you answer in the app; a done one comes with the answers you submitted.",
   "homework-tutor": "Tutors you on a homework task you're answering in the app: hints, questions back and where in the material to look, never the answer.",
   "check-homework": "Checks your homework answers without being picky: says what's right, what could be better and what's not right yet, with hints.",
+  "polish-answer": "Rewords one of your homework answers more academically, same ideas and your own voice, for you to keep or turn down. Use the button under the answer.",
 };
-const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄", "important-dates": "📅", "make-homework": "🧩", "homework-tutor": "🧑‍🏫", "check-homework": "✅" };
+const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄", "important-dates": "📅", "make-homework": "🧩", "homework-tutor": "🧑‍🏫", "check-homework": "✅", "polish-answer": "🎓" };
 // What a plain local model (no file or web tools) can do from the app (it gets the material in its
 // prompt; a quiz it answers with is saved by the app server).
 const CHAT_OK = new Set(["quiz-me", "make-quiz"]);
@@ -262,6 +266,7 @@ export function reviewPrompt(root: string, semId: string, data: SemesterData, a:
 
 const homeworkFolder = (semId: string, a: Pick<Assignment, "id">) => `semesters/${semId}/assignments/${a.id}/homework`;
 export const checkPath = (semId: string, a: Pick<Assignment, "id">) => `${homeworkFolder(semId, a)}/check.json`;
+export const polishPath = (semId: string, a: Pick<Assignment, "id">, task: string) => `${homeworkFolder(semId, a)}/polish/${task}.html`;
 const assignmentOf = (data: SemesterData, id: unknown): Assignment => {
   const a = data.assignments.find((x) => x.id === id);
   if (!a) throw new Error("That assignment isn't in the app data.");
@@ -305,6 +310,19 @@ export function homeworkTutorPrompt(semId: string, a: Assignment, taskId?: strin
     (t ? `I'm on task ${i + 1} of ${tasks.length}${t.title ? ` ("${t.title}")` : ""}, id "${t.id}":\n\n${t.question}${t.options ? `\n\nOptions: ${t.options.map((o, n) => `${"ABCDEFGH"[n]}. ${o}`).join("; ")}` : ""}\n\n` : "") +
     "Tutor me: explain the ideas, give hints, ask me questions back and point me to where the course material covers it (file paths in backticks). " +
     "Never write the answer for me, not even a model answer to compare with.";
+}
+
+/** Rewording one of the student's answers more academically (their ideas and voice kept), for them to keep or turn down. */
+export function homeworkPolishPrompt(semId: string, a: Assignment, taskId?: string): string {
+  const dir = homeworkFolder(semId, a);
+  const tasks = a.homework!.tasks;
+  const i = tasks.findIndex((t) => t.id === taskId);
+  if (i < 0) throw new Error("Say which task's answer to reword.");
+  const t = tasks[i]!, out = polishPath(semId, a, t.id);
+  return `Use the polish-answer skill (ai/skills/polish-answer/SKILL.md). In ${a.fullTitle} (${a.code}), make my answer to task ${i + 1} of ${tasks.length}${t.title ? ` ("${t.title}")` : ""}, id "${t.id}", sound more academic:\n\n${t.question}\n\n` +
+    `My answer is the "text" of "${t.id}" in \`${dir}/answers.json\` (HTML). Change the wording only: the same ideas, examples and conclusions, no new ideas, facts or arguments, nothing that carries meaning left out, wrong content left as it is. ` +
+    "Keep my own voice and as much of my phrasing as the register allows, about the same length, the same HTML (formulas, code, pictures as they are), and no stock phrases. " +
+    `Save the new wording as \`${out}\` (just the HTML) and change nothing else.`;
 }
 
 /** Checking the student's answers, leniently, into homework/check.json (docs/HOMEWORK_FORMAT.md). */
@@ -400,6 +418,8 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
     }
     case "homework-tutor":
       body = homeworkTutorPrompt(semId, assignmentOf(data, params.assignment), params.task ? String(params.task) : undefined) + extra; break;
+    case "polish-answer":
+      body = homeworkPolishPrompt(semId, assignmentOf(data, params.assignment), params.task ? String(params.task) : undefined) + extra; break;
     case "check-homework":
       body = homeworkCheckPrompt(semId, assignmentOf(data, params.assignment)) + extra; break;
     case "important-dates":

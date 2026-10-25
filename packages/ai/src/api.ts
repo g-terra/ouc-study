@@ -34,7 +34,7 @@
 // is set up: GET /api/ai/transcribe says whether it is, POST { enabled } turns transcripts on or off and
 // POST { setup: true } installs it (⚙ Settings), POST { redo: <path>, language? } makes one transcript again (the video page).
 import { randomBytes, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { delimiter, extname, join, relative, resolve, sep } from "node:path";
@@ -46,7 +46,7 @@ import { runAgentTurn, runChatTurn, type AgentEvent, type RunHandle } from "./st
 import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview, reviewState, type Converter } from "./review.ts";
 import type { Assignment, SemesterData } from "../../content/src/types.ts";
 import { setTask } from "../../content/src/plan.ts";
-import { readCheck, readHomework } from "../../content/src/homework-store.ts";
+import { polishFile, readAnswers, readCheck, readHomework } from "../../content/src/homework-store.ts";
 import { setClassTime } from "../../content/src/classes.ts";
 import { createTranscriber, type Engine } from "./transcribe.ts";
 
@@ -601,8 +601,9 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     return added;
   }
 
-  // ----- homework in the background, with no chat: Check my answers (homework/check.json) and Make it interactive (homework/tasks.json) -----
-  type HomeworkJob = { id: string; kind: "check" | "make"; chatId?: string; sem: string; assignment: string; started: string; running: boolean; ok?: boolean; error?: string };
+  // ----- homework in the background, with no chat: Check my answers (homework/check.json), Make it interactive (homework/tasks.json)
+  // and Make it more academic (one answer's wording, homework/polish/<task>.html) -----
+  type HomeworkJob = { id: string; kind: "check" | "make" | "polish"; task?: string; chatId?: string; sem: string; assignment: string; started: string; running: boolean; ok?: boolean; error?: string };
   let homeworkJobs: HomeworkJob[] = [];
   const tasksFile = (semId: string, id: string) => join(root, "semesters", semId, "assignments", id, "homework", "tasks.json");
   function homeworkJob(kind: HomeworkJob["kind"], b: Json): HomeworkJob[] {
@@ -610,18 +611,30 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     const semDir = join(root, "semesters", semId);
     if (kind === "check" && !a.homework?.tasks.length) throw Object.assign(new Error(`${a.title} has no interactive version to check.`), { code: 400 });
     if (kind === "make" && (a.homework || existsSync(tasksFile(semId, a.id)))) throw Object.assign(new Error(`${a.title} already has an interactive version.`), { code: 409 });
-    if (homeworkJobs.some((j) => j.running && j.kind === kind && j.sem === semId && j.assignment === a.id)) throw Object.assign(new Error(kind === "check" ? "Your answers are already being checked." : "The interactive version is already being made."), { code: 409 });
+    const task = kind === "polish" ? String(b.task ?? "") : undefined;
+    if (kind === "polish") {
+      if (!a.homework?.tasks.some((x) => x.id === task)) throw Object.assign(new Error("No such task."), { code: 400 });
+      if (!readAnswers(semDir, a.id)[task!]?.text?.replace(/<[^>]*>|&nbsp;|\s/g, "")) throw Object.assign(new Error("Write an answer first, then the AI can make its wording more academic."), { code: 400 });
+    }
+    const busy = { check: "Your answers are already being checked.", make: "The interactive version is already being made.", polish: "That answer is already being reworded." }[kind];
+    if (homeworkJobs.some((j) => j.running && j.kind === kind && j.sem === semId && j.assignment === a.id && j.task === task)) throw Object.assign(new Error(busy), { code: 409 });
     const before = readCheck(semDir, a.id)?.checked;
-    const t = startTurn({ sem: semId, action: kind === "check" ? "check-homework" : "make-homework", params: { assignment: a.id }, background: true });
+    const action = { check: "check-homework", make: "make-homework", polish: "polish-answer" }[kind];
+    const started = Date.now();
+    const t = startTurn({ sem: semId, action, params: { assignment: a.id, ...(task ? { task } : {}) }, background: true });
     if (t.error !== undefined) throw Object.assign(new Error(t.error), { code: t.code });
-    const job: HomeworkJob = { id: randomUUID(), kind, chatId: t.chat.id, sem: semId, assignment: a.id, started: t.chat.createdAt, running: true };
+    const job: HomeworkJob = { id: randomUUID(), kind, ...(task ? { task } : {}), chatId: t.chat.id, sem: semId, assignment: a.id, started: t.chat.createdAt, running: true };
     t.done.then((r) => {
       job.running = false;
-      // done only when the file it was for is there and can be read: a new check, or tasks without problems
+      // done only when the file it was for is there and can be read: a new check, tasks without problems, a new wording
       const check = kind === "check" ? readCheck(semDir, a.id) : undefined;
-      const made = kind === "check" ? !!check && check.checked !== before && !!Object.keys(check.tasks).length : !!readHomework(semDir, a.id)?.homework;
+      const polished = kind === "polish" ? polishFile(semDir, a.id, task!) : "";
+      const made = kind === "check" ? !!check && check.checked !== before && !!Object.keys(check.tasks).length
+        : kind === "polish" ? existsSync(polished) && statSync(polished).mtimeMs >= started - 1000 && !!readFileSync(polished, "utf8").trim()
+        : !!readHomework(semDir, a.id)?.homework;
       job.ok = !!r?.ok && made;
-      if (!job.ok) job.error = t.chat.messages.at(-1)?.error ?? (r?.ok ? stripTicks(t.chat.messages.at(-1)?.text) || (kind === "check" ? "The AI finished without saving the check." : "The AI finished without saving the tasks.") : "The AI stopped with an error.");
+      const missing = { check: "The AI finished without saving the check.", make: "The AI finished without saving the tasks.", polish: "The AI finished without saving the new wording." }[kind];
+      if (!job.ok) job.error = t.chat.messages.at(-1)?.error ?? (r?.ok ? stripTicks(t.chat.messages.at(-1)?.text) || missing : "The AI stopped with an error.");
     });
     // keep the last few finished ones, so the page can say how it went
     homeworkJobs = [...homeworkJobs.filter((j) => j.running || Date.now() - new Date(j.started).getTime() < 3600_000).slice(-20), job];
@@ -687,8 +700,8 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
           return json(res, reviewBody(semId, a));
         }
       }
-      if (p === "/api/ai/homework-check" || p === "/api/ai/homework-make") {
-        const kind = p.endsWith("check") ? "check" : "make";
+      if (p === "/api/ai/homework-check" || p === "/api/ai/homework-make" || p === "/api/ai/homework-polish") {
+        const kind = p.endsWith("check") ? "check" : p.endsWith("make") ? "make" : "polish";
         if (req.method === "POST") return json(res, { jobs: homeworkJob(kind, await readBody(req)) });
         return json(res, { jobs: homeworkJobs.filter((j) => j.kind === kind) });
       }

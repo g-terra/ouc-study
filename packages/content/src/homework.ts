@@ -22,6 +22,7 @@ export interface TaskAnswer {
   choice?: number;       // the picked option (index into options)
   why?: string;          // optional: why that option was picked
   done?: boolean;
+  aiEdited?: boolean;    // the AI made its wording more academic (Make it more academic), kept once set
   updated?: string;      // ISO datetime
 }
 /** Task id → answer. */
@@ -96,6 +97,10 @@ export function applyAnswer(tasks: HomeworkTask[], answers: HomeworkAnswers, pat
     const n = task.options?.length ?? 0;
     if (!Number.isInteger(p.choice) || (p.choice as number) < 0 || (p.choice as number) >= n) bad("Bad choice.");
     next.choice = p.choice as number;
+  }
+  if (p.aiEdited !== undefined) {
+    if (typeof p.aiEdited !== "boolean") bad("Say aiEdited: true or false.");
+    if (p.aiEdited) next.aiEdited = true;
   }
   if (p.done !== undefined) {
     if (typeof p.done !== "boolean") bad("Say done: true or false.");

@@ -3,9 +3,10 @@
 //   assignments/<CODE>/<folder>/homework/answers.json  { answers: { <task id>: { text, choice, why, done, updated } } }
 //   assignments/<CODE>/<folder>/homework/images/       pictures added to answers, named by their content
 //   assignments/<CODE>/<folder>/homework/check.json    the AI's check of the answers (Check my answers)
+//   assignments/<CODE>/<folder>/homework/polish/<task id>.html  the AI's more academic wording of an answer, until kept or dropped
 // The app saves answers through POST /api/homework (apps/web/vite.config.ts).
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { applyAnswer, parseCheck, parseHomework, type Homework, type HomeworkAnswers, type HomeworkCheck } from "./homework.ts";
 
@@ -53,6 +54,35 @@ export function readCheck(semDir: string, assignment: string): HomeworkCheck | u
 /** Every assignment's check in the semester, by assignment id. */
 export function allChecks(semDir: string): Record<string, HomeworkCheck> {
   return Object.fromEntries(withFile(semDir, "check.json").map((id) => [id, readCheck(semDir, id)]).filter(([, c]) => c));
+}
+
+/** Where the AI saves its more academic wording of one task's answer. */
+export function polishFile(semDir: string, assignment: string, task: string): string {
+  if (!/^[\w.-]{1,20}$/.test(task) || task.startsWith(".")) throw new Error("Bad task.");
+  return join(homeworkDir(semDir, assignment), "polish", `${task}.html`);
+}
+
+/** The AI's more academic wordings waiting to be kept or dropped, by task id, with when each was made. */
+export function readPolish(semDir: string, assignment: string): Record<string, { text: string; made: string }> {
+  const tasks = readHomework(semDir, assignment)?.homework?.tasks ?? [];
+  const out: Record<string, { text: string; made: string }> = {};
+  for (const t of tasks) {
+    const f = polishFile(semDir, assignment, t.id);
+    if (!existsSync(f)) continue;
+    const text = readFileSync(f, "utf8").trim();
+    if (text) out[t.id] = { text, made: statSync(f).mtime.toISOString() };
+  }
+  return out;
+}
+
+/** Every assignment's waiting wordings in the semester, by assignment id. */
+export function allPolish(semDir: string): Record<string, Record<string, { text: string; made: string }>> {
+  return Object.fromEntries(withFile(semDir, "polish").map((id) => [id, readPolish(semDir, id)]).filter(([, p]) => Object.keys(p as object).length));
+}
+
+/** Drops a wording once it's been kept or turned down. */
+export function discardPolish(semDir: string, assignment: string, task: string): void {
+  rmSync(polishFile(semDir, assignment, task), { force: true });
 }
 
 /** Checks and saves one change to an answer ({ assignment, task, text?, choice?, why?, done? }); returns the assignment's answers. */
