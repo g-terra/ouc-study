@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.0](https://github.com/g-terra/ouc-study/compare/v0.39.0...v0.40.0) (2026-10-25)
+
+
+### Features
+
+* **ai:** discuss a homework task's AI check and correct it when the student is right ([#196](https://github.com/g-terra/ouc-study/issues/196)) ([401f2bb](https://github.com/g-terra/ouc-study/commit/401f2bb0842e044a09122297c115ee3163011e52))
+
 ## [0.39.0](https://github.com/g-terra/ouc-study/compare/v0.38.0...v0.39.0) (2026-10-25)
 
 
