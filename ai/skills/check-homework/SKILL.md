@@ -30,7 +30,7 @@ The student answered an assignment's tasks in the app: `<sem>/assignments/<CODE>
 }
 ```
 
-Every task in `tasks.json` gets an entry. Then run `node packages/ai/validate.mjs <that check.json>` and fix every error it reports.
+Every task in `tasks.json` gets an entry. When the request says to check only some tasks (the others were right and haven't changed), judge only those and keep every other entry exactly as it is; leave `answered` to the app. Then run `node packages/ai/validate.mjs <that check.json>` and fix every error it reports.
 
 ## Never
 - Write the answer or a model solution, in a note or anywhere else.

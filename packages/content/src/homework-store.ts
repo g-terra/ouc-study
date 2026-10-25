@@ -51,6 +51,14 @@ export function readCheck(semDir: string, assignment: string): HomeworkCheck | u
   return check ? { ...check, checked: statSync(f).mtime.toISOString() } : undefined;
 }
 
+/** Saves a check (e.g. merged with the one before it, see mergeCheck). */
+export function writeCheck(semDir: string, assignment: string, check: HomeworkCheck): void {
+  const f = join(homeworkDir(semDir, assignment), "check.json");
+  const { checked: _when, ...rest } = check;
+  writeFileSync(`${f}.tmp`, `${JSON.stringify(rest, null, 2)}\n`);
+  renameSync(`${f}.tmp`, f);
+}
+
 /** Every assignment's check in the semester, by assignment id. */
 export function allChecks(semDir: string): Record<string, HomeworkCheck> {
   return Object.fromEntries(withFile(semDir, "check.json").map((id) => [id, readCheck(semDir, id)]).filter(([, c]) => c));

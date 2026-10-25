@@ -190,6 +190,11 @@ test("checking the homework: lenient, saved as check.json and validated", () => 
   assert.match(p, /Save the check as `semesters\/S\/assignments\/AAA\/09-28_A1\/homework\/check\.json`/);
   assert.match(p, /node packages\/ai\/validate\.mjs semesters\/S\/assignments\/AAA\/09-28_A1\/homework\/check\.json/);
   assert.match(p, /not picky/i);
+  assert.doesNotMatch(p, /Check only/);
+  // later checks: only the tasks that need it, the rest kept as they are
+  const some = buildPrompt({ root: ".", semId: "S", data: hw, action: "check-homework", params: { assignment: "AAA/09-28_A1", tasks: "2" }, first: false });
+  assert.match(some, /Check only task 2 \(id "2"\)/);
+  assert.match(some, /keep every other task's entry/i);
   const acts = listActions(join(dirname(fileURLToPath(import.meta.url)), "../../.."));
   assert.equal(acts.find((a) => a.id === "homework-tutor")?.title, "Homework tutor");
   assert.equal(acts.find((a) => a.id === "check-homework")?.title, "Check my homework");

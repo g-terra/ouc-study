@@ -198,7 +198,7 @@ export function applyAnswer(tasks: HomeworkTask[], answers: HomeworkAnswers, pat
  */
 export const VERDICTS = ["right", "better", "wrong", "empty"] as const;
 export type Verdict = (typeof VERDICTS)[number];
-export interface TaskCheck { verdict: Verdict; note: string }
+export interface TaskCheck { verdict: Verdict; note: string; answered?: string }   // answered: the answer's "updated" when it was checked
 export interface HomeworkCheck {
   summary?: string;                      // Markdown
   tasks: Record<string, TaskCheck>;      // task id → its check
@@ -222,10 +222,35 @@ export function parseCheck(src: string | Raw, tasks: HomeworkTask[]): { check: H
     if (!VERDICTS.includes(c?.verdict)) return problems.push(`${at}: "verdict" must be one of ${VERDICTS.join(", ")}.`);
     const note = typeof c.note === "string" ? c.note.trim() : "";
     if (!note) return problems.push(`${at}: needs a "note" saying why.`);
-    out[t.id] = { verdict: c.verdict, note };
+    out[t.id] = { verdict: c.verdict, note, ...(typeof c.answered === "string" ? { answered: c.answered } : {}) };
   });
   const summary = typeof d.summary === "string" ? d.summary.trim() : "";
   return { check: { ...(summary ? { summary } : {}), tasks: out }, problems };
+}
+
+/**
+ * The tasks a new check looks at: each task is checked once, and again only when its answer changed since
+ * or it wasn't right (right and better stay as they are). A check from before "answered" counts an answer saved after it as changed.
+ */
+export function tasksToCheck(tasks: HomeworkTask[], answers: HomeworkAnswers, check: HomeworkCheck | undefined): string[] {
+  return tasks.filter((t) => {
+    const c = check?.tasks[t.id], updated = answers[t.id]?.updated;
+    if (!c || c.verdict === "wrong") return true;
+    if (c.answered !== undefined) return updated !== c.answered;
+    return !!updated && !!check?.checked && updated > check.checked;
+  }).map((t) => t.id);
+}
+
+/** A new check over the old one: the skipped tasks keep their old entries, the checked ones note which answer they were for. */
+export function mergeCheck(prev: HomeworkCheck | undefined, next: HomeworkCheck, checked: string[], answers: HomeworkAnswers): HomeworkCheck {
+  const tasks: Record<string, TaskCheck> = { ...next.tasks };
+  for (const [id, c] of Object.entries(prev?.tasks ?? {})) if (!checked.includes(id)) tasks[id] = c;
+  for (const id of checked) {
+    if (!tasks[id]) continue;
+    const { answered: _old, ...c } = tasks[id]!;
+    tasks[id] = answers[id]?.updated ? { ...c, answered: answers[id]!.updated! } : c;
+  }
+  return { ...(next.summary ? { summary: next.summary } : {}), tasks };
 }
 
 /** How many tasks got each verdict. */
