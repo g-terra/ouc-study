@@ -586,15 +586,39 @@ function RunningTasks({ sem }: { sem: string }) {
 export function Markdown({ text, className, sem, diagrams = true }: { text: string; className?: string; sem?: string; diagrams?: boolean }) {
   const { setOpen } = useAssistant();
   const box = useRef<HTMLDivElement>(null);
-  const html = mdToHtml(text, sem);
+  const html = withCopyButtons(mdToHtml(text, sem));
   const { theme } = useTheme();
   useEffect(() => { if (diagrams && box.current) drawDiagrams(box.current); }, [html, theme, diagrams]);
   return (
     <div ref={box} className={cx("text-sm leading-relaxed [&_a]:underline [&_a_code]:text-accent [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:break-all [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-2 [&_pre]:overflow-x-auto [&_pre_code]:break-normal [&_pre_code]:whitespace-pre [&_ul]:list-disc", className)}
       // file paths open their page (the router follows the link); on phones the chat covers the page, so close it
-      onClick={(e) => { if ((e.target as HTMLElement).closest("a[data-internal]") && !window.matchMedia("(min-width: 640px)").matches) setOpen(false); }}
+      onClick={(e) => {
+        const el = e.target as HTMLElement;
+        const copy = el.closest<HTMLButtonElement>("button[data-copy-tex]");
+        if (copy) copyTex(copy);
+        else if (el.closest("a[data-internal]") && !window.matchMedia("(min-width: 640px)").matches) setOpen(false);
+      }}
       dangerouslySetInnerHTML={{ __html: html }} />
   );
+}
+
+// Lucide's copy and check icons, as markup (the reply is an HTML string)
+const icon = (body: string) => `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-3.5">${body}</svg>`;
+const COPY_ICON = icon('<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>');
+const CHECK_ICON = icon('<path d="M20 6 9 17l-5-5"/>');
+/** Each display formula gets a Copy LaTeX button in its corner (shown on hover, always on touch screens). */
+function withCopyButtons(html: string) {
+  return html.replace(/<div class="math math-display">/g, `<div class="math math-display group relative"><button type="button" data-copy-tex aria-label="Copy LaTeX" title="Copy LaTeX" class="absolute top-0 right-0 z-10 flex items-center gap-1 rounded-md border border-line bg-surface px-1.5 py-1 text-xs text-muted hover:text-ink sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100">${COPY_ICON}</button>`);
+}
+/** Copies the formula's LaTeX (KaTeX keeps it in the maths it renders), then says so on the button for a moment. */
+function copyTex(button: HTMLButtonElement) {
+  const tex = button.parentElement?.querySelector('annotation[encoding="application/x-tex"]')?.textContent;
+  if (!tex) return;
+  void navigator.clipboard.writeText(tex.trim()).then(() => {
+    const say = (label: string, svg: string) => { button.setAttribute("aria-label", label); button.title = label; button.innerHTML = svg; };
+    say("Copied", CHECK_ICON);
+    setTimeout(() => say("Copy LaTeX", COPY_ICON), 1500);
+  });
 }
 
 /** Swaps each ```mermaid code block for its diagram (again on a theme change); a block that isn't a valid diagram stays as code. */

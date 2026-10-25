@@ -293,6 +293,30 @@ test("a flow in a chat reply shows as a Mermaid diagram; code that isn't a diagr
   await expect(page.getByText("this is not mermaid -->")).toBeVisible();
 });
 
+test("a formula in a chat reply has a Copy LaTeX button, and copying selected maths gives its LaTeX", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const text = "The length constant:\n\n$$\n\\lambda = \\sqrt{\\frac{r_m}{r_i}}\n$$\n\nand inline $\\tau = r_m c_m$ too.";
+  const chat = { id: "chat-math", title: "Maths", updatedAt: "2026-10-01T10:00:00Z", messages: [{ role: "user", text: "Explain it" }, { role: "assistant", text }] };
+  await page.route("**/api/ai/chats**", (route) => route.fulfill({ json: route.request().url().includes("chat-math") ? chat : { chats: [chat] } }));
+  await page.goto(`${SEM}/chat/chat-math`);
+  const copy = page.getByRole("button", { name: "Copy LaTeX" });
+  await expect(copy).toHaveCount(1);   // display formulas only
+  await page.locator(".math-display").hover();
+  await copy.click();
+  await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
+  // (browser code as strings: this package is typed without the DOM)
+  expect(await page.evaluate("navigator.clipboard.readText()")).toBe("\\lambda = \\sqrt{\\frac{r_m}{r_i}}");
+  // selecting maths and copying gives the LaTeX, not KaTeX's jumbled text
+  const copied = await page.evaluate(`(() => {
+    const math = document.querySelector(".math-inline");
+    getSelection().selectAllChildren(math);
+    const data = new DataTransfer();
+    math.dispatchEvent(new ClipboardEvent("copy", { clipboardData: data, bubbles: true, cancelable: true }));
+    return data.getData("text/plain");
+  })()`);
+  expect(copied).toBe("$\\tau = r_m c_m$");
+});
+
 test("the AI and its model are picked next to Send; the default is named and the pick is sent", async ({ page }) => {
   // a made-up status: Claude Code (its own default unknown) and Codex (default gpt-5)
   const tool = (id: string, label: string, models: string[], chosen = false, model?: string) => ({ id, label, state: "connected", chosen, models, model });
