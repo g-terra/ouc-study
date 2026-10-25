@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.0](https://github.com/g-terra/ouc-study/compare/v0.37.1...v0.38.0) (2026-10-25)
+
+
+### Features
+
+* **web:** centre answer text and change a homework task's type in the app ([#192](https://github.com/g-terra/ouc-study/issues/192)) ([1f4ccd9](https://github.com/g-terra/ouc-study/commit/1f4ccd9a052e803ba4b279d5df04079453527805))
+
 ## [0.37.1](https://github.com/g-terra/ouc-study/compare/v0.37.0...v0.37.1) (2026-10-25)
 
 
