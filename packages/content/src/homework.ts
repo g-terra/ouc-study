@@ -4,7 +4,7 @@
  * the student's answers and the done/left counts. No Node imports: the web app uses it too.
  */
 
-export const TASK_KINDS = ["written", "calculation", "choice"] as const;
+export const TASK_KINDS = ["written", "calculation", "choice", "truefalse"] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
 
 export interface HomeworkTask {
@@ -14,7 +14,10 @@ export interface HomeworkTask {
   question: string;      // Markdown with $LaTeX$, copied from the brief
   options?: string[];    // kind "choice" only
   multiple?: boolean;    // kind "choice" only: more than one option can be picked
+  statements?: string[]; // kind "truefalse" only: each one is answered true or false
 }
+/** One statement of a true-or-false task: the student's true or false, and why. */
+export interface StatementAnswer { value?: boolean; why?: string }
 export interface Homework { title?: string; tasks: HomeworkTask[] }
 
 /** One task's answer as the app saves it. */
@@ -23,6 +26,7 @@ export interface TaskAnswer {
   choice?: number;       // the picked option (index into options)
   choices?: number[];    // the picked options, for a task that takes more than one (sorted indexes)
   why?: string;          // optional: why that option was picked
+  tf?: Record<string, StatementAnswer>; // kind "truefalse": statement index → its answer
   done?: boolean;
   aiEdited?: boolean;    // the AI made its wording more academic (Make it more academic), kept once set
   updated?: string;      // ISO datetime
@@ -64,6 +68,11 @@ export function parseHomework(src: string | Raw): { homework: Homework | null; p
       task.options = options;
       if (t.multiple === true || (t.multiple !== false && MANY.test(question))) task.multiple = true;
     }
+    if (t.kind === "truefalse") {
+      const statements = Array.isArray(t.statements) ? (t.statements as unknown[]).map(str) : [];
+      if (statements.length < 1 || statements.length > 20 || statements.some((o) => !o)) return problems.push(`${at}: "statements" must be a list of 1 to 20 texts.`);
+      task.statements = statements;
+    }
     tasks.push(task);
   });
   if (problems.length) return { homework: null, problems };
@@ -77,7 +86,7 @@ export function pickedOptions(t: HomeworkTask, a: TaskAnswer | undefined): numbe
 }
 
 /** What a task can be changed to in the app: one option, several options, or typed. */
-export const TASK_TYPES = { written: "Written", calculation: "Calculation", choice: "One choice", multiple: "Several answers" } as const;
+export const TASK_TYPES = { written: "Written", calculation: "Calculation", choice: "One choice", multiple: "Several answers", truefalse: "True or false" } as const;
 export type TaskType = keyof typeof TASK_TYPES;
 export const taskType = (t: HomeworkTask): TaskType => (t.multiple ? "multiple" : t.kind);
 
@@ -92,12 +101,17 @@ export function retypeTask(raw: Raw, patch: unknown): Raw {
   const list: Raw[] = Array.isArray(raw?.tasks) ? raw.tasks : [];
   const at = list.findIndex((t, i) => (typeof t?.id === "string" && t.id.trim() ? t.id.trim() : String(i + 1)) === p.task);
   if (at < 0) bad("No such task.");
-  const { options: old, multiple: _m, ...rest } = list[at];
+  const { options: old, multiple: _m, statements: oldStatements, ...rest } = list[at];
   const task: Raw = { ...rest, kind: type === "multiple" ? "choice" : type };
   if (task.kind === "choice") {
     const options = (Array.isArray(p.options) ? p.options : Array.isArray(old) ? old : []).map((o: unknown) => (typeof o === "string" ? o.trim() : "")).filter(Boolean);
     if (options.length < 2 || options.length > 8) bad("Give 2 to 8 options, one per line.");
     Object.assign(task, { options, multiple: type === "multiple" });
+  }
+  if (task.kind === "truefalse") {
+    const statements = (Array.isArray(p.statements) ? p.statements : Array.isArray(oldStatements) ? oldStatements : []).map((o: unknown) => (typeof o === "string" ? o.trim() : "")).filter(Boolean);
+    if (statements.length < 1 || statements.length > 20) bad("Give 1 to 20 statements, one per line.");
+    task.statements = statements;
   }
   const next = { ...raw, tasks: list.map((t, i) => (i === at ? task : t)) };
   const { problems } = parseHomework(next);
@@ -117,8 +131,9 @@ export function homeworkProgress(tasks: HomeworkTask[], answers: HomeworkAnswers
 const bad = (m: string): never => { throw new Error(m); };
 
 /**
- * Merges one change ({ task, text?, choice?, choices?, why?, done? }) into the saved answers, after checking it.
- * `choice: null` clears the choice; `choices` (a task that takes more than one answer) replaces the picked options. Returns the new answers (the old object is left alone).
+ * Merges one change ({ task, text?, choice?, choices?, why?, tf?, done? }) into the saved answers, after checking it.
+ * `choice: null` clears the choice; `choices` (a task that takes more than one answer) replaces the picked options;
+ * `tf` ({ <statement index>: { value?, why? } }) merges true-or-false answers, `value: null` clearing one. Returns the new answers (the old object is left alone).
  */
 export function applyAnswer(tasks: HomeworkTask[], answers: HomeworkAnswers, patch: unknown, now = new Date()): HomeworkAnswers {
   const p = (patch ?? {}) as Record<string, unknown>;
@@ -145,6 +160,24 @@ export function applyAnswer(tasks: HomeworkTask[], answers: HomeworkAnswers, pat
     if (!Array.isArray(p.choices) || p.choices.some((c) => !Number.isInteger(c) || c < 0 || c >= n)) bad("Bad choice.");
     next.choices = [...new Set(p.choices as number[])].sort((x, y) => x - y);
     delete next.choice;
+  }
+  if (p.tf !== undefined) {
+    if (!p.tf || typeof p.tf !== "object" || Array.isArray(p.tf)) bad("Bad statement.");
+    const n = task.kind === "truefalse" ? task.statements?.length ?? 0 : 0;
+    const tf = { ...next.tf };
+    for (const [k, v] of Object.entries(p.tf as Record<string, Raw>)) {
+      if (!/^\d+$/.test(k) || Number(k) >= n || !v || typeof v !== "object") bad("Bad statement.");
+      const s: StatementAnswer = { ...tf[k] };
+      if (v.value === null) delete s.value;
+      else if (v.value !== undefined) { if (typeof v.value !== "boolean") bad("Say true or false."); s.value = v.value; }
+      if (v.why !== undefined) {
+        if (typeof v.why !== "string") bad("Bad why.");
+        if (v.why.length > MAX_TEXT) bad("That answer is too long.");
+        s.why = v.why;
+      }
+      tf[k] = s;
+    }
+    next.tf = tf;
   }
   if (p.aiEdited !== undefined) {
     if (typeof p.aiEdited !== "boolean") bad("Say aiEdited: true or false.");
@@ -219,7 +252,7 @@ export function parseAnswers(src: string | Raw, tasks: HomeworkTask[]): { answer
     const { updated, ...rest } = a && typeof a === "object" ? a : ({} as Raw);
     try {
       answers = applyAnswer(tasks, answers, { ...rest, task: id }, typeof updated === "string" && !Number.isNaN(Date.parse(updated)) ? new Date(updated) : undefined);
-    } catch (e) { problems.push(`"${id}": ${(e as Error).message.replace(/\.$/, "")} (text and why are HTML strings, choice the index of an option, choices a list of them for a task that takes more than one, done true or false).`); }
+    } catch (e) { problems.push(`"${id}": ${(e as Error).message.replace(/\.$/, "")} (text and why are HTML strings, choice the index of an option, choices a list of them for a task that takes more than one, tf { <statement index>: { value: true or false, why } }, done true or false).`); }
   }
   return { answers, problems };
 }

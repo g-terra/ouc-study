@@ -7,7 +7,7 @@ _Paths: `<sem>` = the current semester folder (named in STUDENT.md; otherwise th
 
 # Check my homework
 
-The student answered an assignment's tasks in the app: `<sem>/assignments/<CODE>/<folder>/homework/tasks.json` (the tasks) and `answers.json` (their answers, HTML, keyed by task id; `choice` is the index of the picked option, `choices` the picked options of a task marked `multiple`, `why` the optional reason; pictures in `images/`). Format: `docs/HOMEWORK_FORMAT.md`.
+The student answered an assignment's tasks in the app: `<sem>/assignments/<CODE>/<folder>/homework/tasks.json` (the tasks) and `answers.json` (their answers, HTML, keyed by task id; `choice` is the index of the picked option, `choices` the picked options of a task marked `multiple`, `tf` the true or false (and optional `why`) for each statement of a `truefalse` task, `why` the optional reason; pictures in `images/`). Format: `docs/HOMEWORK_FORMAT.md`.
 
 ## Read first
 1. `tasks.json` and `answers.json`.

@@ -15,18 +15,18 @@ test.afterEach(async () => expect(errors, "browser errors").toEqual([]));
 
 test("answer a homework task by task, see the counter move, and find the answers again after a reload", async ({ page }) => {
   await page.goto(`${SEM}/courses/DEMO101#work`);
-  await expect(page.getByTestId("homework-count")).toHaveText("0 of 4 done");
+  await expect(page.getByTestId("homework-count")).toHaveText("0 of 5 done");
   await page.getByRole("link", { name: "Answer Assignment 1 in the app" }).click();
 
   await expect(page.getByRole("heading", { level: 1, name: "Assignment 1" })).toBeVisible();
   const timeline = page.getByRole("navigation", { name: "Tasks" });
-  await expect(timeline.getByRole("button")).toHaveCount(4);
-  await expect(page.getByTestId("homework-progress")).toHaveText("0 of 4 done · 4 left");
+  await expect(timeline.getByRole("button")).toHaveCount(5);
+  await expect(page.getByTestId("homework-progress")).toHaveText("0 of 5 done · 5 left");
   await expect(page.getByText("What was new to you?")).toBeVisible();
 
   await page.getByRole("textbox", { name: "Your answer" }).fill("I liked seeing the app with made-up data.");
   await page.getByRole("button", { name: "Done, next task" }).click();
-  await expect(page.getByTestId("homework-progress")).toHaveText("1 of 4 done · 3 left");
+  await expect(page.getByTestId("homework-progress")).toHaveText("1 of 5 done · 4 left");
 
   // task 2: multiple choice, with the optional why
   await expect(page.getByText("Which part of the demo week did you like most?")).toBeVisible();
@@ -34,7 +34,7 @@ test("answer a homework task by task, see the counter move, and find the answers
   await page.getByRole("button", { name: "Add why I picked it" }).click();
   await page.getByRole("textbox", { name: "Why I picked it" }).fill("It was short.");
   await page.getByRole("button", { name: "Done, next task" }).click();
-  await expect(page.getByTestId("homework-progress")).toHaveText("2 of 4 done · 2 left");
+  await expect(page.getByTestId("homework-progress")).toHaveText("2 of 5 done · 3 left");
 
   // task 3 shows its maths, and the timeline jumps back
   await expect(page.locator(".katex").first()).toBeVisible();
@@ -42,7 +42,7 @@ test("answer a homework task by task, see the counter move, and find the answers
   await expect(page.getByRole("radio", { name: "The welcome video" })).toHaveAttribute("aria-checked", "true");
 
   await page.reload();
-  await expect(page.getByTestId("homework-progress")).toHaveText("2 of 4 done · 2 left");
+  await expect(page.getByTestId("homework-progress")).toHaveText("2 of 5 done · 3 left");
   await timeline.getByRole("button", { name: /Your demo week/ }).click();
   await expect(page.getByRole("textbox", { name: "Your answer" })).toHaveText("I liked seeing the app with made-up data.");
   await timeline.getByRole("button", { name: /Favourite part/ }).click();
@@ -50,7 +50,7 @@ test("answer a homework task by task, see the counter move, and find the answers
 
   // the course shows the count too
   await page.goto(`${SEM}/courses/DEMO101#work`);
-  await expect(page.getByTestId("homework-count")).toHaveText("2 of 4 done");
+  await expect(page.getByTestId("homework-count")).toHaveText("2 of 5 done");
 });
 
 test("a task that takes more than one answer lets several options be picked, and keeps them after a reload", async ({ page }) => {
@@ -67,7 +67,12 @@ test("a task that takes more than one answer lets several options be picked, and
   await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Good habits/ }).click();
   await expect(group.getByRole("checkbox", { checked: true })).toHaveText([/Spaced practice/, /Testing yourself/]);
   await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student");
-  await expect(page.getByText("Answers: A, C.")).toBeVisible();
+  // every option is printed, the picked ones struck through in red
+  const q4 = page.getByRole("region", { name: "Question 4" });
+  await expect(q4.getByRole("listitem")).toHaveCount(3);
+  await expect(q4.locator("li[data-picked]")).toHaveText(["A. Spaced practice", "C. Testing yourself"]);
+  await expect(q4.locator("li[data-picked]").first()).toHaveCSS("text-decoration-line", "line-through");
+  await expect(q4.locator("li[data-picked]").first()).toHaveCSS("color", "rgb(200, 16, 46)");
 });
 
 test("an answer that starts with a picture opens as a picture, not as code, after moving away and back", async ({ page }) => {
@@ -114,6 +119,28 @@ test("a task's type can be changed in the app when the AI got it wrong, and chan
   await form.getByRole("combobox", { name: "Type" }).selectOption("multiple");
   await form.getByRole("button", { name: "Save type" }).click();
   await expect(page.getByRole("checkbox")).toHaveCount(3, { timeout: 10_000 });
+});
+
+test("a true-or-false task is one question: True or False and an explanation for each statement, printed with the answers", async ({ page }) => {
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Demo facts/ }).click();
+  await expect(page.getByText("True or false", { exact: false }).first()).toBeVisible();
+  const first = page.getByRole("radiogroup", { name: "Statement 1" });
+  const second = page.getByRole("radiogroup", { name: "Statement 2" });
+  await first.getByRole("radio", { name: "True" }).click();
+  await second.getByRole("radio", { name: "False" }).click();
+  await page.getByRole("button", { name: "Add an explanation" }).nth(1).click();
+  await page.getByRole("textbox", { name: "Explanation for statement 2" }).fill("It has a website.");
+  await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  await page.reload();
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Demo facts/ }).click();
+  await expect(first.getByRole("radio", { name: "True" })).toHaveAttribute("aria-checked", "true");
+  await expect(second.getByRole("radio", { name: "False" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("textbox", { name: "Explanation for statement 2" })).toHaveText("It has a website.");
+  await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student");
+  const q5 = page.getByRole("region", { name: "Question 5" });
+  await expect(q5.getByTestId("tf-answer")).toHaveText(["True", "False"]);
+  await expect(q5).toContainText("It has a website.");
 });
 
 test("answers can have bold, colours and formulas, and keep them after a reload", async ({ page }) => {
@@ -233,7 +260,11 @@ test("the print page shows the name, the title, every task in full and the answe
   await expect(page.getByRole("heading", { level: 1, name: "Assignment 1" })).toBeVisible();
   await expect(page.getByTestId("print-name")).toHaveText("Demo Student");
   await expect(page.getByText("DEMO101 · Introduction to Demo Studies")).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2 })).toHaveText([/Task 1/, /Task 2/, /Task 3/, /Task 4/]);
+  // numbered questions with no task titles, a line between them
+  await expect(page.getByRole("region", { name: /^Question \d$/ })).toHaveCount(5);
+  await expect(page.getByRole("region", { name: "Question 1" })).toContainText("1.Write a short reflection");
+  await expect(page.getByText("Your demo week")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Question 2" })).toHaveCSS("border-top-style", "solid");
   await expect(page.getByText("Which part of the demo week did you like most?")).toBeVisible();
   await expect(page.locator(".katex").first()).toBeVisible();
   // a long homework's last page is white below the answers too (the page behind the paper is the app's background)
@@ -341,7 +372,7 @@ test("the last task's button completes the homework and starts the AI check of e
   const timeline = page.getByRole("navigation", { name: "Tasks" });
   await timeline.getByRole("button", { name: /Demo sum/ }).click();
   await expect(page.getByRole("button", { name: "Complete and review" })).toHaveCount(0);
-  await timeline.getByRole("button", { name: /Good habits/ }).click();
+  await timeline.getByRole("button", { name: /Demo facts/ }).click();
   await page.getByRole("button", { name: "Complete and review" }).click();
   await expect(page.getByRole("status").filter({ hasText: "The AI is checking your answers…" })).toBeVisible();
   await expect(page.getByText("Done", { exact: true })).toBeVisible();
