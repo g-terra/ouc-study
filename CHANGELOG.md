@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.41.0](https://github.com/g-terra/ouc-study/compare/v0.40.0...v0.41.0) (2026-10-25)
+
+
+### Features
+
+* **ai:** check each homework answer once, again only when it changed or wasn't right ([#198](https://github.com/g-terra/ouc-study/issues/198)) ([dd2aba4](https://github.com/g-terra/ouc-study/commit/dd2aba4331c27fb065ca478e2e70312d5b0131ec))
+
 ## [0.40.0](https://github.com/g-terra/ouc-study/compare/v0.39.0...v0.40.0) (2026-10-25)
 
 
