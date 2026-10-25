@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.0](https://github.com/g-terra/ouc-study/compare/v0.38.0...v0.39.0) (2026-10-25)
+
+
+### Features
+
+* **web:** rework the homework PDF and add true-or-false tasks ([#194](https://github.com/g-terra/ouc-study/issues/194)) ([945b4f2](https://github.com/g-terra/ouc-study/commit/945b4f2b7b547876e7571a810378eb47b8cc2e4e))
+
 ## [0.38.0](https://github.com/g-terra/ouc-study/compare/v0.37.1...v0.38.0) (2026-10-25)
 
 
