@@ -61,3 +61,14 @@ test("installDeps runs npm ci, and npm install if that fails", () => {
   assert.equal(installDeps((c, a) => { calls.push([c, ...a].join(" ")); return a[0] === "install"; }), true);
   assert.deepEqual(calls, ["npm ci --no-audit --no-fund", "npm install --no-audit --no-fund"]);
 });
+
+test("after a reinstall, Vite's pre-bundled dependencies are thrown away (they point at the old packages)", () => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-deps-"));
+  for (const d of ["apps/web/node_modules/.vite/deps", "node_modules/.vite/deps"]) { mkdirSync(join(root, d), { recursive: true }); writeFileSync(join(root, d, "react.js"), "old"); }
+  assert.equal(installDeps(() => true, () => {}, root), true);
+  assert.ok(!existsSync(join(root, "apps/web/node_modules/.vite")) && !existsSync(join(root, "node_modules/.vite")));
+  // a failed install leaves them alone
+  mkdirSync(join(root, "apps/web/node_modules/.vite"), { recursive: true });
+  assert.equal(installDeps(() => false, () => {}, root), false);
+  assert.ok(existsSync(join(root, "apps/web/node_modules/.vite")));
+});

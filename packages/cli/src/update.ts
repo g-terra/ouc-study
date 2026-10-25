@@ -81,10 +81,10 @@ export async function checkForUpdate(root: string, { fresh = false, fetchImpl = 
 
 /**
  * Move this git checkout to the newest release (or, with latest, to the newest code on its branch),
- * then reinstall what changed: a clean `npm ci` when the dependencies changed, the AI skills when ai/ did.
+ * then reinstall what changed: a clean `npm ci` when the dependencies changed (after beforeInstall()), the AI skills when ai/ did.
  * Never touches local code edits. Returns { ok, changed, message }; log(kind, text) reports progress.
  */
-export function applyUpdate(root: string, { latest = false, log = (() => {}) as UpdateLog, run = npmRunner(root) as Runner } = {}): UpdateResult {
+export function applyUpdate(root: string, { latest = false, log = (() => {}) as UpdateLog, run = npmRunner(root) as Runner, beforeInstall = () => {} } = {}): UpdateResult {
   const fail = (message: string) => { log("warn", message); return { ok: false, changed: false, message }; };
   if (git(root, "rev-parse", "--is-inside-work-tree").status !== 0) return fail("Not a git checkout, so no code update (download the latest from GitHub instead).");
   if (git(root, "status", "--porcelain", "--untracked-files=no").stdout.trim()) return fail("You have local code changes, so the code wasn't updated (commit or stash them, then: ouc update).");
@@ -113,7 +113,8 @@ export function applyUpdate(root: string, { latest = false, log = (() => {}) as 
   const changed = git(root, "diff", "--name-only", before, after).stdout.split(/\r?\n/);
   if (changed.some((f) => /(^|\/)package(-lock)?\.json$/.test(f)) || missingDeps(root).length) {
     log("warn", "Dependencies changed, reinstalling them (npm ci)…");
-    if (!installDeps(run, (t) => log("warn", t))) return fail(`Installing dependencies failed; run "npm ci" in ${root}`);
+    beforeInstall();   // e.g. stop the running app: npm ci empties node_modules under it
+    if (!installDeps(run, (t) => log("warn", t), root)) return fail(`Installing dependencies failed; run "npm ci" in ${root}`);
   }
   if (changed.some((f) => f.startsWith("ai/")) && !run(process.execPath, [join(root, "bin/ai.mjs"), "install"])) log("warn", "Couldn't reinstall the AI skills (ouc ai install)");
   return { ok: true, changed: true, message: onReleases ? `Updated to ${tag}` : "Updated" };

@@ -48,7 +48,7 @@ function needDeps() {
   const missing = missingDeps(ROOT);
   if (!missing.length) return;
   warn(`Installing dependencies first (npm ci: ${missing.length} missing, e.g. ${missing[0]})…`);
-  if (!installDeps(npmRunner(ROOT), warn)) { err(`Installing dependencies failed; run "npm ci" in ${ROOT}`); process.exit(1); }
+  if (!installDeps(npmRunner(ROOT), warn, ROOT)) { err(`Installing dependencies failed; run "npm ci" in ${ROOT}`); process.exit(1); }
 }
 const buildData = () => {
   const tsx = join(ROOT, "node_modules/tsx/dist/cli.mjs");
@@ -98,7 +98,7 @@ function unlinkCmd() {
 
 // Move to the newest release (--main or --latest: the newest code on this branch), then refresh dependencies and AI skills
 // if they changed. Never touches local edits. Details in update.ts.
-function updateCode(opts = {}) {
+function updateCode(opts: Parameters<typeof applyUpdate>[1] = {}) {
   return applyUpdate(ROOT, { latest: args.includes("--main") || args.includes("--latest"), log: (kind, text) => (kind === "ok" ? ok : warn)(text), ...opts });
 }
 /** One line when a newer release is out (checked at most once a day). */
@@ -216,8 +216,14 @@ switch (cmd) {
       else ok(`Up to date: v${u.current}${u.latest ? ` (latest release v${u.latest})` : ""}`);
       break;
     }
-    if (!updateCode().ok) process.exitCode = 1;
-    else if (await up()) console.log("  Restart the app to use it: ouc restart");
+    {
+      // reinstalling the dependencies empties node_modules: stop the running app first, start it again after
+      let stopped = false;
+      const r = updateCode({ beforeInstall: () => { if (svc.running()) stopped = svc.stop(); } });
+      if (!r.ok) process.exitCode = 1;
+      if (stopped) process.exitCode = node([SELF, "start"]) || process.exitCode;
+      else if (r.ok && r.changed && (await up())) console.log("  Restart the app to use it: ouc restart");
+    }
     break;
   case "restart":
     // stop first, so a clean reinstall of the dependencies doesn't pull them from under the running app

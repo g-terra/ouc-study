@@ -3,7 +3,7 @@
 // with "Failed to resolve import". `ouc start`, `ouc update` and the background app check this and
 // run `npm ci` when something is missing.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 interface LockEntry { version?: string; optional?: boolean; link?: boolean; inBundle?: boolean }
@@ -37,10 +37,14 @@ export function npmRunner(root: string, stdio: "inherit" | "ignore" = "inherit")
   };
 }
 
-/** A clean `npm ci` (falling back to `npm install`); true when it worked. */
-export function installDeps(run: Run, log: (text: string) => void = () => {}): boolean {
+/**
+ * A clean `npm ci` (falling back to `npm install`); true when it worked. With `root`, it then throws away
+ * Vite's pre-bundled dependencies (node_modules/.vite), which point at the packages it just replaced.
+ */
+export function installDeps(run: Run, log: (text: string) => void = () => {}, root?: string): boolean {
   // a clean install: `npm install` over old node_modules can keep stale copies (it once left Vite 6 next to Vite 8)
-  if (run("npm", ["ci", "--no-audit", "--no-fund"])) return true;
-  log("npm ci failed, trying npm install…");
-  return run("npm", ["install", "--no-audit", "--no-fund"]);
+  let ok = run("npm", ["ci", "--no-audit", "--no-fund"]);
+  if (!ok) { log("npm ci failed, trying npm install…"); ok = run("npm", ["install", "--no-audit", "--no-fund"]); }
+  if (ok && root) for (const d of ["apps/web/node_modules/.vite", "node_modules/.vite"]) rmSync(join(root, d), { recursive: true, force: true });
+  return ok;
 }

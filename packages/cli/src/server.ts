@@ -24,7 +24,7 @@ const vite = join(ROOT, "node_modules/vite/bin/vite.js");
 const missing = missingDeps(ROOT);
 if (missing.length) {
   say(`Installing dependencies (${missing.length} missing, e.g. ${missing[0]})…`);
-  if (!installDeps(npmRunner(ROOT), say)) say(`Installing dependencies failed. Run "npm ci" in ${ROOT}.`);
+  if (!installDeps(npmRunner(ROOT), say, ROOT)) say(`Installing dependencies failed. Run "npm ci" in ${ROOT}.`);
 }
 if (!existsSync(vite) || !existsSync(tsx)) {
   say(`Dependencies missing. Run "npm install" in ${ROOT} first.`);
