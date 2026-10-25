@@ -159,18 +159,28 @@ test("the print page shows the name, the title, every task in full and the answe
   await expect(page.locator(".katex").first()).toBeVisible();
 });
 
-test("Make PDF saves a PDF with the student's name into the assignment's folder", async ({ page }) => {
+test("Make PDF saves a PDF with the student's eClass name into the assignment's folder, without asking for it", async ({ page }) => {
+  await page.route("**/api/eclass/status*", (r) => r.fulfill({ json: { state: "connected", ok: true, user: "Demo Student" } }));
   await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
   await page.getByRole("button", { name: "Make PDF" }).click();
   const dialog = page.getByRole("dialog", { name: "Make the PDF" });
-  await dialog.getByRole("textbox", { name: "Name on the PDF" }).fill("Demo Student");
-  await dialog.getByRole("button", { name: "Make PDF" }).click();
+  await expect(dialog.getByRole("textbox", { name: "Name on the PDF" })).toHaveCount(0);
+  await expect(dialog).toContainText("Demo Student");
   const link = dialog.getByRole("link", { name: "Open the PDF" });
   await expect(link).toBeVisible({ timeout: 60_000 });
   const href = (await link.getAttribute("href"))!;
   expect(decodeURIComponent(href)).toMatch(/\/assignments\/DEMO101\/09-28_Assignment-1\/my-submission\/Assignment 1 - Demo Student\.pdf$/);
   const pdf = await page.request.get(href);
   expect((await pdf.body()).subarray(0, 4).toString()).toBe("%PDF");
+});
+
+test("without an eClass name, Make PDF asks for the name once", async ({ page }) => {
+  await page.route("**/api/eclass/status*", (r) => r.fulfill({ json: { state: "nokey", ok: false } }));
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("button", { name: "Make PDF" }).click();
+  const dialog = page.getByRole("dialog", { name: "Make the PDF" });
+  await dialog.getByRole("textbox", { name: "Name on the PDF" }).fill("Demo Student");
+  await expect(dialog.getByRole("link", { name: "Preview" })).toHaveAttribute("href", /name=Demo%20Student/);
 });
 
 test("the homework page fits a phone", async ({ page }) => {
