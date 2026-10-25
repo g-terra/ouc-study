@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.1](https://github.com/g-terra/ouc-study/compare/v0.37.0...v0.37.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **web:** homework takes several answers, keeps picture answers as pictures, and ends with complete and review ([#190](https://github.com/g-terra/ouc-study/issues/190)) ([1e09bab](https://github.com/g-terra/ouc-study/commit/1e09bab1e332d629ebe034b375f52b19ce31d7e8))
+
 ## [0.37.0](https://github.com/g-terra/ouc-study/compare/v0.36.0...v0.37.0) (2026-10-25)
 
 
