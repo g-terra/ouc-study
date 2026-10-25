@@ -193,7 +193,7 @@ test("the print page shows the name, the title, every task in full and the answe
   await expect(page.locator(".katex").first()).toBeVisible();
   // a long homework's last page is white below the answers too (the page behind the paper is the app's background)
   await page.emulateMedia({ media: "print" });
-  expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)).toBe("rgb(255, 255, 255)");
+  await expect(page.locator("html")).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 
 test("Make PDF saves a PDF with the student's eClass name into the assignment's folder, without asking for it", async ({ page }) => {
