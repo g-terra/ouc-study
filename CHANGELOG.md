@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.0](https://github.com/g-terra/ouc-study/compare/v0.36.0...v0.37.0) (2026-10-25)
+
+
+### Features
+
+* **ai:** make a homework answer more academic, kept or turned down by the student ([#187](https://github.com/g-terra/ouc-study/issues/187)) ([ab6359d](https://github.com/g-terra/ouc-study/commit/ab6359d3f49f9f8d834049e9537b4aeeb635aa02))
+
 ## [0.36.0](https://github.com/g-terra/ouc-study/compare/v0.35.1...v0.36.0) (2026-10-25)
 
 
