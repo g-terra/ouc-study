@@ -329,15 +329,16 @@ export function HomeworkLink({ sem, a, tasks }: { sem: string; a: Pick<Assignmen
 
 const NAME_KEY = "ouc-pdf-name";
 
-/** Make PDF: asks for the name on it (eClass's name, or the last one used), then saves the PDF into my-submission/. */
+/** Make PDF: saves the PDF into my-submission/ with the name from eClass; only without one does it ask (and remember) the name. */
 function MakePdfButton({ sem, id, title }: { sem: string; id: string; title: string }) {
   const conn = useConnection();
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState(() => { try { return localStorage.getItem(NAME_KEY) ?? ""; } catch { return ""; } });
+  const [typed, setTyped] = useState(() => { try { return localStorage.getItem(NAME_KEY) ?? ""; } catch { return ""; } });
   const [st, setSt] = useState<{ busy?: boolean; pdf?: string; error?: string; printed?: boolean }>({});
-  useEffect(() => { if (!name && conn.user) setName(conn.user); }, [conn.user]);
+  const known = conn.user?.trim();
+  const name = known || typed;
   const go = () => {
-    try { localStorage.setItem(NAME_KEY, name.trim()); } catch {}
+    if (!known) try { localStorage.setItem(NAME_KEY, typed.trim()); } catch {}
     setSt({ busy: true });
     makePdf(sem, id, title, name.trim()).then((pdf) => setSt({ pdf }), (e: Error & { noBrowser?: boolean }) => {
       // no Chrome or Edge: the print window can still save a PDF
@@ -347,7 +348,7 @@ function MakePdfButton({ sem, id, title }: { sem: string; id: string; title: str
   };
   return (
     <>
-      <button type="button" onClick={() => { setSt({}); setOpen(true); }} className="flex min-h-11 items-center gap-1.5 rounded-full bg-ink px-4 font-semibold text-bg hover:opacity-90">
+      <button type="button" onClick={() => { setSt({}); setOpen(true); if (known) go(); }} className="flex min-h-11 items-center gap-1.5 rounded-full bg-ink px-4 font-semibold text-bg hover:opacity-90">
         <FileText aria-hidden className="size-4" />Make PDF
       </button>
       {open && (
@@ -356,10 +357,12 @@ function MakePdfButton({ sem, id, title }: { sem: string; id: string; title: str
             <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="absolute right-3 top-3 grid size-9 place-items-center rounded-full text-muted hover:bg-surface-2"><X aria-hidden className="size-4" /></button>
             <h2 className="mb-1 font-serif text-2xl font-semibold">Make the PDF</h2>
             <p className="mb-4 text-sm text-muted">Every task in full with your answers, your name and the assignment's title. It's saved in this assignment's my-submission folder, ready to upload on eClass.</p>
-            <label className="mb-4 grid gap-1 text-sm">
-              <span className="font-semibold">Name on the PDF</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl border border-line bg-bg px-3 py-2 outline-none focus:border-muted" />
-            </label>
+            {known ? <p className="mb-4 text-sm">Name on the PDF: <b>{known}</b> <span className="text-muted">(from eClass)</span></p> : (
+              <label className="mb-4 grid gap-1 text-sm">
+                <span className="font-semibold">Name on the PDF</span>
+                <input value={typed} onChange={(e) => setTyped(e.target.value)} className="rounded-xl border border-line bg-bg px-3 py-2 outline-none focus:border-muted" />
+              </label>
+            )}
             {st.pdf && (
               <div className="mb-4 rounded-xl bg-ok-bg p-3 text-sm text-ok">
                 Saved as <b className="break-all">{decodeURIComponent(st.pdf.split("/").pop() ?? "")}</b>.{" "}
