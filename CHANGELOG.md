@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.0](https://github.com/g-terra/ouc-study/compare/v0.35.1...v0.36.0) (2026-10-25)
+
+
+### Features
+
+* **web:** make the homework PDF with the eClass name, without asking for it ([#184](https://github.com/g-terra/ouc-study/issues/184)) ([9c77ab3](https://github.com/g-terra/ouc-study/commit/9c77ab3bcfcbe69b8881bee1f4cca6941a2abff3))
+
 ## [0.35.1](https://github.com/g-terra/ouc-study/compare/v0.35.0...v0.35.1) (2026-10-25)
 
 
