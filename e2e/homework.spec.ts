@@ -107,6 +107,27 @@ test("a picture can be added to an answer and is still there after a reload", as
   await expect.poll(() => again.evaluate((el) => (el as unknown as { naturalWidth: number }).naturalWidth)).toBe(1);
 });
 
+test("what was typed while the app server couldn't save it comes back after a reload, and is then saved", async ({ page }) => {
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  // the server is down: the save fails, as it would if the page crashed before it
+  await page.route("**/api/homework", (r) => (r.request().method() === "POST" ? r.abort() : r.fallback()));
+  await page.getByRole("textbox", { name: "Your answer" }).fill("Typed before the crash.");
+  await expect(page.getByRole("alert")).toContainText("Couldn't save");
+  await page.unroute("**/api/homework");
+  await page.reload();
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  await expect(page.getByRole("textbox", { name: "Your answer" })).toHaveText("Typed before the crash.");
+  await expect(page.getByTestId("draft-restored")).toBeVisible();
+  await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  // now it's on the server: gone from the browser, still there
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  await expect(page.getByRole("textbox", { name: "Your answer" })).toHaveText("Typed before the crash.");
+  await expect(page.getByTestId("draft-restored")).toHaveCount(0);
+});
+
 test("answers can have inline code and code blocks with syntax colours", async ({ page }) => {
   await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
   await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
@@ -166,7 +187,7 @@ const aiReady = (page: import("@playwright/test").Page) => page.route("**/api/ai
   tools: [{ id: "claude", label: "Claude Code", state: "connected", chosen: true }],
 } }));
 
-test("Ask AI about this task opens the tutor on the task being answered", async ({ page }) => {
+test("Ask AI about this task starts the tutor chat on the task being answered, with its question sent", async ({ page }) => {
   await aiReady(page);
   let sent: Record<string, unknown> | undefined;
   await page.route("**/api/ai/run", (route) => {
@@ -175,11 +196,11 @@ test("Ask AI about this task opens the tutor on the task being answered", async 
   });
   await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
   await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Demo sum/ }).click();
+  // one click: the chat starts on its own, with the task's question as the first message
   await page.getByRole("button", { name: "Ask AI about this task" }).click();
-  await page.getByRole("textbox", { name: "Message" }).fill("I'm stuck");
-  await page.getByRole("button", { name: "Start" }).click();
   await expect(page.getByText("What does the question ask you to add?")).toBeVisible();
   expect(sent).toMatchObject({ action: "homework-tutor", params: { course: "DEMO101", assignment: "DEMO101/09-28_Assignment-1", task: "3" } });
+  expect(String(sent?.message)).toMatch(/^Help me with task 3 \(Demo sum\):/);
 });
 
 test("Check my answers runs in the background, then shows a verdict on each task", async ({ page }) => {
