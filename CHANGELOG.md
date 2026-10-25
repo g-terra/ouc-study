@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.35.0](https://github.com/g-terra/ouc-study/compare/v0.34.0...v0.35.0) (2026-10-25)
+
+
+### Features
+
+* **web:** keep homework answers through a crash, and start the tutor chat on the task ([#181](https://github.com/g-terra/ouc-study/issues/181)) ([df5ab5f](https://github.com/g-terra/ouc-study/commit/df5ab5f9bd4eed1946d47f3f3e67d23a6e6f0462))
+
+
+### Bug Fixes
+
+* **web:** copy a formula's latex from the chat, and draw its square roots whole ([#182](https://github.com/g-terra/ouc-study/issues/182)) ([b965fda](https://github.com/g-terra/ouc-study/commit/b965fda8785657d98a47d148306d671fd850c402))
+
 ## [0.34.0](https://github.com/g-terra/ouc-study/compare/v0.33.0...v0.34.0) (2026-10-23)
 
 
