@@ -48,6 +48,8 @@ A file with problems isn't used: the app shows what to fix on the homework page.
 
 Written by the AI when the student presses **Check my answers** (it runs in the background, no chat; `/api/ai/homework-check`). Check it with `node packages/ai/validate.mjs <path>/homework/check.json`, which reads the `tasks.json` next to it.
 
+Each answer is checked once. A later check looks again only at new answers, answers changed since they were checked, and ones that were `wrong`; the rest keep their entries. The app stamps each checked entry with `answered`, the answer's `updated` time it was checked against.
+
 ```json
 {
   "summary": "Good start: task 3 needs another look.",

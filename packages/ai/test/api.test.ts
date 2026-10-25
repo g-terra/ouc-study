@@ -576,6 +576,36 @@ test("Check my answers: the AI checks the homework in the background and saves c
   assert.equal(JSON.parse(readFileSync(join(dir, "check.json"), "utf8")).tasks["1"].verdict, "right");
   // background work: not in the chat history
   assert.ok(!(await json(fetch(`${base}/api/ai/chats`))).chats.some((c: Ev) => c.id === jobs[0].chatId));
+  // checked once: right and unchanged, so there's nothing to check again
+  const again = await post({ sem: "S", assignment: "AAA/09-28_A1" });
+  assert.equal(again.status, 409);
+  assert.match(((await again.json()) as { error: string }).error, /Nothing new to check/);
+});
+
+test("Check my answers checks again only new and changed answers and ones that weren't right, and keeps the rest", async (t) => {
+  const { root, server, base } = await setup();
+  t.after(() => server.close());
+  const dir = join(root, "semesters/S/assignments/AAA/09-28_A1/homework");
+  mkdirSync(dir, { recursive: true });
+  const tasks = ["1", "2", "3"].map((id) => ({ id, kind: "written", question: "Why?" }));
+  writeFileSync(join(dir, "tasks.json"), JSON.stringify({ tasks }));
+  writeFileSync(join(dir, "answers.json"), JSON.stringify({ answers: { 1: { text: "a", updated: "T1" }, 2: { text: "b", updated: "T2" }, 3: { text: "c", updated: "T3" } } }));
+  writeFileSync(join(dir, "check.json"), JSON.stringify({ tasks: { 1: { verdict: "right", note: "Kept.", answered: "T1" }, 2: { verdict: "wrong", note: "No.", answered: "T2" } } }));
+  writeFileSync(join(root, "semesters/S/semester.json"), JSON.stringify({ start: "2000-01-01", end: "2999-01-01", courses: [] }));
+  mkdirSync(join(root, "apps/web/public/data"), { recursive: true });
+  writeFileSync(join(root, "apps/web/public/data/S.json"), JSON.stringify({
+    courses: [{ code: "AAA", short: "AAA", title: "AAA course", weeks: [] }], notes: [],
+    assignments: [{ id: "AAA/09-28_A1", code: "AAA", title: "A1", fullTitle: "AAA A1", briefs: [], homework: { tasks } }],
+  }));
+  const { token } = await json(fetch(`${base}/api/ai/status`));
+  await json(fetch(`${base}/api/ai/homework-check`, { method: "POST", headers: { "X-OUC-AI": token }, body: JSON.stringify({ sem: "S", assignment: "AAA/09-28_A1" }) }));
+  let jobs: Ev[] = [];
+  for (let i = 0; i < 100 && (!jobs.length || jobs[0].running); i++) { await new Promise((ok) => setTimeout(ok, 20)); jobs = (await json(fetch(`${base}/api/ai/homework-check`))).jobs; }
+  assert.equal(jobs[0].ok, true);
+  const saved = JSON.parse(readFileSync(join(dir, "check.json"), "utf8")).tasks;
+  assert.deepEqual(saved["1"], { verdict: "right", note: "Kept.", answered: "T1" });
+  assert.deepEqual(saved["2"], { verdict: "right", note: "Right.", answered: "T2" });
+  assert.deepEqual(saved["3"], { verdict: "right", note: "Right.", answered: "T3" });
 });
 
 test("interactive versions: Sync makes them for new assignments with a task, never for done ones; the app can ask for one", async (t) => {
