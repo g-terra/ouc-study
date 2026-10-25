@@ -5,7 +5,7 @@
 
 type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
-export const draftKey = (sem: string, assignment: string, task: string, field: "text" | "why") =>
+export const draftKey = (sem: string, assignment: string, task: string, field: string) =>
   `ouc-homework-draft|${sem}|${assignment}|${task}|${field}`;
 
 /** Keeps what was just typed. */

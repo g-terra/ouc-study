@@ -39,7 +39,7 @@ export function useHomework(sem: string): HomeworkState {
   return store.get(sem) ?? { state: "loading", answers: {}, checks: {}, polish: {} };
 }
 
-export type AnswerPatch = { task: string; text?: string; choice?: number | null; choices?: number[] | null; why?: string; done?: boolean; aiEdited?: boolean };
+export type AnswerPatch = { task: string; text?: string; choice?: number | null; choices?: number[] | null; tf?: Record<string, { value?: boolean | null; why?: string }>; why?: string; done?: boolean; aiEdited?: boolean };
 
 // the newest save per assignment: an older save's reply must not undo a newer change shown already
 const latest = new Map<string, number>();
@@ -148,8 +148,9 @@ export async function dropPolish(sem: string, assignment: string, task: string):
 }
 
 /** Changes a task's type (to fix what the AI got wrong); the page shows it once the app data rebuilds. Rejects with the reason. */
-export async function retypeTask(sem: string, assignment: string, task: string, type: string, options?: string[]): Promise<void> {
-  const res = await fetch("/api/homework/task", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sem, assignment, task, type, options }) }).catch(() => null);
+export async function retypeTask(sem: string, assignment: string, task: string, type: string, lines?: string[]): Promise<void> {
+  const list = type === "truefalse" ? { statements: lines } : { options: lines };
+  const res = await fetch("/api/homework/task", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sem, assignment, task, type, ...list }) }).catch(() => null);
   const j = await res?.json().catch(() => null);
   if (!res?.ok) throw new Error(j?.error ?? "Couldn't save. Is the app still running?");
 }

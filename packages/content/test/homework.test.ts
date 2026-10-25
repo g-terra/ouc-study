@@ -260,3 +260,37 @@ test("changing a task's type is saved in tasks.json, and answers stay", () => {
   assert.equal(readAnswers(dir, "AAA/10-26_Assignment-3")["1"]!.text, "kept");
   assert.throws(() => saveTaskType(dir, { assignment: "AAA/nope", task: "1", type: "written" }), /no interactive version/);
 });
+
+const TF = { tasks: [
+  { id: "5", kind: "truefalse", title: "Rall model", question: "True or False:", statements: ["Compartment 1 has zero delay.", "Compartment 5 is broader than compartment 7."] },
+  { id: "6", kind: "written", question: "Q" },
+] };
+
+test("a true-or-false task is one question with its statements", () => {
+  const { homework, problems } = parseHomework(TF);
+  assert.deepEqual(problems, []);
+  assert.deepEqual(homework!.tasks[0]!.statements, ["Compartment 1 has zero delay.", "Compartment 5 is broader than compartment 7."]);
+  assert.match(parseHomework({ tasks: [{ id: "1", kind: "truefalse", question: "Q", statements: [] }] }).problems.join(), /"statements" must be a list of 1 to 20/);
+});
+
+test("each statement of a true-or-false task gets true or false and an optional explanation", () => {
+  const { tasks } = parseHomework(TF).homework!;
+  const now = new Date("2026-10-25T10:00:00Z");
+  let a = applyAnswer(tasks, {}, { task: "5", tf: { 1: { value: false } } }, now);
+  a = applyAnswer(tasks, a, { task: "5", tf: { 1: { why: "<p>Further away is broader.</p>" }, 0: { value: true } } }, now);
+  assert.deepEqual(a["5"]!.tf, { 0: { value: true }, 1: { value: false, why: "<p>Further away is broader.</p>" } });
+  a = applyAnswer(tasks, a, { task: "5", tf: { 0: { value: null } } }, now);
+  assert.deepEqual(a["5"]!.tf![0], {});
+  assert.throws(() => applyAnswer(tasks, a, { task: "5", tf: { 2: { value: true } } }, now), /Bad statement/);
+  assert.throws(() => applyAnswer(tasks, a, { task: "5", tf: { 0: { value: "yes" } } }, now), /true or false/);
+  assert.throws(() => applyAnswer(tasks, a, { task: "6", tf: { 0: { value: true } } }, now), /Bad statement/);
+  assert.deepEqual(parseAnswers({ answers: { 5: { tf: { 0: { value: true, why: "x" } }, done: true } } }, tasks).answers["5"]!.tf, { 0: { value: true, why: "x" } });
+});
+
+test("a task can be changed to true or false, with one statement per line", () => {
+  const raw = { tasks: [{ id: "1", kind: "choice", question: "True or False:", options: ["True", "False"] }] };
+  const next = retypeTask(raw, { task: "1", type: "truefalse", statements: ["First.", " Second. ", ""] });
+  assert.deepEqual(next.tasks[0], { id: "1", kind: "truefalse", question: "True or False:", statements: ["First.", "Second."] });
+  assert.throws(() => retypeTask(raw, { task: "1", type: "truefalse" }), /statement/);
+  assert.equal(retypeTask(next, { task: "1", type: "written" }).tasks[0].statements, undefined);
+});

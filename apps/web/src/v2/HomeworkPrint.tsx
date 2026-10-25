@@ -1,9 +1,10 @@
 import { useEffect } from "react";
-import { pickedOptions, taskLabel } from "@ouc/content/homework";
+import { pickedOptions } from "@ouc/content/homework";
 import { Loading, Problem, courseMap, useSemester } from "../lib/data";
 import { useHomework } from "../lib/homework";
 import { mdToHtml } from "../lib/markdown";
 import { AnswerView } from "../components/RichEditor";
+import { cx } from "../components/ui";
 
 const LETTERS = "ABCDEFGH";
 
@@ -35,7 +36,7 @@ export function HomeworkPrint({ sem, id }: { sem: string; id: string }) {
   return (
     <div className="homework-print min-h-screen bg-white text-[#1c1b19]" data-ready={ready ? "1" : undefined}>
       <div className="mx-auto max-w-[46rem] px-10 py-12 font-serif text-[15px] leading-relaxed">
-        <header className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b-2 border-[#1c1b19] pb-4">
+        <header className="mb-3 flex flex-wrap items-start justify-between gap-4 border-b-2 border-[#1c1b19] pb-4">
           <div className="min-w-0">
             <div className="text-xs uppercase tracking-[0.1em] text-[#6e6a62]">Open University of Cyprus · {a.code}{course?.title && course.title !== a.code ? ` · ${course.title}` : ""}</div>
             <h1 className="mt-1 text-2xl font-bold">{a.title}</h1>
@@ -47,30 +48,49 @@ export function HomeworkPrint({ sem, id }: { sem: string; id: string }) {
         </header>
         {a.homework.tasks.map((t, i) => {
           const ans = answers[t.id] ?? {};
+          const none = <p className="text-[#6e6a62]">No answer.</p>;
           return (
-            <section key={t.id} className="mb-7 break-inside-avoid-page">
-              <h2 className="mb-1 font-bold">Task {i + 1}{t.title ? ` · ${taskLabel(t, i)}` : ""}</h2>
-              <div className="md mb-3 italic text-[#4a4741]" dangerouslySetInnerHTML={{ __html: mdToHtml(t.question, sem) }} />
+            <section key={t.id} aria-label={`Question ${i + 1}`} className={cx("py-5 break-inside-avoid-page", i > 0 && "border-t border-[#d8d3c8]")}>
+              <div className="mb-3 flex gap-2 font-semibold">
+                <span>{i + 1}.</span>
+                <div className="md min-w-0 flex-1 [&>*:first-child]:mt-0" dangerouslySetInnerHTML={{ __html: mdToHtml(t.question, sem) }} />
+              </div>
               {t.kind === "choice" ? (
                 <>
-                  {(() => {
-                    const picked = pickedOptions(t, ans).filter((n) => t.options?.[n] !== undefined);
-                    if (!picked.length) return <p className="text-[#6e6a62]">No answer.</p>;
-                    if (picked.length === 1) return <p><b>Answer: {LETTERS[picked[0]!]}.</b> {t.options![picked[0]!]}</p>;
-                    return (
-                      <>
-                        <p><b>Answers: {picked.map((n) => LETTERS[n]).join(", ")}.</b></p>
-                        <ul className="ml-5 list-disc">{picked.map((n) => <li key={n}>{LETTERS[n]}. {t.options![n]}</li>)}</ul>
-                      </>
-                    );
-                  })()}
-                  {ans.why && <div className="mt-2 border-l-2 border-[#e4e0d6] pl-3"><span className="text-[#6e6a62]">Why: </span><AnswerView html={ans.why} /></div>}
+                  {/* every option, the picked ones struck through in red, as on a paper answer sheet */}
+                  <ol className="grid gap-1 pl-6">
+                    {t.options!.map((o, n) => {
+                      const on = pickedOptions(t, ans).includes(n);
+                      return <li key={n} data-picked={on ? "1" : undefined} className={on ? "font-semibold text-[#c8102e] line-through decoration-2" : undefined}>{LETTERS[n]}. {o}</li>;
+                    })}
+                  </ol>
+                  {!pickedOptions(t, ans).length && <p className="mt-1 pl-6 text-[#6e6a62]">No option picked.</p>}
+                  {ans.why && <Explanation html={ans.why} />}
                 </>
-              ) : ans.text ? <AnswerView html={ans.text} className="font-sans" /> : <p className="text-[#6e6a62]">No answer.</p>}
+              ) : t.kind === "truefalse" ? (
+                <ol className="grid gap-3 pl-6">
+                  {t.statements!.map((st, n) => {
+                    const sa = ans.tf?.[n] ?? {};
+                    return (
+                      <li key={n}>
+                        <p>{n + 1}. {st}</p>
+                        {sa.value === undefined
+                          ? <p className="text-[#6e6a62]">No answer.</p>
+                          : <p data-testid="tf-answer" className="font-semibold text-[#c8102e]">{sa.value ? "True" : "False"}</p>}
+                        {sa.why && <Explanation html={sa.why} />}
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : ans.text ? <AnswerView html={ans.text} className="font-sans" /> : none}
             </section>
           );
         })}
       </div>
     </div>
   );
+}
+
+function Explanation({ html }: { html: string }) {
+  return <div className="mt-2 border-l-2 border-[#e4e0d6] pl-3"><span className="text-[#6e6a62]">Why: </span><AnswerView html={html} /></div>;
 }

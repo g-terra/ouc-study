@@ -4,6 +4,7 @@
   { "id": "1", "kind": "written", "title": "Your demo week", "question": "Write a short reflection on the demo week. What was **new** to you?" },
   { "id": "2", "kind": "choice", "title": "Favourite part", "question": "Which part of the demo week did you like most?", "options": ["The demo lecture", "The welcome video", "The course website"] },
   { "id": "3", "kind": "calculation", "title": "Demo sum", "question": "Work out $\\frac{1}{2} + \\frac{1}{4}$ and show your working." },
-  { "id": "4", "kind": "choice", "title": "Good habits", "question": "Which of these are good study habits? (there can be more than one answer)", "options": ["Spaced practice", "Cramming the night before", "Testing yourself"] }
+  { "id": "4", "kind": "choice", "title": "Good habits", "question": "Which of these are good study habits? (there can be more than one answer)", "options": ["Spaced practice", "Cramming the night before", "Testing yourself"] },
+  { "id": "5", "kind": "truefalse", "title": "Demo facts", "question": "True or False:", "statements": ["The demo week has a lecture.", "The demo course has no website."] }
  ]
 }

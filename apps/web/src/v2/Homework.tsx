@@ -16,7 +16,7 @@ import { AskAiButton, Markdown } from "../components/Assistant";
 import { WorkLink } from "../components/MakeQuiz";
 import { Check, FileText, Settings, Sparkles, TriangleAlert, X } from "../components/icons";
 
-const KIND: Record<HomeworkTask["kind"], string> = { written: "Written", calculation: "Calculation", choice: "Multiple choice" };
+const KIND: Record<HomeworkTask["kind"], string> = { written: "Written", calculation: "Calculation", choice: "Multiple choice", truefalse: "True or false" };
 const kindName = (t: HomeworkTask) => (t.multiple ? "Multiple answers" : KIND[t.kind]);
 const LETTERS = "ABCDEFGH";
 // the AI check's verdicts: lenient, so "better" is still right
@@ -154,7 +154,9 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
           <div className="md font-serif text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(task.question) }} />
           <ChangeType key={task.id} sem={data.id} assignment={id} task={task} />
 
-          {task.kind === "choice" ? (
+          {task.kind === "truefalse" ? (
+            <TrueFalse key={`tf-${task.id}`} task={task} ans={ans} sem={data.id} assignment={id} save={save} dirty={dirty} upload={upload} onError={setError} />
+          ) : task.kind === "choice" ? (
             <>
               <div role={task.multiple ? "group" : "radiogroup"} aria-label={task.multiple ? "Your choices (more than one can be right)" : "Your choice"} className="grid gap-2">
                 {task.multiple && <p className="text-xs text-muted">Pick every option you think is right.</p>}
@@ -224,16 +226,17 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
 function ChangeType({ sem, assignment, task }: { sem: string; assignment: string; task: HomeworkTask }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<TaskType>(taskType(task));
-  const [options, setOptions] = useState((task.options ?? []).join("\n"));
+  const lines = (t: TaskType) => ((t === "truefalse" ? task.statements : task.options) ?? []).join("\n");
+  const [options, setOptions] = useState(lines(taskType(task)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!open) {
     return (
-      <button type="button" onClick={() => { setType(taskType(task)); setOptions((task.options ?? []).join("\n")); setError(null); setOpen(true); }}
+      <button type="button" onClick={() => { setType(taskType(task)); setOptions(lines(taskType(task))); setError(null); setOpen(true); }}
         className="justify-self-start text-xs text-muted underline-offset-2 hover:text-ink hover:underline">Wrong type? Change it</button>
     );
   }
-  const choice = type === "choice" || type === "multiple";
+  const choice = type === "choice" || type === "multiple" || type === "truefalse";
   const save = async () => {
     setBusy(true); setError(null);
     try {
@@ -245,13 +248,13 @@ function ChangeType({ sem, assignment, task }: { sem: string; assignment: string
     <section aria-label="Change the task's type" className="grid gap-2 rounded-xl border border-line bg-surface-2/50 p-3 text-sm">
       <label className="flex flex-wrap items-center gap-2">
         <span className="font-semibold">Type</span>
-        <select value={type} onChange={(e) => setType(e.target.value as TaskType)} className="min-h-9 rounded-lg border border-line bg-surface px-2">
+        <select value={type} onChange={(e) => { const t = e.target.value as TaskType; if ((t === "truefalse") !== (type === "truefalse")) setOptions(lines(t)); setType(t); }} className="min-h-9 rounded-lg border border-line bg-surface px-2">
           {(Object.keys(TASK_TYPES) as TaskType[]).map((t) => <option key={t} value={t}>{TASK_TYPES[t]}</option>)}
         </select>
       </label>
       {choice && (
         <label className="grid gap-1">
-          <span className="font-semibold">Options, one per line</span>
+          <span className="font-semibold">{type === "truefalse" ? "Statements, one per line" : "Options, one per line"}</span>
           <textarea value={options} onChange={(e) => setOptions(e.target.value)} rows={4} className="rounded-lg border border-line bg-surface px-3 py-2" />
         </label>
       )}
@@ -391,16 +394,49 @@ function Polish({ sem, assignment, task, answer, offer, onKeep }: { sem: string;
 }
 
 /** The optional "why I picked it" under a multiple-choice task. */
-function Why({ value, ...rest }: { value?: string; draft: string; onSave: (v: string) => Promise<boolean>; onDirty: () => void; upload: (f: File) => Promise<string>; onError: (msg: string) => void }) {
+function Why({ value, label = "Why I picked it", add = "Add why I picked it", ...rest }: { value?: string; label?: string; add?: string; draft: string; onSave: (v: string) => Promise<boolean>; onDirty: () => void; upload: (f: File) => Promise<string>; onError: (msg: string) => void }) {
   const [open, setOpen] = useState(() => !!value || restoreDraft(browserStore(), rest.draft, value) !== null);
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="justify-self-start rounded-full border border-dashed border-line px-4 py-2 text-sm text-muted hover:text-ink">
-        + Add why I picked it <span className="text-muted">(optional)</span>
+        + {add} <span className="text-muted">(optional)</span>
       </button>
     );
   }
-  return <TextAnswer label="Why I picked it" value={value} {...rest} minHeight="4.5rem" />;
+  return <TextAnswer label={label} value={value} {...rest} minHeight="4.5rem" />;
+}
+
+/** A true-or-false task: one question, True or False for each statement, and an optional explanation for each. */
+function TrueFalse({ task, ans, sem, assignment, save, dirty, upload, onError }: {
+  task: HomeworkTask; ans: TaskAnswer; sem: string; assignment: string; save: (p: Omit<AnswerPatch, "task">) => Promise<boolean>; dirty: () => void; upload: (f: File) => Promise<string>; onError: (msg: string) => void;
+}) {
+  return (
+    <ol className="grid gap-3">
+      {task.statements!.map((st, n) => {
+        const a = ans.tf?.[n] ?? {};
+        return (
+          <li key={n} className="grid gap-2 rounded-xl border border-line p-3">
+            <div className="flex flex-wrap items-start gap-3">
+              <div role="radiogroup" aria-label={`Statement ${n + 1}`} className="flex shrink-0 gap-1.5">
+                {([[true, "True"], [false, "False"]] as const).map(([v, name]) => {
+                  const on = a.value === v;
+                  return (
+                    <button key={name} type="button" role="radio" aria-checked={on} onClick={() => save({ tf: { [n]: { value: v } } })}
+                      className={cx("flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold", on ? "border-accent bg-accent text-bg" : "border-line text-muted hover:border-muted")}>
+                      <span aria-hidden className={cx("size-3 rounded-full border-2", on ? "border-bg bg-bg" : "border-current")} />{name}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="min-w-0 flex-1 pt-1"><span className="font-semibold">{n + 1}.</span> {st}</div>
+            </div>
+            <Why label={`Explanation for statement ${n + 1}`} add="Add an explanation" value={a.why} draft={draftKey(sem, assignment, task.id, `tf-${n}`)}
+              onSave={(why) => save({ tf: { [n]: { why } } })} onDirty={dirty} upload={upload} onError={onError} />
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 /**
