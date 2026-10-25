@@ -1,7 +1,7 @@
 {
   "name": "ouc-study",
   "private": true,
-  "version": "0.37.0",
+  "version": "0.37.1",
   "description": "OUC study workspace: course files, notes and a React study dashboard",
   "packageManager": "npm@10.9.0",
   "workspaces": [
