@@ -5,6 +5,7 @@ import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
 import { mdToHtml } from "../lib/markdown";
+import { browserStore, clearDraft, draftKey, keepDraft, restoreDraft } from "../lib/homework-drafts";
 import { checkAnswers, dismissJob, makeInteractive, makePdf, printHref, saveAnswer, uploadPicture, useCheckJobs, useHomework, useMakeJobs, type AnswerPatch, type HomeworkJob } from "../lib/homework";
 import { useAiStatus } from "../lib/ai";
 import { useConnection } from "../lib/connection";
@@ -84,8 +85,8 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
     setSaving("saving");
     const n = ++saves.current;
     return saveAnswer(data.id, id, tasks, { task: task.id, ...patch }).then(
-      () => { setError(null); if (n === saves.current) setSaving("saved"); },
-      (e: Error) => { setError(e.message); setSaving(null); });
+      () => { setError(null); if (n === saves.current) setSaving("saved"); return true; },
+      (e: Error) => { setError(e.message); setSaving(null); return false; });
   };
   const upload = (f: File) => uploadPicture(data.id, id, f);
   const brief = a.briefs.find((f) => f.ext === "pdf") ?? a.briefs[0];
@@ -141,7 +142,8 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
             <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-semibold text-muted">Task {i + 1} of {total} · {KIND[task.kind]}</span>
             {ans.done && <span className="rounded-full bg-ok-bg px-2.5 py-0.5 text-xs font-semibold text-ok">Done</span>}
             <span className="ml-auto text-xs text-muted" data-testid="save-state" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>
-            <AskAiButton action="homework-tutor" params={{ course: a.code, assignment: id, task: task.id }} className="py-1 text-xs">Ask AI about this task</AskAiButton>
+            <AskAiButton action="homework-tutor" params={{ course: a.code, assignment: id, task: task.id }} className="py-1 text-xs"
+              send={`Help me with task ${i + 1}${task.title ? ` (${task.title})` : ""}: ${task.question}`}>Ask AI about this task</AskAiButton>
           </div>
           <div className="md font-serif text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(task.question) }} />
 
@@ -159,10 +161,10 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
                   );
                 })}
               </div>
-              <Why key={task.id} value={ans.why} onSave={(why) => save({ why })} onDirty={dirty} upload={upload} onError={setError} />
+              <Why key={task.id} value={ans.why} draft={draftKey(data.id, id, task.id, "why")} onSave={(why) => save({ why })} onDirty={dirty} upload={upload} onError={setError} />
             </>
           ) : (
-            <TextAnswer key={task.id} label="Your answer" value={ans.text} onSave={(text) => save({ text })} onDirty={dirty} upload={upload} onError={setError} />
+            <TextAnswer key={task.id} label="Your answer" value={ans.text} draft={draftKey(data.id, id, task.id, "text")} onSave={(text) => save({ text })} onDirty={dirty} upload={upload} onError={setError} />
           )}
 
           {check?.tasks[task.id] && (
@@ -243,27 +245,40 @@ function CheckSummary({ sem, tasks, check, answers }: { sem: string; tasks: Home
   );
 }
 
-/** A rich answer box that saves itself a moment after typing stops, and when it's closed. */
-function TextAnswer({ label, value, onSave, onDirty, upload, onError, minHeight }: {
-  label: string; value?: string; onSave: (v: string) => void; onDirty: () => void; upload: (f: File) => Promise<string>; onError: (msg: string) => void; minHeight?: string;
+/**
+ * A rich answer box that saves itself a moment after typing stops, when it's closed and when the page is hidden.
+ * Every change is also kept in the browser (lib/homework-drafts.ts) until the server has it, so a crash loses nothing.
+ */
+function TextAnswer({ label, value, draft, onSave, onDirty, upload, onError, minHeight }: {
+  label: string; value?: string; draft: string; onSave: (v: string) => Promise<boolean>; onDirty: () => void; upload: (f: File) => Promise<string>; onError: (msg: string) => void; minHeight?: string;
 }) {
   const pending = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const save = useRef(onSave);
   save.current = onSave;
-  const flush = () => { clearTimeout(timer.current); if (pending.current !== null) { save.current(pending.current); pending.current = null; } };
-  useEffect(() => flush, []);
+  // typed before the page closed or crashed, and never saved: back in the box, and saved now
+  const [restored] = useState(() => restoreDraft(browserStore(), draft, value));
+  const send = (html: string) => { void save.current(html).then((ok) => { if (ok) clearDraft(browserStore(), draft, html); }); };
+  const flush = () => { clearTimeout(timer.current); if (pending.current !== null) { send(pending.current); pending.current = null; } };
+  useEffect(() => {
+    if (restored !== null) { onDirty(); send(restored); }
+    const hidden = () => { if (document.visibilityState === "hidden") flush(); };
+    document.addEventListener("visibilitychange", hidden);
+    window.addEventListener("pagehide", flush);
+    return () => { document.removeEventListener("visibilitychange", hidden); window.removeEventListener("pagehide", flush); flush(); };
+  }, []);
   return (
-    <div onBlur={flush}>
-      <RichEditor label={label} value={value} minHeight={minHeight} upload={upload} onError={onError}
-        onChange={(html) => { pending.current = html; onDirty(); clearTimeout(timer.current); timer.current = setTimeout(flush, 700); }} />
+    <div onBlur={flush} className="grid gap-1">
+      <RichEditor label={label} value={restored ?? value} minHeight={minHeight} upload={upload} onError={onError}
+        onChange={(html) => { keepDraft(browserStore(), draft, html); pending.current = html; onDirty(); clearTimeout(timer.current); timer.current = setTimeout(flush, 700); }} />
+      {restored !== null && <p data-testid="draft-restored" className="text-xs text-muted">Brought back what you typed before the page closed.</p>}
     </div>
   );
 }
 
 /** The optional "why I picked it" under a multiple-choice task. */
-function Why({ value, ...rest }: { value?: string; onSave: (v: string) => void; onDirty: () => void; upload: (f: File) => Promise<string>; onError: (msg: string) => void }) {
-  const [open, setOpen] = useState(!!value);
+function Why({ value, ...rest }: { value?: string; draft: string; onSave: (v: string) => Promise<boolean>; onDirty: () => void; upload: (f: File) => Promise<string>; onError: (msg: string) => void }) {
+  const [open, setOpen] = useState(() => !!value || restoreDraft(browserStore(), rest.draft, value) !== null);
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="justify-self-start rounded-full border border-dashed border-line px-4 py-2 text-sm text-muted hover:text-ink">

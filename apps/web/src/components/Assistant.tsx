@@ -17,7 +17,8 @@ import { renderMermaid } from "../notes/Mermaid";
 import { useTheme } from "../lib/theme";
 import { CalendarDays, FileImage, FileText, INLINE, Sparkles, Trash2, X } from "./icons";
 
-interface Draft { action: string; params: Record<string, string> }
+/** `send`: a first message to send on its own as soon as the AI is ready (no Start to press). */
+interface Draft { action: string; params: Record<string, string>; send?: string }
 /** One tab in the panel: a chat (or a draft action), with its own run. */
 export interface Session { key: string; chat: Chat | null; busy: boolean; error?: string; draft: Draft | null; tool?: string; /** a saved chat being read back after a reload */ loading?: string }
 interface Ctx {
@@ -27,7 +28,7 @@ interface Ctx {
   // the active tab
   chat: Chat | null; busy: boolean; error?: string; draft: Draft | null; setDraft: (d: Draft | null) => void;
   /** Opens the panel with an action picked (and its inputs filled in), in a free tab; `tool` picks the AI for that tab only. */
-  start: (action: string, params?: Record<string, string>, tool?: string) => void;
+  start: (action: string, params?: Record<string, string>, tool?: string, send?: string) => void;
   send: (sem: string, message: string, title?: string, model?: string) => Promise<void>;
   /** The coding tool for the active tab: its own, else the one picked in the panel (null = the one from `ouc ai setup`). */
   tool: string | null; setTool: (t: string | null) => void;
@@ -89,10 +90,10 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   };
 
   const reset = () => { const key = freeTab(); update(key, (x) => ({ ...x, draft: null, error: undefined, tool: undefined })); };
-  const start = (action: string, params: Record<string, string> = {}, tool?: string) => {
+  const start = (action: string, params: Record<string, string> = {}, tool?: string, send?: string) => {
     setOpen(true);
     const key = freeTab();
-    update(key, (x) => ({ ...x, error: undefined, draft: { action, params }, tool }));
+    update(key, (x) => ({ ...x, error: undefined, draft: { action, params, ...(send ? { send } : {}) }, tool }));
   };
   const close = (key: string) => {
     window.clearInterval(polls.current.get(key));
@@ -221,12 +222,13 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
 }
 
 /** A small button that opens the panel with an action ready to go. */
-export function AskAiButton({ action, params, children, className }: { action: string; params?: Record<string, string>; children: ReactNode; className?: string }) {
+/** Opens the panel on an action; with `send`, the chat starts right away with that as the first message. */
+export function AskAiButton({ action, params, send, children, className }: { action: string; params?: Record<string, string>; send?: string; children: ReactNode; className?: string }) {
   const { start } = useAssistant();
   const ai = useAiStatus();
   if (ai.state === "unavailable") return null;
   return (
-    <button type="button" onClick={() => start(action, params)}
+    <button type="button" onClick={() => start(action, params, undefined, send)}
       className={cx("inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink transition hover:border-muted", className)}>
       <Sparkles aria-hidden className="size-4 text-accent" />{children}
     </button>
@@ -335,6 +337,15 @@ function ChatView({ data, page = false }: { data: SemesterData; page?: boolean }
     setInput("");
     await a.send(data.id, msg, meta?.title, model || undefined);
   };
+  // an action started with its first message (e.g. Ask AI about this task): send it once the AI is ready
+  const auto = a.draft?.send;
+  const autoSent = useRef<Draft | null>(null);
+  useEffect(() => {
+    if (!auto || !canSend || autoSent.current === a.draft) return;
+    autoSent.current = a.draft;
+    a.setDraft({ ...a.draft!, send: undefined });
+    void a.send(data.id, auto, meta?.title, model || undefined);
+  }, [auto, canSend]);
   const pick = async (id: string) => { setHistory(null); await a.load(id); };
   // on the full page's wide layout, History shows or hides the side list; otherwise it opens the list in place
   const wide = () => page && window.matchMedia("(min-width: 1024px)").matches;
