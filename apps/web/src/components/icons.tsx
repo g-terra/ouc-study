@@ -1,12 +1,12 @@
 import type { ItemKind } from "@ouc/content/types";
 import {
-  AlarmClock, ArrowUpCircle, Award, Bell, BookOpen, Bot, Braces, CalendarDays, Check, CircleAlert, CircleHelp, Clapperboard, ClipboardList, CloudUpload, Code, Copy, ImagePlus, SquareCode, Compass, File, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, KeyRound, Library, List, ListOrdered, Maximize, Megaphone, MessageSquareText, MessagesSquare, Monitor, NotebookPen, NotebookText, PartyPopper, Presentation, RefreshCw, Search, Settings, Sparkles, Star, Sun, Trash2, TriangleAlert, Trophy, Upload, User, Video, Volume2, Wifi, WifiOff, X,
+  AlarmClock, AlignCenter, AlignLeft, AlignRight, ArrowUpCircle, Award, Bell, BookOpen, Bot, Braces, CalendarDays, Check, CircleAlert, CircleHelp, Clapperboard, ClipboardList, CloudUpload, Code, Copy, ImagePlus, SquareCode, Compass, File, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, KeyRound, Library, List, ListOrdered, Maximize, Megaphone, MessageSquareText, MessagesSquare, Monitor, NotebookPen, NotebookText, PartyPopper, Presentation, RefreshCw, Search, Settings, Sparkles, Star, Sun, Trash2, TriangleAlert, Trophy, Upload, User, Video, Volume2, Wifi, WifiOff, X,
   Link as LinkIcon, type LucideIcon,
 } from "lucide-react";
 
 // One icon set for the app (Lucide, ISC licence): thin line icons in the text colour, so they suit every colour theme.
 export {
-  AlarmClock, ArrowUpCircle, Award, Bell, BookOpen, Bot, CalendarDays, Check, CircleAlert, CircleHelp, Clapperboard, ClipboardList, CloudUpload, Code, Copy, ImagePlus, SquareCode, Compass, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, KeyRound, Library, List, ListOrdered, Maximize, Megaphone, MessageSquareText, MessagesSquare, NotebookPen, PartyPopper, Presentation, RefreshCw, Search, Settings, Sparkles, Star, Sun, Trash2, TriangleAlert, Trophy, Upload, User, Video, Volume2, Wifi, WifiOff, X,
+  AlarmClock, AlignCenter, AlignLeft, AlignRight, ArrowUpCircle, Award, Bell, BookOpen, Bot, CalendarDays, Check, CircleAlert, CircleHelp, Clapperboard, ClipboardList, CloudUpload, Code, Copy, ImagePlus, SquareCode, Compass, FileImage, FileText, Flame, GraduationCap, Hand, Headphones, Hourglass, KeyRound, Library, List, ListOrdered, Maximize, Megaphone, MessageSquareText, MessagesSquare, NotebookPen, PartyPopper, Presentation, RefreshCw, Search, Settings, Sparkles, Star, Sun, Trash2, TriangleAlert, Trophy, Upload, User, Video, Volume2, Wifi, WifiOff, X,
   type LucideIcon,
 };
 
