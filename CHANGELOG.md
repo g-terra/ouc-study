@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.35.1](https://github.com/g-terra/ouc-study/compare/v0.35.0...v0.35.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **cli:** stop the running app before ouc update reinstalls the dependencies ([#185](https://github.com/g-terra/ouc-study/issues/185)) ([bd8a5fd](https://github.com/g-terra/ouc-study/commit/bd8a5fd815a6c522bc0be64bac418a595920f6b8))
+
 ## [0.35.0](https://github.com/g-terra/ouc-study/compare/v0.34.0...v0.35.0) (2026-10-25)
 
 
