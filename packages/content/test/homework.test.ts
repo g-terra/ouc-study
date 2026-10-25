@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyAnswer, checkCounts, homeworkProgress, parseAnswers, parseCheck, parseHomework, pickedOptions, retypeTask, taskLabel } from "../src/homework.ts";
+import { applyAnswer, checkCounts, mergeCheck, tasksToCheck, homeworkProgress, parseAnswers, parseCheck, parseHomework, pickedOptions, retypeTask, taskLabel } from "../src/homework.ts";
 import { allAnswers, allChecks, allPolish, discardPolish, homeworkDir, saveTaskType, polishFile, readAnswers, readHomework, readPolish, saveAnswer, saveImage } from "../src/homework-store.ts";
 
 const TASKS = {
@@ -293,4 +293,35 @@ test("a task can be changed to true or false, with one statement per line", () =
   assert.deepEqual(next.tasks[0], { id: "1", kind: "truefalse", question: "True or False:", statements: ["First.", "Second."] });
   assert.throws(() => retypeTask(raw, { task: "1", type: "truefalse" }), /statement/);
   assert.equal(retypeTask(next, { task: "1", type: "written" }).tasks[0].statements, undefined);
+});
+
+test("a check looks again only at new answers, changed ones and ones that weren't right", () => {
+  const tasks = parseHomework({ tasks: ["1", "2", "3", "4", "5"].map((id) => ({ id, kind: "written", question: "Q" })) }).homework!.tasks;
+  const answers = { 1: { text: "a", updated: "T1" }, 2: { text: "b", updated: "T2-new" }, 3: { text: "c", updated: "T3" }, 4: { text: "d", updated: "T4" } };
+  const check = { tasks: {
+    1: { verdict: "right" as const, note: "Right.", answered: "T1" },       // right, unchanged: skipped
+    2: { verdict: "better" as const, note: "Ok.", answered: "T2" },         // changed since
+    3: { verdict: "wrong" as const, note: "No.", answered: "T3" },          // wasn't right
+  } };
+  assert.deepEqual(tasksToCheck(tasks, answers, check), ["2", "3", "4", "5"]);
+  assert.deepEqual(tasksToCheck(tasks, answers, undefined), ["1", "2", "3", "4", "5"]);
+  // an older check with no "answered": an answer saved after the check counts as changed
+  const old = { checked: "2026-10-25T10:00:00.000Z", tasks: { 1: { verdict: "right" as const, note: "R" }, 2: { verdict: "right" as const, note: "R" } } };
+  assert.deepEqual(tasksToCheck(tasks.slice(0, 2), { 1: { updated: "2026-10-25T09:00:00.000Z" }, 2: { updated: "2026-10-25T11:00:00.000Z" } }, old), ["2"]);
+});
+
+test("a new check keeps the entries it skipped and notes which answer it checked", () => {
+  const prev = { summary: "Old.", tasks: { 1: { verdict: "right" as const, note: "Kept.", answered: "T1" }, 2: { verdict: "wrong" as const, note: "No." } } };
+  const next = { summary: "New.", tasks: { 1: { verdict: "wrong" as const, note: "Changed by mistake." }, 2: { verdict: "right" as const, note: "Now right." } } };
+  assert.deepEqual(mergeCheck(prev, next, ["2"], { 2: { updated: "T2" } }), {
+    summary: "New.",
+    tasks: { 1: { verdict: "right", note: "Kept.", answered: "T1" }, 2: { verdict: "right", note: "Now right.", answered: "T2" } },
+  });
+});
+
+test("a check file keeps which answer each verdict was for", () => {
+  const { tasks } = parseHomework(TASKS).homework!;
+  const { check } = parseCheck({ tasks: { 1: { verdict: "right", note: "R", answered: "2026-10-25T10:00:00.000Z" }, 2: { verdict: "empty", note: "E" }, 3: { verdict: "right", note: "R", answered: 5 } } }, tasks);
+  assert.equal(check!.tasks["1"]!.answered, "2026-10-25T10:00:00.000Z");
+  assert.equal(check!.tasks["3"]!.answered, undefined);
 });

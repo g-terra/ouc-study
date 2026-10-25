@@ -342,11 +342,17 @@ export function homeworkDiscussPrompt(semId: string, a: Assignment, taskId?: str
 }
 
 /** Checking the student's answers, leniently, into homework/check.json (docs/HOMEWORK_FORMAT.md). */
-export function homeworkCheckPrompt(semId: string, a: Assignment): string {
+export function homeworkCheckPrompt(semId: string, a: Assignment, only?: string[]): string {
   const dir = homeworkFolder(semId, a), out = checkPath(semId, a);
+  const tasks = a.homework!.tasks;
+  // a later check: only the tasks whose answers changed or weren't right; the rest stay as checked before
+  const some = only?.length && only.length < tasks.length
+    ? `Check only ${only.length === 1 ? "task" : "tasks"} ${only.map((id) => `${tasks.findIndex((t) => t.id === id) + 1} (id "${id}")`).join(", ")}: the others were right and haven't changed since the last check. ` +
+      `Keep every other task's entry in the existing \`${out}\` exactly as it is, and update the summary to fit. `
+    : "";
   return `Use the check-homework skill (ai/skills/check-homework/SKILL.md). Check my answers to ${a.fullTitle} (${a.code}). ` +
     `The tasks are in \`${dir}/tasks.json\`, my answers in \`${dir}/answers.json\` (HTML; pictures in ${dir}/images/), the brief in semesters/${semId}/assignments/${a.id}/. ` +
-    "Be lenient and not picky: an answer that is right is right, whatever the wording. Give a better way only when it really helps, say plainly when an answer is not right, " +
+    some + "Be lenient and not picky: an answer that is right is right, whatever the wording. Give a better way only when it really helps, say plainly when an answer is not right, " +
     "and for those give a hint and where to look, never the answer. " +
     `Save the check as \`${out}\` (format in docs/HOMEWORK_FORMAT.md). When done, run: node packages/ai/validate.mjs ${out} and fix every error it reports.`;
 }
@@ -439,7 +445,7 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
     case "polish-answer":
       body = homeworkPolishPrompt(semId, assignmentOf(data, params.assignment), params.task ? String(params.task) : undefined) + extra; break;
     case "check-homework":
-      body = homeworkCheckPrompt(semId, assignmentOf(data, params.assignment)) + extra; break;
+      body = homeworkCheckPrompt(semId, assignmentOf(data, params.assignment), params.tasks ? String(params.tasks).split(",").filter(Boolean) : undefined) + extra; break;
     case "important-dates":
       body = `Use the important-dates skill${course ? ` for ${course.title} (${course.code})` : ""}: the dates are in semesters/${semId}/_meta/dates.json. ` +
         `${msg ? `Add, change or remove what I say.${extra}` : "Ask me which dates to add, change or remove."}`; break;

@@ -46,7 +46,8 @@ import { runAgentTurn, runChatTurn, type AgentEvent, type RunHandle } from "./st
 import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview, reviewState, type Converter } from "./review.ts";
 import type { Assignment, SemesterData } from "../../content/src/types.ts";
 import { setTask } from "../../content/src/plan.ts";
-import { polishFile, readAnswers, readCheck, readHomework } from "../../content/src/homework-store.ts";
+import { polishFile, readAnswers, readCheck, readHomework, writeCheck } from "../../content/src/homework-store.ts";
+import { mergeCheck, tasksToCheck } from "../../content/src/homework.ts";
 import { setClassTime } from "../../content/src/classes.ts";
 import { createTranscriber, type Engine } from "./transcribe.ts";
 
@@ -618,10 +619,14 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     }
     const busy = { check: "Your answers are already being checked.", make: "The interactive version is already being made.", polish: "That answer is already being reworded." }[kind];
     if (homeworkJobs.some((j) => j.running && j.kind === kind && j.sem === semId && j.assignment === a.id && j.task === task)) throw Object.assign(new Error(busy), { code: 409 });
-    const before = readCheck(semDir, a.id)?.checked;
+    const prev = kind === "check" ? readCheck(semDir, a.id) : undefined, before = prev?.checked;
+    // a check looks at each answer once: again only when it changed or wasn't right (the answers as they are now)
+    const answers = kind === "check" ? readAnswers(semDir, a.id) : {};
+    const only = kind === "check" ? tasksToCheck(a.homework!.tasks, answers, prev) : [];
+    if (kind === "check" && !only.length) throw Object.assign(new Error("Nothing new to check: every answer was right and hasn't changed since the last check."), { code: 409 });
     const action = { check: "check-homework", make: "make-homework", polish: "polish-answer" }[kind];
     const started = Date.now();
-    const t = startTurn({ sem: semId, action, params: { assignment: a.id, ...(task ? { task } : {}) }, background: true });
+    const t = startTurn({ sem: semId, action, params: { assignment: a.id, ...(task ? { task } : {}), ...(kind === "check" && prev ? { tasks: only.join(",") } : {}) }, background: true });
     if (t.error !== undefined) throw Object.assign(new Error(t.error), { code: t.code });
     const job: HomeworkJob = { id: randomUUID(), kind, ...(task ? { task } : {}), chatId: t.chat.id, sem: semId, assignment: a.id, started: t.chat.createdAt, running: true };
     t.done.then((r) => {
@@ -633,6 +638,8 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         : kind === "polish" ? existsSync(polished) && statSync(polished).mtimeMs >= started - 1000 && !!readFileSync(polished, "utf8").trim()
         : !!readHomework(semDir, a.id)?.homework;
       job.ok = !!r?.ok && made;
+      // the tasks it skipped keep their old entries; the ones it checked note which answer that was
+      if (job.ok && check) writeCheck(semDir, a.id, mergeCheck(prev, check, only, answers));
       const missing = { check: "The AI finished without saving the check.", make: "The AI finished without saving the tasks.", polish: "The AI finished without saving the new wording." }[kind];
       if (!job.ok) job.error = t.chat.messages.at(-1)?.error ?? (r?.ok ? stripTicks(t.chat.messages.at(-1)?.text) || missing : "The AI stopped with an error.");
     });
