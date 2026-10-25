@@ -379,6 +379,31 @@ test("the last task's button completes the homework and starts the AI check of e
   expect(posted).toBe(true);
 });
 
+test("Discuss on a task's check starts a chat about that check, and a corrected check shows when the chat ends", async ({ page }) => {
+  await aiReady(page);
+  let corrected = false;
+  const check = (verdict: string, note: string) => ({ checked: "2026-09-15T10:00:00Z", tasks: { "3": { verdict, note } } });
+  await page.route("**/api/homework?**", async (route) => {
+    const res = await route.fetch();
+    return route.fulfill({ response: res, json: { ...(await res.json()), checks: { "DEMO101/09-28_Assignment-1": corrected ? check("right", "You're right: the brief allows decimals.") : check("wrong", "Give it as a fraction.") } } });
+  });
+  let sent: Record<string, unknown> | undefined;
+  await page.route("**/api/ai/run", (route) => {
+    sent = route.request().postDataJSON();
+    corrected = true;
+    return route.fulfill({ contentType: "text/event-stream", body: 'data: {"type":"text","text":"Fair point, I have updated the check."}\n\ndata: {"type":"file","path":"semesters/2026-Demo/assignments/DEMO101/09-28_Assignment-1/homework/check.json"}\n\ndata: {"type":"done","ok":true}\n\n' });
+  });
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Demo sum/ }).click();
+  const region = page.getByRole("region", { name: "AI check of this task" });
+  await expect(region).toContainText("Give it as a fraction.");
+  await region.getByRole("button", { name: "Discuss" }).click();
+  await expect(page.getByText("Fair point, I have updated the check.")).toBeVisible();
+  expect(sent).toMatchObject({ action: "discuss-check", params: { course: "DEMO101", assignment: "DEMO101/09-28_Assignment-1", task: "3" } });
+  expect(String(sent?.message)).toMatch(/^I'd like to discuss your check of task 3 \(Demo sum\): you said "Not right yet"\./);
+  await expect(region).toContainText("You're right: the brief allows decimals.", { timeout: 10_000 });
+});
+
 test("a check that fails says why, with no chat", async ({ page }) => {
   await aiReady(page);
   const job = { id: "j2", sem: "2026-Demo", assignment: "DEMO101/09-28_Assignment-1", started: "2026-09-15T10:00:00Z", running: false, ok: false, error: "You've hit your usage limit." };

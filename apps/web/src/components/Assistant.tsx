@@ -187,9 +187,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       update(key, (x) => ({ ...x, chat, busy: false, error: (e as Error).message }));
       return;
     }
-    if (!id) return;
     // the app server rebuilds the data when a note changes; this catches a write it didn't see
     if (wrote) window.setTimeout(refreshData, 2000);
+    if (!id) return;
     // the stream ended (finished, or the page lost the connection): re-read what was saved
     const saved = await getChat(id);
     if (saved) { update(key, (x) => ({ ...x, chat: saved, busy: !!saved.running })); if (saved.running) follow(key, id); }

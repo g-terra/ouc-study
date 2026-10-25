@@ -9,6 +9,8 @@ const cache = new Map<string, Promise<SemesterData>>();
 // Bumped when the data files are rebuilt (a note was written, eClass synced…), so pages re-fetch.
 let version = 0;
 const watchers = new Set<(v: number) => void>();
+/** Calls `f` each time the app data is rebuilt (e.g. a chat wrote a file). */
+export const onDataRefresh = (f: (v: number) => void) => { watchers.add(f); };
 export function refreshData() {
   cache.clear();
   version++;

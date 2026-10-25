@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import { applyAnswer, type HomeworkAnswers, type HomeworkCheck, type HomeworkTask } from "@ouc/content/homework";
 import { refreshAi, token } from "./ai";
-import { refreshData } from "./data";
+import { onDataRefresh, refreshData } from "./data";
 
 /** The AI's more academic wordings waiting to be kept or turned down: assignment → task id → { text (HTML), made }. */
 export type Polish = Record<string, Record<string, { text: string; made: string }>>;
@@ -27,6 +27,9 @@ function load(sem: string) {
     .finally(() => loading.delete(sem)));
   return loading.get(sem)!;
 }
+
+// the data was rebuilt (a chat may have corrected a check): read the answers and checks again
+onDataRefresh(() => { for (const sem of store.keys()) load(sem); });
 
 export function useHomework(sem: string): HomeworkState {
   const [, tick] = useState(0);

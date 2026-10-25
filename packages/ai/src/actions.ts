@@ -33,6 +33,8 @@ const FIELDS: Record<string, Field[]> = {
   "make-homework": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "homework-tutor": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   "check-homework": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
+  // started from a task's AI check on the homework page
+  "discuss-check": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
   // started from a task's answer box on the homework page
   "polish-answer": [{ key: "course", kind: "course", label: "Course", placeholder: "All courses" }, { key: "assignment", kind: "assignment", label: "Assignment", required: true }],
 };
@@ -41,7 +43,7 @@ const TITLE: Record<string, string> = {
   "find-material": "Find material", "assignment-helper": "Assignment help", "assignment-prep": "Prep an assignment",
   "assignment-review": "Review my draft", "sync-eclass": "Sync eClass", "important-dates": "Important dates",
   "make-homework": "Make it interactive", "homework-tutor": "Homework tutor", "check-homework": "Check my homework",
-  "polish-answer": "Make it more academic",
+  "polish-answer": "Make it more academic", "discuss-check": "Discuss a check",
 };
 // What the app shows the student about each action (the skill's description is written for the AI: paths, trigger phrases)
 const SUMMARY: Record<string, string> = {
@@ -59,9 +61,10 @@ const SUMMARY: Record<string, string> = {
   "make-homework": "Turns an assignment into tasks you answer in the app; a done one comes with the answers you submitted.",
   "homework-tutor": "Tutors you on a homework task you're answering in the app: hints, questions back and where in the material to look, never the answer.",
   "check-homework": "Checks your homework answers without being picky: says what's right, what could be better and what's not right yet, with hints.",
+  "discuss-check": "Talks through the AI check of a homework task you think is wrong or missed something, and corrects it when you're right. Use Discuss on the task's check.",
   "polish-answer": "Rewords one of your homework answers more academically, same ideas and your own voice, for you to keep or turn down. Use the button under the answer.",
 };
-const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄", "important-dates": "📅", "make-homework": "🧩", "homework-tutor": "🧑‍🏫", "check-homework": "✅", "polish-answer": "🎓" };
+const ICON: Record<string, string> = { "make-notes": "📒", "quiz-me": "❓", "make-quiz": "🏆", "plan-week": "🗓️", "research-topic": "🔎", "find-material": "📂", "assignment-helper": "📝", "assignment-prep": "🧭", "assignment-review": "🔍", "sync-eclass": "🔄", "important-dates": "📅", "make-homework": "🧩", "homework-tutor": "🧑‍🏫", "check-homework": "✅", "polish-answer": "🎓", "discuss-check": "💬" };
 // What a plain local model (no file or web tools) can do from the app (it gets the material in its
 // prompt; a quiz it answers with is saved by the app server).
 const CHAT_OK = new Set(["quiz-me", "make-quiz"]);
@@ -325,6 +328,19 @@ export function homeworkPolishPrompt(semId: string, a: Assignment, taskId?: stri
     `Save the new wording as \`${out}\` (just the HTML) and change nothing else.`;
 }
 
+/** Talking through the AI check of one task, and correcting that task's entry in check.json when the student is right. */
+export function homeworkDiscussPrompt(semId: string, a: Assignment, taskId?: string): string {
+  const dir = homeworkFolder(semId, a), out = checkPath(semId, a);
+  const tasks = a.homework!.tasks;
+  const i = tasks.findIndex((t) => t.id === taskId);
+  if (i < 0) throw new Error("Say which task's check to discuss.");
+  const t = tasks[i]!;
+  return `Use the discuss-check skill (ai/skills/discuss-check/SKILL.md). I want to discuss your check of task ${i + 1} of ${tasks.length}${t.title ? ` ("${t.title}")` : ""}, id "${t.id}", in ${a.fullTitle} (${a.code}):\n\n${t.question}\n\n` +
+    `The check is the "${t.id}" entry in \`${out}\`, my answer the "${t.id}" entry in \`${dir}/answers.json\` (HTML; read both again each turn), the brief in semesters/${semId}/assignments/${a.id}/. ` +
+    "Hear me out, weigh what I say against the brief and the course material, and if I'm right or give context that changes it, update only that task's verdict and note in the check file " +
+    `and run: node packages/ai/validate.mjs ${out}. If the verdict still holds, explain why with a hint. Never give me the answer.`;
+}
+
 /** Checking the student's answers, leniently, into homework/check.json (docs/HOMEWORK_FORMAT.md). */
 export function homeworkCheckPrompt(semId: string, a: Assignment): string {
   const dir = homeworkFolder(semId, a), out = checkPath(semId, a);
@@ -416,6 +432,8 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       if (!a) throw new Error("That assignment isn't in the app data.");
       body = homeworkMakePrompt(semId, a) + extra; break;
     }
+    case "discuss-check":
+      body = homeworkDiscussPrompt(semId, assignmentOf(data, params.assignment), params.task ? String(params.task) : undefined) + extra; break;
     case "homework-tutor":
       body = homeworkTutorPrompt(semId, assignmentOf(data, params.assignment), params.task ? String(params.task) : undefined) + extra; break;
     case "polish-answer":

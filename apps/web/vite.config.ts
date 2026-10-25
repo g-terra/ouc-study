@@ -397,7 +397,7 @@ function semesterFiles(): Plugin {
         spawn(process.execPath, [resolve(HERE, "../../packages/eclass-sync/daily.mjs"), "--quiet"], { cwd: resolve(HERE, "../.."), stdio: "inherit" });
       }
       server.watcher.on("all", (_event, file) => {
-        if (!file.startsWith(SEMESTERS) || !/(\/notes\/.*\.md|\/plans\/[^/]+\.md|\/quizzes\/[^/]+\/[^/]+\.json|\/assignments\/.*\/(PREP\.md|homework\/tasks\.json)|\/_meta\/(?!sync-state).*\.json|\/updates\/(?!connection).*\.json|semester\.json)$/.test(file.replaceAll(sep, "/"))) return;
+        if (!file.startsWith(SEMESTERS) || !/(\/notes\/.*\.md|\/plans\/[^/]+\.md|\/quizzes\/[^/]+\/[^/]+\.json|\/assignments\/.*\/(PREP\.md|homework\/(tasks|check)\.json)|\/_meta\/(?!sync-state).*\.json|\/updates\/(?!connection).*\.json|semester\.json)$/.test(file.replaceAll(sep, "/"))) return;
         clearTimeout(timer);
         timer = setTimeout(() => {
           // use this same Node + local tsx (works in the background service where npm isn't on PATH)
