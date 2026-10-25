@@ -13,6 +13,7 @@ export interface HomeworkTask {
   title?: string;        // a few words for the timeline
   question: string;      // Markdown with $LaTeX$, copied from the brief
   options?: string[];    // kind "choice" only
+  multiple?: boolean;    // kind "choice" only: more than one option can be picked
 }
 export interface Homework { title?: string; tasks: HomeworkTask[] }
 
@@ -20,6 +21,7 @@ export interface Homework { title?: string; tasks: HomeworkTask[] }
 export interface TaskAnswer {
   text?: string;         // the written answer
   choice?: number;       // the picked option (index into options)
+  choices?: number[];    // the picked options, for a task that takes more than one (sorted indexes)
   why?: string;          // optional: why that option was picked
   done?: boolean;
   aiEdited?: boolean;    // the AI made its wording more academic (Make it more academic), kept once set
@@ -32,6 +34,8 @@ export type HomeworkAnswers = Record<string, TaskAnswer>;
 type Raw = any;
 const TASK_ID = /^[\w.-]{1,20}$/;
 const MAX_TEXT = 200_000;
+// a question that says it takes more than one answer, for tasks files made before "multiple"
+const MANY = /more than one (correct )?(answer|option)|one or more (correct )?(answer|option)s?|(select|choose|tick|pick|mark) all (that|which) (apply|are)|πολλαπλές απαντήσεις|περισσότερες από μία/i;
 
 /** Checks a tasks file. `homework` is null when it can't be used until the problems are fixed. */
 export function parseHomework(src: string | Raw): { homework: Homework | null; problems: string[] } {
@@ -58,11 +62,18 @@ export function parseHomework(src: string | Raw): { homework: Homework | null; p
       const options = Array.isArray(t.options) ? (t.options as unknown[]).map(str) : [];
       if (options.length < 2 || options.length > 8 || options.some((o) => !o)) return problems.push(`${at}: "options" must be a list of 2 to 8 texts.`);
       task.options = options;
+      if (t.multiple === true || MANY.test(question)) task.multiple = true;
     }
     tasks.push(task);
   });
   if (problems.length) return { homework: null, problems };
   return { homework: { ...(str(d.title) ? { title: str(d.title) } : {}), tasks }, problems };
+}
+
+/** The options picked for a choice task, as indexes: one or none for most tasks, any number when it takes more than one. */
+export function pickedOptions(t: HomeworkTask, a: TaskAnswer | undefined): number[] {
+  if (t.multiple && Array.isArray(a?.choices)) return a.choices;
+  return a?.choice !== undefined ? [a.choice] : [];
 }
 
 /** What the timeline calls a task. */
@@ -77,8 +88,8 @@ export function homeworkProgress(tasks: HomeworkTask[], answers: HomeworkAnswers
 const bad = (m: string): never => { throw new Error(m); };
 
 /**
- * Merges one change ({ task, text?, choice?, why?, done? }) into the saved answers, after checking it.
- * `choice: null` clears the choice. Returns the new answers (the old object is left alone).
+ * Merges one change ({ task, text?, choice?, choices?, why?, done? }) into the saved answers, after checking it.
+ * `choice: null` clears the choice; `choices` (a task that takes more than one answer) replaces the picked options. Returns the new answers (the old object is left alone).
  */
 export function applyAnswer(tasks: HomeworkTask[], answers: HomeworkAnswers, patch: unknown, now = new Date()): HomeworkAnswers {
   const p = (patch ?? {}) as Record<string, unknown>;
@@ -97,6 +108,14 @@ export function applyAnswer(tasks: HomeworkTask[], answers: HomeworkAnswers, pat
     const n = task.options?.length ?? 0;
     if (!Number.isInteger(p.choice) || (p.choice as number) < 0 || (p.choice as number) >= n) bad("Bad choice.");
     next.choice = p.choice as number;
+  }
+  if (p.choices === null) delete next.choices;
+  else if (p.choices !== undefined) {
+    if (!task.multiple) bad("This task takes only one answer: send choice.");
+    const n = task.options?.length ?? 0;
+    if (!Array.isArray(p.choices) || p.choices.some((c) => !Number.isInteger(c) || c < 0 || c >= n)) bad("Bad choice.");
+    next.choices = [...new Set(p.choices as number[])].sort((x, y) => x - y);
+    delete next.choice;
   }
   if (p.aiEdited !== undefined) {
     if (typeof p.aiEdited !== "boolean") bad("Say aiEdited: true or false.");
@@ -171,7 +190,7 @@ export function parseAnswers(src: string | Raw, tasks: HomeworkTask[]): { answer
     const { updated, ...rest } = a && typeof a === "object" ? a : ({} as Raw);
     try {
       answers = applyAnswer(tasks, answers, { ...rest, task: id }, typeof updated === "string" && !Number.isNaN(Date.parse(updated)) ? new Date(updated) : undefined);
-    } catch (e) { problems.push(`"${id}": ${(e as Error).message.replace(/\.$/, "")} (text and why are HTML strings, choice the index of an option, done true or false).`); }
+    } catch (e) { problems.push(`"${id}": ${(e as Error).message.replace(/\.$/, "")} (text and why are HTML strings, choice the index of an option, choices a list of them for a task that takes more than one, done true or false).`); }
   }
   return { answers, problems };
 }

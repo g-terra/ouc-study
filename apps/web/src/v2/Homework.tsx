@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Assignment, SemesterData } from "@ouc/content/types";
-import { checkCounts, homeworkProgress, taskLabel, type HomeworkAnswers, type HomeworkCheck, type HomeworkTask, type TaskAnswer, type Verdict } from "@ouc/content/homework";
+import { checkCounts, homeworkProgress, pickedOptions, taskLabel, type HomeworkAnswers, type HomeworkCheck, type HomeworkTask, type TaskAnswer, type Verdict } from "@ouc/content/homework";
 import { Link, enc } from "../lib/router";
 import { courseMap } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
@@ -17,6 +17,7 @@ import { WorkLink } from "../components/MakeQuiz";
 import { Check, FileText, Settings, Sparkles, TriangleAlert, X } from "../components/icons";
 
 const KIND: Record<HomeworkTask["kind"], string> = { written: "Written", calculation: "Calculation", choice: "Multiple choice" };
+const kindName = (t: HomeworkTask) => (t.multiple ? "Multiple answers" : KIND[t.kind]);
 const LETTERS = "ABCDEFGH";
 // the AI check's verdicts: lenient, so "better" is still right
 const VERDICT: Record<Verdict, { label: string; cls: string }> = {
@@ -61,6 +62,8 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<"saving" | "saved" | null>(null);
   const saves = useRef(0);
+  const ai = useAiStatus();
+  const checking = useCheckJobs(data.id, id).some((j) => j.running);
   if (!a) return <Empty>Assignment not found.</Empty>;
   const base = `/${enc(data.id)}`;
   const back = <Link to={`${base}/courses/${enc(a.code)}#work`} className="text-sm text-muted hover:text-ink">← {course?.short ?? a.code} · Assignments</Link>;
@@ -132,7 +135,7 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">{taskLabel(t, n)}</span>
-                  <span className="block text-xs text-muted">{KIND[t.kind]} · {now ? "now" : isDone ? "done" : "to do"}</span>
+                  <span className="block text-xs text-muted">{kindName(t)} · {now ? "now" : isDone ? "done" : "to do"}</span>
                   {v && <VerdictTag v={v} className="mt-1 inline-block" />}
                 </span>
               </button>
@@ -142,7 +145,7 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
 
         <Card className="grid min-w-0 flex-[999_1_28rem] gap-4 p-5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-semibold text-muted">Task {i + 1} of {total} · {KIND[task.kind]}</span>
+            <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-semibold text-muted">Task {i + 1} of {total} · {kindName(task)}</span>
             {ans.done && <span className="rounded-full bg-ok-bg px-2.5 py-0.5 text-xs font-semibold text-ok">Done</span>}
             <span className="ml-auto text-xs text-muted" data-testid="save-state" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>
             <AskAiButton action="homework-tutor" params={{ course: a.code, assignment: id, task: task.id }} className="py-1 text-xs"
@@ -152,13 +155,16 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
 
           {task.kind === "choice" ? (
             <>
-              <div role="radiogroup" aria-label="Your choice" className="grid gap-2">
+              <div role={task.multiple ? "group" : "radiogroup"} aria-label={task.multiple ? "Your choices (more than one can be right)" : "Your choice"} className="grid gap-2">
+                {task.multiple && <p className="text-xs text-muted">Pick every option you think is right.</p>}
                 {task.options!.map((o, n) => {
-                  const on = ans.choice === n;
+                  const picked = pickedOptions(task, ans);
+                  const on = picked.includes(n);
+                  const pick = () => task.multiple ? save({ choices: on ? picked.filter((c) => c !== n) : [...picked, n] }) : save({ choice: n });
                   return (
-                    <button key={n} type="button" role="radio" aria-checked={on} onClick={() => save({ choice: n })}
+                    <button key={n} type="button" role={task.multiple ? "checkbox" : "radio"} aria-checked={on} onClick={pick}
                       className={cx("flex min-h-12 items-center gap-3 rounded-xl border px-4 py-2.5 text-left", on ? "border-2 border-accent bg-accent/5" : "border-line hover:border-muted")}>
-                      <span aria-hidden className={cx("grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold", on ? "bg-accent text-bg" : "border border-line text-muted")}>{LETTERS[n]}</span>
+                      <span aria-hidden className={cx("grid size-7 shrink-0 place-items-center text-xs font-bold", task.multiple ? "rounded-md" : "rounded-full", on ? "bg-accent text-bg" : "border border-line text-muted")}>{LETTERS[n]}</span>
                       <span>{o}</span>
                     </button>
                   );
@@ -189,10 +195,22 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
               className="min-h-11 rounded-full border border-line px-4 disabled:opacity-40">Previous</button>
             <div className="flex flex-wrap gap-2">
               {ans.done && <button type="button" onClick={() => save({ done: false })} className="min-h-11 rounded-full border border-line px-4">Not done yet</button>}
-              <button type="button" onClick={() => { if (!ans.done) save({ done: true }); setCur(Math.min(tasks.length - 1, i + 1)); }}
-                className="flex min-h-11 items-center gap-1.5 rounded-full bg-ok px-4 font-semibold text-bg">
-                <Check aria-hidden className="size-4" strokeWidth={2.5} />{ans.done ? "Next task" : i === tasks.length - 1 ? "Done" : "Done, next task"}
-              </button>
+              {i === tasks.length - 1 && ai.state !== "unavailable" ? (
+                // the last task: done, and the AI checks every answer in the background
+                <button type="button" disabled={checking} onClick={() => {
+                  if (!ans.done) save({ done: true });
+                  setError(null);
+                  checkAnswers(data.id, id).catch((e: Error) => setError(e.message));
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }} className="flex min-h-11 items-center gap-1.5 rounded-full bg-ok px-4 font-semibold text-bg disabled:opacity-60">
+                  <Sparkles aria-hidden className="size-4" />{checking ? "Checking…" : "Complete and review"}
+                </button>
+              ) : (
+                <button type="button" onClick={() => { if (!ans.done) save({ done: true }); setCur(Math.min(tasks.length - 1, i + 1)); }}
+                  className="flex min-h-11 items-center gap-1.5 rounded-full bg-ok px-4 font-semibold text-bg">
+                  <Check aria-hidden className="size-4" strokeWidth={2.5} />{i === tasks.length - 1 ? "Done" : ans.done ? "Next task" : "Done, next task"}
+                </button>
+              )}
             </div>
           </div>
         </Card>

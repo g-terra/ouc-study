@@ -26,10 +26,11 @@ An assignment's **interactive version** lives next to it, in `semesters/<semeste
 |---|---|---|
 | `tasks` | yes | The tasks in the brief's order, at least one. |
 | `id` | yes | Unique in the file: letters, digits, dots and dashes (`"1"`, `"2b"`). Answers are saved under it, so keep it when the file is redone. |
-| `kind` | yes | `written` (an explanation or essay), `calculation` (working and a result) or `choice` (pick one option). |
+| `kind` | yes | `written` (an explanation or essay), `calculation` (working and a result) or `choice` (pick from options). |
 | `question` | yes | The task as the brief asks it, in Markdown. Maths in LaTeX: `$…$` inline, `$$…$$` on its own line. Tables and lists are fine. |
 | `title` | no | A few words for the timeline. Without it the task is called "Task N". |
 | `options` | `choice` only | 2 to 8 option texts, in the brief's order. Nothing marks the right one. |
+| `multiple` | `choice` only | `true` when more than one option can be right (the brief says "more than one answer", "select all that apply"…): the student ticks several. A question that says so in its wording counts as `multiple` even without it. |
 | `title` (top) | no | The assignment's name as the brief gives it. |
 
 A file with problems isn't used: the app shows what to fix on the homework page.
@@ -40,7 +41,7 @@ A file with problems isn't used: the app shows what to fix on the homework page.
 { "answers": { "2": { "choice": 0, "why": "Optional reason for the pick.", "done": true, "updated": "2026-10-22T21:40:00.000Z" } } }
 ```
 
-`text` is the written answer and `why` the optional reason for a picked option, both HTML from the app's editor (paragraphs, bold, italic, underline, colours, highlight, lists, `<code>` and `<pre><code>` blocks; a formula is `<span data-latex="\frac{1}{2}"></span>`; a picture is `<img src="/files/<semester>/assignments/<CODE>/<folder>/homework/images/<hash>.png">`, saved in the `images/` folder next to the answers). Older answers in plain text are still read. `choice` is the index of the picked option, `done` is set when the student marks the task done. `aiEdited` is set once the student keeps the AI's more academic wording of the answer.
+`text` is the written answer and `why` the optional reason for a picked option, both HTML from the app's editor (paragraphs, bold, italic, underline, colours, highlight, lists, `<code>` and `<pre><code>` blocks; a formula is `<span data-latex="\frac{1}{2}"></span>`; a picture is `<img src="/files/<semester>/assignments/<CODE>/<folder>/homework/images/<hash>.png">`, saved in the `images/` folder next to the answers). Older answers in plain text are still read. `choice` is the index of the picked option; for a `multiple` task, `choices` is the list of picked indexes (`[0, 2]`), and an older `choice` there counts as one pick. `done` is set when the student marks the task done. `aiEdited` is set once the student keeps the AI's more academic wording of the answer.
 
 ## check.json
 

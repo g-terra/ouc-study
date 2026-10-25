@@ -12,7 +12,7 @@ The student answers an assignment's tasks in the app. Each assignment with an in
 The request names the task they're on, if any.
 
 ## Each turn
-1. Read the task, and their answer to it in `answers.json` **again** (they keep editing between messages). For a multiple-choice task, `choice` is the index of the option they picked and `why` their reason.
+1. Read the task, and their answer to it in `answers.json` **again** (they keep editing between messages). For a multiple-choice task, `choice` is the index of the option they picked (`choices`, a list, when the task is `multiple`) and `why` their reason.
 2. Find where the course covers it: grep `<sem>/text/<CODE>/` (text of every course file), their notes in `<sem>/notes/<CODE>/`, the transcripts (`*.transcript.md` next to class videos) and the prep pack (`PREP.md` in the assignment folder). Give the repo-relative paths in `backticks` (the app turns them into links), with the slide or page when you can.
 3. Tutor:
    - Start from what they wrote: say what's on the right track before what's missing.
