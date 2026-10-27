@@ -3,7 +3,7 @@ import type { Assignment, SemesterData } from "@ouc/content/types";
 import { Link, cameFrom, enc } from "../lib/router";
 import { courseMap, stateOf, type State } from "../lib/data";
 import { at, fmtFull, relative } from "../lib/dates";
-import { Card, CourseBadge, CourseDot, Empty, FileCard, PageHeader, SectionTitle, StatePill, cx } from "../components/ui";
+import { Card, CourseBadge, CourseDot, Empty, FileCard, FileLink, PageHeader, SectionTitle, StatePill, cx } from "../components/ui";
 import { AskAiButton, useAssistant } from "../components/Assistant";
 import { useAiStatus, usePrepStatus, type PrepStatus } from "../lib/ai";
 import { NoteBody, useNoteBlocks } from "../notes/NoteRenderer";
@@ -149,7 +149,7 @@ export function AssignmentPage({ data, id }: { data: SemesterData; id: string })
             {(a.resources.local.length > 0 || notes.length > 0) && <h3 className="mb-2 text-sm font-semibold text-muted">From your course</h3>}
             <div className="mb-4 grid gap-1.5">
               {notes.map((n) => <Link key={n.slug} to={`${base}/notes/${enc(n.code)}/${enc(n.slug)}`} className="flex gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold hover:bg-surface-2">📒 My notes: {n.title}</Link>)}
-              {a.resources.local.map((l) => <a key={l.href} href={l.href} target="_blank" rel="noreferrer" className="flex gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">📂 {l.title}</a>)}
+              {a.resources.local.map((l) => <FileLink key={l.href} href={l.href} className="flex gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">📂 {l.title}</FileLink>)}
             </div>
             <h3 className="mb-2 text-sm font-semibold text-muted">Further reading & practice</h3>
             <div className="grid gap-2">

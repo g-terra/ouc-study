@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import type { Assignment } from "@ouc/content/types";
-import { Card, SectionTitle, cx } from "../components/ui";
+import { Card, FileLink, SectionTitle, cx } from "../components/ui";
 import { useAssistant } from "../components/Assistant";
 import { approveDraft, getReview, uploadDraft, useAiStatus, type ReviewState, type ReviewVersion, type Verdict } from "../lib/ai";
 import { NoteBody, useNoteBlocks } from "../notes/NoteRenderer";
@@ -166,7 +166,7 @@ function Approve({ state, v, busy, onApprove }: { state: ReviewState; v: ReviewV
     return (
       <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl bg-ok-bg px-4 py-3 text-sm text-ok">
         <span className="font-semibold">✅ Version {v.v} approved</span>
-        <a href={ap.href} target="_blank" rel="noreferrer" className="font-semibold underline">Open {ap.pdf}</a>
+        <FileLink href={ap.href} className="font-semibold underline">Open {ap.pdf}</FileLink>
         <a href={ap.href} download={ap.pdf} className="underline">Download</a>
         <span className="text-ink/70">Made with {ap.with} on {when(ap.at)}. Upload it on eClass yourself.</span>
       </div>

@@ -32,10 +32,10 @@ test("the button says start, continue or go through again", () => {
   assert.equal(classLabel({ done: 4, total: 4 }), "Go through again");
 });
 
-test("each step shows in the app when it can: a video or slides in their viewer, a PDF in place, anything else opens", () => {
+test("each step shows in the app when it can: a video, slides or a PDF in its viewer, anything else opens", () => {
   assert.deepEqual(stepView(vid), { kind: "video", file: "courses/C1/03/lecture.mp4" });
   assert.deepEqual(stepView(deck), { kind: "slides", file: "courses/C1/03/deck.pptx" });
-  assert.deepEqual(stepView(pdf), { kind: "pdf", href: pdf.href });
+  assert.deepEqual(stepView(pdf), { kind: "pdf", file: "courses/C1/03/reading.pdf" });
   assert.deepEqual(stepView(link), { kind: "open", href: link.href });
   assert.deepEqual(stepView(item("file", "Doc", "/files/S/x.docx", { ext: "docx" })), { kind: "open", href: "/files/S/x.docx" });
   // a Panopto recording with a transcript here shows its transcript, each line opening Panopto

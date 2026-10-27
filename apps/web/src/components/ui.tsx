@@ -1,6 +1,6 @@
 import type { ReactNode, CSSProperties } from "react";
 import { Link } from "../lib/router";
-import { slidesPage, videoPage } from "../lib/links";
+import { pdfPage, slidesPage, videoPage } from "../lib/links";
 import type { Course, FileRef, ItemKind, WeekItem } from "@ouc/content/types";
 import { STATE_LABEL, type State } from "../lib/data";
 import { KindIcon } from "./icons";
@@ -73,9 +73,12 @@ export function ProgressRing({ value, color, size = 56, label }: { value: number
 export const isMaterial = (i: WeekItem) => i.kind === "file" || (i.kind === "video" && !i.external);
 export const kindIcon = (k: ItemKind, ext?: string) => <KindIcon kind={k} ext={ext} />;
 
-/** A link to a course file: slides open in the app's slide viewer, anything else in a new tab. */
+/** The app page that shows a file in place (a PDF, slides, a video), or null when it opens in a new tab. */
+export const viewerPage = (href?: string) => pdfPage(href) ?? slidesPage(href) ?? videoPage(href);
+
+/** A link to a course file: PDFs, slides and videos open in the app's viewers, anything else in a new tab. */
 export function FileLink({ href, className, title, children }: { href?: string; className?: string; title?: string; children: ReactNode }) {
-  const page = slidesPage(href) ?? videoPage(href);
+  const page = viewerPage(href);
   return page ? <Link to={page} className={className} title={title}>{children}</Link>
     : <a href={href} target="_blank" rel="noreferrer" className={className} title={title}>{children}</a>;
 }
@@ -86,7 +89,7 @@ export function FileCard({ file, label }: { file: FileRef; label: string }) {
       <KindIcon kind="file" ext={file.ext} className="size-7" />
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold">{file.name}</span>
-        <span className="text-xs text-muted">{label} · {file.ext.toUpperCase()} · {slidesPage(file.href) ? "opens in the slide viewer" : "opens in a new tab"}</span>
+        <span className="text-xs text-muted">{label} · {file.ext.toUpperCase()} · {viewerPage(file.href) ? "opens in the app" : "opens in a new tab"}</span>
       </span>
     </FileLink>
   );

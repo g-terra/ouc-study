@@ -4,7 +4,7 @@
  */
 import type { Week, WeekItem } from "@ouc/content/types";
 import { itemKey, tracked, type Count, type Progress } from "@ouc/content/progress";
-import { slidesPage, videoPage } from "./links";
+import { pdfPage, slidesPage, videoPage } from "./links";
 
 /** The class's steps: what there is to watch, then what there is to read, each in the week's order. */
 export const classSteps = (w: Week): WeekItem[] =>
@@ -18,16 +18,16 @@ export function startStep(code: string, w: Week, done: Progress): number {
 
 export const classLabel = (c: Count) => (c.done === 0 ? "Start class" : c.done < c.total ? "Continue class" : "Go through again");
 
-export type StepView = { kind: "video"; file: string } | { kind: "slides"; file: string } | { kind: "pdf"; href: string } | { kind: "open"; href?: string };
+export type StepView = { kind: "video"; file: string } | { kind: "slides"; file: string } | { kind: "pdf"; file: string } | { kind: "open"; href?: string };
 
-/** How a step shows: in the video page or slide viewer (by its path in the semester folder), a PDF in place, the rest opens. */
+/** How a step shows: in the video page, slide viewer or PDF viewer (by its path in the semester folder); the rest opens. */
 export function stepView(it: WeekItem): StepView {
   const rel = (href: string) => decodeURIComponent(href.replace(/^\/files\/[^/]+\//, ""));
   if (it.href && videoPage(it.href)) return { kind: "video", file: rel(it.href) };
   // a Panopto recording plays there; its transcript here opens Panopto at each line
   if (it.external && it.transcript) return { kind: "video", file: rel(it.transcript) };
   if (it.href && slidesPage(it.href)) return { kind: "slides", file: rel(it.href) };
-  if (it.href && !it.external && /\.pdf$/i.test(it.href)) return { kind: "pdf", href: it.href };
+  if (it.href && pdfPage(it.href)) return { kind: "pdf", file: rel(it.href) };
   return { kind: "open", href: it.href };
 }
 

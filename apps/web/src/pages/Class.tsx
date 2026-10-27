@@ -71,17 +71,11 @@ export function ClassPage({ data, code, week, step }: { data: SemesterData; code
   );
 }
 
-/** One step: a video or slides in their viewer, a PDF in place, anything else (a link, a Word file) opens in a new tab. */
+/** One step: a video, slides or a PDF in its viewer; anything else (a link, a Word file) opens in a new tab. */
 function Step({ data, it }: { data: SemesterData; it: WeekItem }) {
   const v = stepView(it);
   if (v.kind === "video") return <VideoPage data={data} file={v.file} bare />;
-  if (v.kind === "slides") return <SlidesPage data={data} file={v.file} bare />;
-  if (v.kind === "pdf") return (
-    <>
-      <iframe src={v.href} title={it.title} className="h-[75vh] w-full rounded-2xl border border-line bg-surface" />
-      <a href={v.href} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-muted hover:text-ink">Open in a new tab ↗</a>
-    </>
-  );
+  if (v.kind === "slides" || v.kind === "pdf") return <SlidesPage data={data} file={v.file} bare />;
   return (
     <Card className="p-6">
       <p className="font-semibold">{it.external ? "This one is on another site" : "This file opens outside the app"}</p>

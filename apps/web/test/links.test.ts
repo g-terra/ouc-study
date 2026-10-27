@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fileLink, linkLabel, linkPaths, panoptoAt, transcriptPage, videoPage } from "../src/lib/links.ts";
+import { fileLink, linkLabel, linkPaths, panoptoAt, pdfPage, transcriptPage, videoPage } from "../src/lib/links.ts";
 
 const VIDEO = "/files/2026-Fall/courses/COS512-AI/01-Week-1/Video-1/What%20is%20AI.mp4";
 
@@ -9,6 +9,14 @@ test("class videos open on the video page; other files don't", () => {
   assert.equal(videoPage("/files/2026-Fall/x/Reading.pdf"), null);
   assert.equal(videoPage("https://example.com/v.mp4"), null);
   assert.equal(fileLink("semesters/2026-Fall/courses/A/01-W/talk.m4a")?.to, "/2026-Fall/video/courses%2FA%2F01-W%2Ftalk.m4a");
+});
+
+test("PDFs open in the app's PDF viewer; other files don't", () => {
+  assert.equal(pdfPage("/files/2026-Fall/courses/A/01-W/Reading%201.pdf"), "/2026-Fall/pdf/courses%2FA%2F01-W%2FReading%201.pdf");
+  assert.equal(pdfPage("/files/2026-Fall/courses/A/01-W/Notes.PDF"), "/2026-Fall/pdf/courses%2FA%2F01-W%2FNotes.PDF");
+  assert.equal(pdfPage("/files/2026-Fall/courses/A/01-W/Deck.pptx"), null);
+  assert.equal(pdfPage("https://example.com/x.pdf"), null);
+  assert.deepEqual(fileLink("semesters/S/assignments/A/09-28_A1/brief.pdf"), { to: "/S/pdf/assignments%2FA%2F09-28_A1%2Fbrief.pdf", internal: true });
 });
 
 test("a transcript opens with what it transcribes: the video, the slides, or alone for a Panopto link", () => {
@@ -20,8 +28,8 @@ test("a transcript opens with what it transcribes: the video, the slides, or alo
 
 test("a note's citation opens the material at the spot: a PDF page, a slide, a moment of a video or a Panopto transcript", () => {
   const C = "semesters/S/courses/A-Course/01-Week-1";
-  assert.deepEqual(fileLink(`${C}/Reading 1.pdf#page=12`), { to: "/files/S/courses/A-Course/01-Week-1/Reading%201.pdf#page=12", internal: false });
-  assert.deepEqual(fileLink(`${C}/Reading 1.pdf#page=12-14`), { to: "/files/S/courses/A-Course/01-Week-1/Reading%201.pdf#page=12", internal: false });
+  assert.deepEqual(fileLink(`${C}/Reading 1.pdf#page=12`), { to: "/S/pdf/courses%2FA-Course%2F01-Week-1%2FReading%201.pdf#page=12", internal: true });
+  assert.deepEqual(fileLink(`${C}/Reading 1.pdf#page=12-14`), { to: "/S/pdf/courses%2FA-Course%2F01-Week-1%2FReading%201.pdf#page=12", internal: true });
   assert.deepEqual(fileLink(`${C}/Deck.pptx#slide=5`), { to: "/S/slides/courses%2FA-Course%2F01-Week-1%2FDeck.pptx#5", internal: true });
   assert.deepEqual(fileLink(`${C}/Talk.mp4#t=12:03`), { to: "/S/video/courses%2FA-Course%2F01-Week-1%2FTalk.mp4#t=723", internal: true });
   assert.deepEqual(fileLink(`${C}/Lecture 2.transcript.md#t=1:02:05`), { to: "/S/video/courses%2FA-Course%2F01-Week-1%2FLecture%202.transcript.md#t=3725", internal: true });
