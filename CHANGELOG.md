@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.1](https://github.com/g-terra/ouc-study/compare/v0.44.0...v0.44.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **ai:** study AI runs can no longer change the app's code ([#208](https://github.com/g-terra/ouc-study/issues/208)) ([2b33301](https://github.com/g-terra/ouc-study/commit/2b33301da592164cc1943928d537ff4f6a7b36d1))
+
 ## [0.44.0](https://github.com/g-terra/ouc-study/compare/v0.43.0...v0.44.0) (2026-10-27)
 
 
