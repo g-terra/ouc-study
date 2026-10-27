@@ -31,7 +31,8 @@ const pageFromHash = (hash: string) => Number(hash.match(/^#(?:page=)?(\d+)$/)?.
 
 const readLecture = () => { try { return localStorage.getItem(LECTURE) === "1"; } catch { return false; } };
 
-export function SlidesPage({ data, file }: { data: SemesterData; file: string }) {
+/** `bare`: inside a class (src/pages/Class.tsx), which shows the course, week and title itself. */
+export function SlidesPage({ data, file, bare = false }: { data: SemesterData; file: string; bare?: boolean }) {
   const base = `/${enc(data.id)}`;
   const isPdf = /\.pdf$/i.test(file);
   const noun = isPdf ? "page" : "slide", Noun = isPdf ? "Page" : "Slide";
@@ -109,14 +110,14 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted">
-        {course && <Link to={`${base}/courses/${enc(course.code)}${weekIndex !== undefined ? `#w${weekIndex}` : ""}`} aria-label={`Back to ${course.short}${week ? `, ${week}` : ""}`}><CourseBadge course={course} size="md" /></Link>}
-        {week && <span>{week}</span>}
+        {!bare && course && <Link to={`${base}/courses/${enc(course.code)}${weekIndex !== undefined ? `#w${weekIndex}` : ""}`} aria-label={`Back to ${course.short}${week ? `, ${week}` : ""}`}><CourseBadge course={course} size="md" /></Link>}
+        {!bare && week && <span>{week}</span>}
         <span className="ml-auto flex gap-3">
           {isPdf && <a href={href} target="_blank" rel="noreferrer" className="hover:text-ink" title="The browser's own PDF viewer, to search or copy text">Open in a new tab ↗</a>}
           {info?.download && <a href={info.download} download className="hover:text-ink">⬇ Download the .{file.split(".").pop()}</a>}
         </span>
       </div>
-      <h1 className="mb-5 font-serif text-3xl font-semibold leading-tight tracking-tight">{name}</h1>
+      {!bare && <h1 className="mb-5 font-serif text-3xl font-semibold leading-tight tracking-tight">{name}</h1>}
 
       {!info || (isPdf && info.ok && !doc) ? (
         <Card className="p-10 text-center text-muted" >

@@ -21,10 +21,10 @@ Built by students for students. Works with **your own** eClass account: nothing 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/course-dark.webp">
-  <img src="docs/images/course.webp" alt="A course page listing each week's materials, with this week open">
+  <img src="docs/images/course.webp" alt="A course page with this week open: a Continue class button above the week's videos, slides, readings and links, the watched ones ticked">
 </picture>
 
-**Every course, week by week**<br>Slides, recordings, readings, notes and quizzes for each week, with buttons to make notes or a quiz.
+**Every course, week by week**<br>Slides, recordings, readings, notes and quizzes for each week. **Start class** takes you through them one at a time, ticking each off.
 
 </td>
 <td width="50%" valign="top">
@@ -162,7 +162,7 @@ How it runs in the background: on macOS two LaunchAgents (`~/Library/LaunchAgent
 The top bar has **Today**, **Courses** and **Calendar**, plus **Search**, the 🔔 bell (notifications) and the profile circle (Settings) on the right.
 
 - **Today**: next deadline, the next exam, the next 7 days (deadlines and live classes), what's still to watch and read this week in each course, and what's new on eClass.
-- **Courses**: each course with its weeks (slides, videos, assignments, your notes, the week's live class), notes, quizzes and assignments, plus your grades. Tick off each video, slide deck, file and link as you watch or read it (a video ticks itself when it plays to the end, slides when you reach the last one); each week and course shows how much is done. Ticks are kept on your computer in `semesters/<id>/progress.json`, where your AI reads them when it plans your week.
+- **Courses**: each course with its weeks (slides, videos, assignments, your notes, the week's live class), notes, quizzes and assignments, plus your grades. Tick off each video, slide deck, file and link as you watch or read it (a video ticks itself when it plays to the end, slides and PDFs when you reach the last page); each week and course shows how much is done. **Start class** on a week goes through its videos, slides, PDFs and links one at a time in the app (a link or a Word file opens in a new tab): **Done, next** ticks the step off, **Skip** leaves it, and it picks up where you stopped. Ticks are kept on your computer in `semesters/<id>/progress.json`, where your AI reads them when it plans your week.
 - **Calendar**: deadlines, live classes, exams and other important dates week by week, with filters per course and type, and your submitted work.
 - **Important dates**: eClass doesn't publish exam dates in a form the app can read, so you add them yourself on a course's **Dates** tab: a title ("Final exam"), exam or other, the day, the time if you know it, and the topics it covers. **Edit** and the bin button change or remove one. Exams show on Today, Courses and the Calendar, other dates on the Calendar. Or ask the AI (**Important dates** in Ask AI): "the COS512 final is on 5 December at 13:00, weeks 1 to 10". They're saved in `semesters/<id>/_meta/dates.json`.
 - **Slides and PDFs**: click a PowerPoint or a PDF (on a course week, an assignment, a note's sources or a search result) and it opens right in the app, page by page (arrow keys, full screen), with no new tab or download. A PDF fits the window, or press **Fit width** for small print; **Open in a new tab** gives the browser's own viewer when you want to search or copy its text. Reaching the last page ticks it off as read. Slides with recorded narration have a 🔊 player under them; tick **Play as a lecture** to hear each slide and move on by itself. The app makes a PDF copy the first time you open a deck (a few seconds; kept in `.ouc/slides/`) using [LibreOffice](https://www.libreoffice.org/download/) (free; `ouc setup` offers to install it, or on a Mac `brew install --cask libreoffice`, on Windows `winget install TheDocumentFoundation.LibreOffice`). Animations and videos inside the slides don't play there: use **Download** for those.

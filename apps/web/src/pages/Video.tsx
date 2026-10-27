@@ -21,7 +21,8 @@ const FOLLOW = "ouc-video-follow";
 const readFollow = () => { try { return localStorage.getItem(FOLLOW) !== "0"; } catch { return true; } };
 const fileHref = (sem: string, rel: string) => `/files/${encodeURIComponent(sem)}/${rel.split("/").map(encodeURIComponent).join("/")}`;
 
-export function VideoPage({ data, file }: { data: SemesterData; file: string }) {
+/** `bare`: inside a class (src/pages/Class.tsx), which shows the course, week and title itself. */
+export function VideoPage({ data, file, bare = false }: { data: SemesterData; file: string; bare?: boolean }) {
   const base = `/${enc(data.id)}`;
   const parts = file.split("/");
   const course = parts[0] === "courses" ? data.courses.find((c) => parts[1]?.startsWith(c.code)) : undefined;
@@ -84,11 +85,11 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
   return (
     <div className="mx-auto max-w-7xl">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted">
-        {course && <Link to={`${base}/courses/${enc(course.code)}${weekIndex !== undefined ? `#w${weekIndex}` : ""}`} aria-label={`Back to ${course.short}${weekLabel ? `, ${weekLabel}` : ""}`}><CourseBadge course={course} size="md" /></Link>}
-        {weekLabel && <span>{weekLabel}</span>}
+        {!bare && course && <Link to={`${base}/courses/${enc(course.code)}${weekIndex !== undefined ? `#w${weekIndex}` : ""}`} aria-label={`Back to ${course.short}${weekLabel ? `, ${weekLabel}` : ""}`}><CourseBadge course={course} size="md" /></Link>}
+        {!bare && weekLabel && <span>{weekLabel}</span>}
         {videoSrc && <a href={videoSrc} download className="ml-auto hover:text-ink">⬇ Download the video</a>}
       </div>
-      <h1 className="mb-5 font-serif text-3xl font-semibold leading-tight tracking-tight">{title}</h1>
+      {!bare && <h1 className="mb-5 font-serif text-3xl font-semibold leading-tight tracking-tight">{title}</h1>}
 
       <div className={cx("grid gap-4", t !== null && "lg:grid-cols-[minmax(0,1fr)_24rem]")}>
         <div className="min-w-0">

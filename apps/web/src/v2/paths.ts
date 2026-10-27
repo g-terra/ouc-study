@@ -47,6 +47,6 @@ export function v2Section(path: string, from?: string): string {
   const [, , section] = split(path).p.split("/").filter(Boolean);
   // an assignment opened from a course stays under Courses
   if (section === "assignments" && from && v2Section(from) === "courses") return "courses";
-  const parent: Record<string, string> = { notes: "courses", quizzes: "courses", homework: "courses", slides: "courses", pdf: "courses", video: "courses", assignments: "calendar", plan: "", "ai-work": "" };
+  const parent: Record<string, string> = { notes: "courses", quizzes: "courses", homework: "courses", slides: "courses", pdf: "courses", video: "courses", class: "courses", assignments: "calendar", plan: "", "ai-work": "" };
   return section in parent ? parent[section] : section ?? "";
 }
