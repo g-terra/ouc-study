@@ -23,7 +23,7 @@ apps/web/             React + Vite + Tailwind study app (dashboard, timeline, co
 packages/content/     builds apps/web/public/data/*.json from semesters/ (npm run content); src/search.ts = the app's search (/api/search)
 packages/eclass-sync/ eClass web-service client: src/daily.ts (what changed), src/pull.ts (download files, class videos), src/media.ts (video sources, transcript format), src/moodle.ts
 packages/backup/src/  backups of the student's own files: select.ts (what goes in: allow-list, never the keys), git.ts (private GitHub repo via .ouc/backup.git), github.ts (device-code sign-in, private repo, sign-in to git as a header), config.ts (.ouc/backup.json), media.ts (videos' smaller copies with ffmpeg, files over 50 MB split into .ouc-part-NNN and joined on restore, cache in .ouc/backup-media/), run.ts (one run + .ouc/backup-status.json), now.ts (back up or restore with the saved setup), restore.ts (gets a backup back: asks before replacing, joins parts), api.ts (/api/backup for Settings › Backup), clients.ts (the GitHub sign-in client), progress.ts and help.ts (a running backup's progress and the token how-to, shared with the app)
-packages/ai/src/      AI backends (providers.ts), study actions (actions.ts), /api/ai for the app's Ask AI panel (api.ts, stream.ts), slide viewer server (slides.ts: .pptx → PDF + narration), transcripts (transcribe.ts: local Whisper, `ouc transcribe`)
+packages/ai/src/      AI backends (providers.ts), study actions (actions.ts), /api/ai for the app's Ask AI panel (api.ts, stream.ts; guard.ts undoes any change a run makes to the app's code), slide viewer server (slides.ts: .pptx → PDF + narration), transcripts (transcribe.ts: local Whisper, `ouc transcribe`)
 packages/cli/src/     the `ouc` command (ouc.ts, ai.ts, backup.ts), setup.ts (installer), server.ts (background app), background.ts, update.ts
 bin/                  small .mjs launchers (ouc.mjs, setup.mjs, server.mjs, ai.mjs) that start the TypeScript in packages/cli with tsx
 semesters/<id>/       ← personal, git-ignored
@@ -55,6 +55,7 @@ The key lives in `.eclass-token`: **never print, read out, copy or commit it.** 
 ## Writing notes
 
 Notes must follow **`docs/NOTE_FORMAT.md`**: front matter, `> [!IDEA]` big idea, `cards`, a `mermaid` diagram, `formula` (LaTeX), `compare`, `steps`, `terms`, `flashcards`, `links`.
+**Never change the app's own code** (anything git tracks: `packages/`, `apps/`, `ai/`, `docs/`, `tools/`…); you write only the student's files (`semesters/`, `memory/`). If `validate.mjs` rejects something the format docs ask for, keep what the docs say and tell the student the checker disagrees. The app undoes any code change a run makes.
 Match the learning style in `STUDENT.md` (default: visual, so prefer diagrams, comparison tables and step flows over long paragraphs). Use LaTeX for all maths.
 
 ## Memory protocol (important)
