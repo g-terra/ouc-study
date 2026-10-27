@@ -369,3 +369,12 @@ test("v2 settings: an AI switched off disappears from the chat; the default AI s
   await page.goto(`/v2${SEM}/chat`);
   await expect(page.getByRole("combobox", { name: "Which AI answers" }).locator("option")).toHaveText(["Claude Code", "opencode"]);
 });
+
+test("a course's tab bar has no vertical scrollbar", async ({ page }) => {
+  await page.goto(`/v2${SEM}/courses/DEMO101`);
+  const tabs = page.getByRole("tablist", { name: "Course" });
+  await expect(tabs).toBeVisible();
+  await expect(tabs).toHaveCSS("overflow-y", "hidden");
+  await expect(tabs).toHaveCSS("overflow-x", "auto");
+  expect(await tabs.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+});
