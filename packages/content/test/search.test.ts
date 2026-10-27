@@ -67,6 +67,12 @@ test("text copies split by slide or PDF page", () => {
   assert.deepEqual(textCopyParts("page one\fpage two", "pdf"), [{ text: "page one", page: 1 }, { text: "page two", page: 2 }]);
 });
 
+test("a PDF's page markers number its pages and aren't searched as text, even on a one-page PDF", () => {
+  assert.deepEqual(textCopyParts("--- page 1 ---\n\nIntro\f--- page 2 ---\n\nAttention\n\nSpotlight", "pdf"),
+    [{ text: "Intro", page: 1 }, { text: "Attention", page: 2 }, { text: "Spotlight", page: 2 }]);
+  assert.deepEqual(textCopyParts("--- page 1 ---\n\nOnly page", "pdf"), [{ text: "Only page", page: 1 }]);
+});
+
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), "ouc-search-"));
   const wk = "courses/DEMO101-Demo/01-Week-1";
