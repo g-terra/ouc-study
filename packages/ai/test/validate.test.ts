@@ -55,3 +55,8 @@ test("homework files: the tasks against docs/HOMEWORK_FORMAT.md, answers and a c
   assert.deepEqual(validateHomework(JSON.stringify({ answers: { "1": { text: "<p>Mine.</p>", done: true } } }), "x/homework/answers.json", sibling).errors, []);
   assert.match(validateHomework(JSON.stringify({ answers: { "2": { choice: 5 } } }), "x/homework/answers.json", sibling).errors[0]!, /choice/);
 });
+
+test("a [!SOURCE] citation line is a known callout (docs/NOTE_FORMAT.md asks for one per section)", () => {
+  const note = "## Topic\n\n> [!SOURCE] Slides p. 3\n";
+  assert.ok(!validateNote(note).errors.some((e) => /unknown callout/.test(e)));
+});

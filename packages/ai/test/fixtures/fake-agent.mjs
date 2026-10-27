@@ -40,6 +40,15 @@ if (polish) {
   fs.mkdirSync(`${process.cwd()}/${polish.split("/").slice(0, -1).join("/")}`, { recursive: true });
   fs.writeFileSync(`${process.cwd()}/${polish}`, "<p>Put more academically.</p>\n");
 }
+// a run that strays into the app's code (the guard must undo it) next to a note it may write
+if (prompt.includes("TOUCH_CODE")) {
+  const fs = await import("node:fs");
+  fs.writeFileSync(`${process.cwd()}/app.ts`, "export const x = 2;\n");
+  fs.mkdirSync(`${process.cwd()}/tools`, { recursive: true });
+  fs.writeFileSync(`${process.cwd()}/tools/new.py`, "print(1)\n");
+  fs.mkdirSync(`${process.cwd()}/semesters/2026-Fall/notes/AAA`, { recursive: true });
+  fs.writeFileSync(`${process.cwd()}/semesters/2026-Fall/notes/AAA/week-01.md`, "# Week 1\n");
+}
 if (prompt.includes("FAIL")) { console.error("boom: something broke"); process.exit(3); }
 out({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: `${process.cwd()}/memory/progress.md` } }] } });
 out({ type: "assistant", message: { content: [{ type: "tool_use", name: "Write", input: { file_path: `${process.cwd()}/semesters/2026-Fall/plans/2026-W42.md`, content: "x" } }] } });

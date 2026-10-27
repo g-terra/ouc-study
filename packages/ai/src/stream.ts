@@ -8,6 +8,7 @@
 //   { type: "done", ok }
 // Each tool prints its own JSON shape; parse<Tool>() maps one parsed line to zero or more events.
 import { isAbsolute, relative, sep } from "node:path";
+import { changedFiles, undoCodeChanges } from "./guard.ts";
 import { agentCommand, agentEnv, chat, spawnCli, type AiConfig, type ChatMessage, type LocalModel } from "./providers.ts";
 
 export type AgentEvent =
@@ -133,6 +134,7 @@ export function runAgentTurn(root: string, cfg: Pick<AiConfig, "tool" | "opencod
         emit(e);
       }
     };
+    const before = changedFiles(root);
     const p = spawnCli(bin ?? cmd, args, { cwd: root, env: agentEnv(cfg.tool ?? ""), stdio: ["ignore", "pipe", "pipe"] });
     const finish = (ok: boolean) => { if (finished) return; finished = true; done({ ok }); };
     onStart?.({ stop: () => { if (!finished) p.kill("SIGTERM"); } });
@@ -147,6 +149,8 @@ export function runAgentTurn(root: string, cfg: Pick<AiConfig, "tool" | "opencod
       if (buf) handle(buf);
       if (signal) emit({ type: "error", message: "Stopped." });
       else if (code !== 0 && !sawError) emit({ type: "error", message: short(err.trim().split("\n").filter(Boolean).slice(-3).join(" ") || `${cmd} exited with code ${code}`, 400) });
+      const undone = undoCodeChanges(root, before);
+      if (undone.length) emit({ type: "error", message: `The AI changed the app's own code, so that was undone (${undone.join(", ")}). It may only write notes and study files.` });
       const ok = code === 0 && !signal;
       emit({ type: "done", ok });
       finish(ok);

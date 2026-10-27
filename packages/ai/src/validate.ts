@@ -14,7 +14,7 @@ import { hasQuotedLatex, parseBlock, singleQuoteLatex } from "../../content/src/
 import { parseQuiz } from "../../content/src/quiz.ts";
 import { parseAnswers, parseCheck, parseHomework } from "../../content/src/homework.ts";
 
-const CALLOUTS = new Set(["IDEA", "KEY", "TIP", "WARN", "EXAM", "ANALOGY", "LINK"]);
+const CALLOUTS = new Set(["IDEA", "KEY", "TIP", "WARN", "EXAM", "ANALOGY", "LINK", "SOURCE"]);
 const DATA = new Set(["cards", "formula", "compare", "steps", "flashcards", "terms", "links"]);
 const MERMAID_START = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|mindmap|timeline|pie|quadrantChart|journey|gantt|xychart-beta|block-beta)\b/;
 /** A parsed YAML block: any shape until each field is checked below. */
