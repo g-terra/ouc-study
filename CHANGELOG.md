@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.42.0](https://github.com/g-terra/ouc-study/compare/v0.41.0...v0.42.0) (2026-10-27)
+
+
+### Features
+
+* **web:** notes cite their sources and open them at the page, slide or minute ([#202](https://github.com/g-terra/ouc-study/issues/202)) ([81d17da](https://github.com/g-terra/ouc-study/commit/81d17daae9fa764c16fe490dd8f9752043da31f8))
+
+
+### Bug Fixes
+
+* **web:** no scrollbar on a course's tab bar ([#201](https://github.com/g-terra/ouc-study/issues/201)) ([894f32a](https://github.com/g-terra/ouc-study/commit/894f32a262304f070233c712ea829ac6941e799f))
+
 ## [0.41.0](https://github.com/g-terra/ouc-study/compare/v0.40.0...v0.41.0) (2026-10-25)
 
 
