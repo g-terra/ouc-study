@@ -1,7 +1,7 @@
 /**
  * Visual-markdown parser. A note body is ordinary Markdown plus:
  *   ## Heading               → numbered section (also used for the table of contents)
- *   > [!IDEA] Title          → callout (IDEA, KEY, TIP, WARN, EXAM, ANALOGY, LINK)
+ *   > [!IDEA] Title          → callout (IDEA, KEY, TIP, WARN, EXAM, ANALOGY, LINK, SOURCE)
  *   ```cards / formula / compare / steps / flashcards / terms / links / mermaid
  * See docs/NOTE_FORMAT.md.
  */

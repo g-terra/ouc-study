@@ -6,7 +6,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkQuizFile, createAiApi, needsHomework, needsPrep, quizWriting, readPrepMeta, stampQuiz } from "../src/api.ts";
+import { checkQuizFile, createAiApi, needsHomework, needsPrep, needsSources, quizWriting, readPrepMeta, stampQuiz } from "../src/api.ts";
 import { setServerModels } from "../src/providers.ts";
 import { json, portOf, type Ev } from "./helpers.ts";
 import type { Server } from "node:http";
@@ -439,6 +439,36 @@ test("Sync now also makes a quiz for every class without one, unless autoQuiz is
   assert.ok(existsSync(join(root, "semesters/S/quizzes/AAA/week-01-intro.json")) && existsSync(join(root, "semesters/S/quizzes/AAA/week-02-more.json")));
 });
 
+test("notes without sources get them added, once a day at most", () => {
+  const notes = [
+    { code: "AAA", slug: "week-01-old", body: "The sky is blue." },
+    { code: "AAA", slug: "week-02-cited", body: "Blue.\n\n> [!SOURCE]\n> `courses/A/01/Deck.pptx#slide=2`" },
+    { code: "AAA", slug: "week-03-listed", body: "Green.\n\n## Sources\n\n- `courses/A/03/Reading.pdf#page=4`" },
+    { code: "BBB", slug: "week-01-tried", body: "Red." },
+  ];
+  const now = new Date("2026-10-27T12:00:00Z");
+  const tried = { "sources:BBB/week-01-tried": "2026-10-27T01:00:00Z" };
+  assert.deepEqual(needsSources({ notes } as never, tried, now).map((n) => n.slug), ["week-01-old"]);
+  assert.deepEqual(needsSources({ notes } as never, tried, new Date("2026-10-28T02:00:00Z")).map((n) => n.slug), ["week-01-old", "week-01-tried"]);
+});
+
+test("Sync now adds sources to the notes made before notes cited them, in the background", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ouc-ai-"));
+  cpSync(join(REPO, "ai/skills"), join(root, "ai/skills"), { recursive: true });
+  mkdirSync(join(root, ".ouc"), { recursive: true });
+  twoClasses(root);
+  writeFileSync(join(root, ".ouc/ai.json"), JSON.stringify({ tool: "claude", autoQuiz: false }));
+  const mw = createAiApi(root, { bin: join(HERE, "fixtures/fake-agent.mjs"), status: async () => ({ ready: true }), noAutoPrep: true });
+  assert.deepEqual(mw.catchUp(), { notes: 0, prep: 0, quizzes: 0, sources: 2 });
+  while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
+  const chats = readdirSync(join(root, ".ouc/chats")).map((f) => JSON.parse(readFileSync(join(root, ".ouc/chats", f), "utf8")));
+  assert.deepEqual(chats.map((c) => c.action), ["make-notes", "make-notes"]);
+  const prompts = chats.map((c) => c.messages[0].prompt).sort();
+  assert.match(prompts[0], /Add sources to the note semesters\/S\/notes\/AAA\/week-01-intro\.md/);
+  assert.match(prompts[1], /semesters\/S\/notes\/AAA\/week-02-more\.md/);
+  assert.equal(mw.catchUp().sources, 0);   // tried today: not again until tomorrow
+});
+
 test("Sync now: the videos of the weeks about to get notes are transcribed first", async () => {
   const root = mkdtempSync(join(tmpdir(), "ouc-ai-"));
   cpSync(join(REPO, "ai/skills"), join(root, "ai/skills"), { recursive: true });
@@ -460,7 +490,7 @@ test("Sync now: the videos of the weeks about to get notes are transcribed first
     bin: join(HERE, "fixtures/fake-agent.mjs"), status: async () => ({ ready: true }),
     whisper: () => ({ label: "fake", transcribe: async (files) => { order.push("transcribe"); return files.map(() => [{ start: 0, end: 1, text: "hello" }]); } }),
   });
-  assert.deepEqual(mw.catchUp(), { notes: 1, prep: 0, quizzes: 0 });
+  assert.deepEqual(mw.catchUp(), { notes: 1, prep: 0, quizzes: 0, sources: 0 });
   while (!mw.prepIdle()) await new Promise((ok) => setTimeout(ok, 20));
   assert.ok(existsSync(join(sem, "courses/AAA-Course/01-Week-1/Lesson.transcript.md")));
   assert.deepEqual(order, ["transcribe"]);

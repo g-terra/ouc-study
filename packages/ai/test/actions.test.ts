@@ -40,6 +40,16 @@ test("make notes for one course, or one week from a shortcut", () => {
   assert.throws(() => buildPrompt({ root: ".", semId: "S", data: fixture({ ...data, notes: [...data.notes, { code: "AAA", weekIndex: 2 }, { code: "AAA", weekIndex: 3 }] }), action: "make-notes", params: { course: "AAA" } }), /AAA: all 3 weeks with files have notes/);
 });
 
+test("notes cite their sources: new notes are asked to, and an old note can get them added", () => {
+  assert.match(buildPrompt({ root: ".", semId: "S", data, action: "make-notes", params: { course: "AAA", week: "1" }, first: false }), /Cite the material[\s\S]*#page=[\s\S]*#slide=[\s\S]*#t=/);
+  assert.match(buildPrompt({ root: ".", semId: "S", data, action: "make-notes", params: {}, first: false }), /Cite the material/);
+  const old = buildPrompt({ root: ".", semId: "S", data: fixture({ ...data, notes: [{ code: "AAA", weekIndex: 1, slug: "week-01-intro" }] }), action: "make-notes", params: { note: "AAA/week-01-intro" }, first: false });
+  assert.match(old, /Add sources to the note semesters\/S\/notes\/AAA\/week-01-intro\.md/);
+  assert.match(old, /Don't change what the note says/);
+  assert.match(old, /validate\.mjs semesters\/S\/notes\/AAA\/week-01-intro\.md/);
+  assert.throws(() => buildPrompt({ root: ".", semId: "S", data, action: "make-notes", params: { note: "AAA/nope" } }), /No note AAA\/nope/);
+});
+
 test("a course with files only in General gets a note for it, and an empty course says why", () => {
   const general = fixture({ courses: [course("GEN", [[0, null, [file]], [1, "2026-09-01", []]]), course("NIL", [[1, "2026-09-01", []]])], notes: [], assignments: [] });
   assert.deepEqual(weeksWithoutNotes(general, general.courses).map(({ course: c, week: w }) => `${c.code}/${w.index}`), ["GEN/0"]);

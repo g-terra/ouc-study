@@ -16,6 +16,7 @@ Process:
    - `> [!IDEA]` big idea → `## Key concepts` as a `cards` block → a `mermaid` diagram of how it fits together
    - topic sections using `compare` tables, `steps` flows and `formula` cards (all maths in LaTeX)
    - `## Key terms` (`terms`), `## Check yourself` (`flashcards`, with hints, not assignment answers), a `> [!LINK]` callout, `## Go deeper` (`links`)
+   - sources: a `> [!SOURCE]` line under each topic section and a `## Sources` list at the end, citing files with the spot (`…/Reading.pdf#page=12`, `…/Lecture 3.pptx#slide=5`, `…/Lecture 3.mp4#t=12:03`; see "Sources" in `docs/NOTE_FORMAT.md`). Pages come from the `--- page N ---` lines of the text copies, slides from `--- slide N ---` or `## Slide N`, times from the transcript's `[mm:ss]`; never guess one
    - keep prose short; one idea per card; 4–10 nodes per diagram; quote every mermaid label
    Check the app renders it (`npm run dev`, Notes page). Invalid YAML or diagrams show a red error box.
 4. Add new terms to `memory/glossary.md` (`- **Term** (COS5xx): one-line definition`), keeping it alphabetical.

@@ -5,7 +5,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { findCourse, noteFileName, read, slug, weekMaterial, weekNumber } from "./context.ts";
 import { loadReview, reviewDir, reviewFile } from "./review.ts";
-import type { Assignment, Course, SemesterData, Week } from "../../content/src/types.ts";
+import type { Assignment, Course, Note, SemesterData, Week } from "../../content/src/types.ts";
 
 /** An input an action asks for in the app. */
 export interface Field { key: string; kind: "course" | "text" | "assignment"; label: string; required?: boolean; placeholder?: string }
@@ -114,13 +114,25 @@ export function notesCoverage(_data: unknown, course: Course): string {
   return `${course.short}: all ${withFiles.length} week${withFiles.length === 1 ? "" : "s"} with files have notes`;
 }
 
+// how a note says where its points come from (docs/NOTE_FORMAT.md, "Sources"); the app opens each citation at that spot
+const CITE = "Cite the material as docs/NOTE_FORMAT.md says under \"Sources\": under each topic section a `> [!SOURCE]` line naming the files and spots it comes from, " +
+  "as paths in backticks with the spot at the end (`courses/…/Reading.pdf#page=4`, `courses/…/Deck.pptx#slide=5`, `courses/…/Lecture.mp4#t=12:03`; for a recording that is only a link, its `….transcript.md#t=12:03`), " +
+  "and a `## Sources` list of everything used at the end. Take page numbers from the \"--- page N ---\" lines of the text copies, slides from \"--- slide N ---\" or a transcript's \"## Slide N\", times from a transcript's [mm:ss] stamps; never guess a spot.";
+
+/** The prompt that adds sources to a note made before notes cited them (Sync now does it in the background). */
+export function sourcesPrompt(semId: string, note: Pick<Note, "code" | "slug" | "weekIndex">): string {
+  const rel = `semesters/${semId}/notes/${note.code}/${note.slug}.md`;
+  return `Use the make-notes skill. Add sources to the note ${rel} (${note.code}, eClass section ${note.weekIndex}): find where each of its points comes from in that week's files in semesters/${semId}/courses/, their text copies in semesters/${semId}/text/ and the transcripts (*.transcript.md next to videos and narrated slides). ` +
+    `${CITE} Don't change what the note says otherwise; only add the citations. When done, run: node packages/ai/validate.mjs ${rel} and fix every error it reports.`;
+}
+
 /** The prompt `ouc notes` and the app use for an agent tool. */
 export function notesPrompt(semId: string, course: Course, week: Week): { rel: string; prompt: string } {
   const rel = `semesters/${semId}/notes/${course.code}/${noteFileName(course, week)}`;
   return {
     rel,
     prompt: `Use the make-notes skill. Make visual study notes for ${course.title} (${course.code}), eClass section ${week.index} "${week.name}". ` +
-      `The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/; transcripts of its videos and narrated slides (*.transcript.md next to them), when there are any, are the base for the note. Save the note as ${rel} (front matter: course ${course.code}, section ${week.index}, week ${weekNumber(week)}). ` +
+      `The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/; transcripts of its videos and narrated slides (*.transcript.md next to them), when there are any, are the base for the note. Save the note as ${rel} (front matter: course ${course.code}, section ${week.index}, week ${weekNumber(week)}). ${CITE} ` +
       `When done, run: node packages/ai/validate.mjs ${rel} and fix every error it reports.`,
   };
 }
@@ -393,6 +405,11 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       if (!msg) throw new Error("Type a message first.");
       body = msg; break;
     case "make-notes": {
+      if (params.note) {
+        const note = data.notes.find((n) => `${n.code}/${n.slug}` === String(params.note));
+        if (!note) throw new Error(`No note ${params.note}.`);
+        body = sourcesPrompt(semId, note) + extra; break;
+      }
       if (week && course) { body = notesPrompt(semId, course, week).prompt + extra; break; }
       const todo = weeksWithoutNotes(data, course ? [course] : data.courses);
       if (!todo.length) throw new Error(`Nothing to make notes for. ${(course ? [course] : data.courses).map((c) => notesCoverage(data, c)).join("; ")}.`);
@@ -400,7 +417,7 @@ export function buildPrompt({ root, semId, data, action, params = {}, message = 
       body = `Use the make-notes skill. Make visual study notes for each of these ${todo.length} weeks, which have material but no notes yet (some may not have started: use the files that are there). ` +
         `Delegate to the note-taker agent, one per course, in parallel if you can. The week's files are listed in semesters/${semId}/courses/ and their text copies in semesters/${semId}/text/; transcripts of the videos and narrated slides (*.transcript.md next to them), when there are any, are the base for each note.\n\n` +
         todo.map(({ course: c, week: w }) => `- ${c.code} section ${w.index} "${w.name}" → ${notesPrompt(semId, c, w).rel} (front matter: course ${c.code}, section ${w.index}, week ${weekNumber(w)})`).join("\n") +
-        `\n\nAfter writing each note, run: node packages/ai/validate.mjs <its path> and fix every error it reports.${extra}`;
+        `\n\n${CITE}\n\nAfter writing each note, run: node packages/ai/validate.mjs <its path> and fix every error it reports.${extra}`;
       break;
     }
     case "quiz-me":
