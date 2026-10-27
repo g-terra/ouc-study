@@ -17,9 +17,17 @@ const CALLOUT: Record<string, { icon: string; label: string; cls: string }> = {
   EXAM: { icon: "🎯", label: "Assignment & exam angle", cls: "border-sky-300/70 bg-sky-50 dark:border-sky-500/40 dark:bg-sky-500/10" },
   ANALOGY: { icon: "🧠", label: "Think of it like", cls: "border-orange-300/70 bg-orange-50 dark:border-orange-500/40 dark:bg-orange-500/10" },
   LINK: { icon: "🔗", label: "Connects to", cls: "border-slate-300/70 bg-slate-50 dark:border-slate-500/40 dark:bg-slate-500/10" },
+  SOURCE: { icon: "📄", label: "From the material", cls: "" },
 };
 export function Callout({ kind, title, text }: { kind: string; title: string; text: string }) {
   const c = CALLOUT[kind] ?? CALLOUT.KEY;
+  // where a section's points come from: a quiet line under it, each citation opening the page, slide or moment
+  if (kind === "SOURCE") return (
+    <aside className="my-3 flex flex-wrap items-baseline gap-x-2 border-l-2 border-line pl-3 text-sm text-muted">
+      <span className="font-semibold">{c.icon} {title || c.label}:</span>
+      <Html html={mdToHtml(text)} className="md [&>p]:my-0" />
+    </aside>
+  );
   return (
     <aside className={cx("my-5 rounded-2xl border p-4 sm:p-5", c.cls)}>
       <div className="mb-1 flex items-center gap-2 text-sm font-semibold">

@@ -15,12 +15,11 @@ import { Maximize } from "../components/icons";
 import { markDone } from "../lib/progress";
 import { findItem } from "@ouc/content/progress";
 import { redoTranscript } from "../lib/ai";
+import { panoptoAt, videoPage } from "../lib/links";
 
 const FOLLOW = "ouc-video-follow";
 const readFollow = () => { try { return localStorage.getItem(FOLLOW) !== "0"; } catch { return true; } };
 const fileHref = (sem: string, rel: string) => `/files/${encodeURIComponent(sem)}/${rel.split("/").map(encodeURIComponent).join("/")}`;
-/** A Panopto viewer link that starts at `sec`. */
-const panoptoAt = (url: string, sec: number) => { try { const u = new URL(url); u.searchParams.set("start", String(Math.floor(sec))); return u.toString(); } catch { return url; } };
 
 export function VideoPage({ data, file }: { data: SemesterData; file: string }) {
   const base = `/${enc(data.id)}`;
@@ -35,7 +34,10 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
   }
   const isTranscript = /\.transcript\.md$/i.test(file);
   const external = isTranscript && item?.external ? item.href : undefined;
-  const videoSrc = isTranscript ? undefined : href;
+  // a transcript of a video on this computer (a note may cite it) plays beside that video
+  const own = isTranscript && item && !item.external && videoPage(item.href) ? item.href : undefined;
+  const videoSrc = isTranscript ? own : href;
+  const videoFile = own ? decodeURIComponent(own.replace(/^\/files\/[^/]+\//, "")) : file;   // what "Make it again" transcribes
   const transcriptHref = isTranscript ? href : item?.transcript ?? fileHref(data.id, file.replace(/\.[^./]+$/, ".transcript.md"));
 
   const [t, setT] = useState<Transcript | null>();
@@ -94,7 +96,7 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
             <>
               <video ref={video} src={videoSrc} controls playsInline preload="metadata" data-testid="class-video"
                 onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} onSeeked={(e) => setNow(e.currentTarget.currentTime)}
-                onEnded={() => { const f = findItem(data.courses, href); if (f) void markDone(data.id, f.course.code, f.week, f.item, true, "watched"); }}
+                onEnded={() => { const f = findItem(data.courses, videoSrc); if (f) void markDone(data.id, f.course.code, f.week, f.item, true, "watched"); }}
                 className="aspect-video w-full rounded-2xl border border-line bg-black" />
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                 <button type="button" onClick={() => video.current?.requestFullscreen?.()} className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 hover:border-muted"><Maximize aria-hidden className="size-3.5" />Full screen</button>
@@ -105,7 +107,7 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
             <Card className="p-6">
               <p className="font-semibold">This recording is on Panopto</p>
               <p className="mt-1 text-sm text-muted">It needs your Panopto sign-in, so it plays there. Each line of the transcript opens Panopto at that moment.</p>
-              <a href={external} target="_blank" rel="noreferrer" className="mt-4 inline-block rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white">Watch on Panopto ↗</a>
+              <a href={startAt ? panoptoAt(external, startAt) : external} target="_blank" rel="noreferrer" className="mt-4 inline-block rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white">{startAt ? `Watch on Panopto from ${stamp(startAt)} ↗` : "Watch on Panopto ↗"}</a>
             </Card>
           ) : null}
         </div>
@@ -120,7 +122,7 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
         ) : t === null ? (
           <div className="text-sm text-muted">
             <p>No transcript yet. Transcripts are made on this computer when Whisper is set up (Settings → Video transcripts).</p>
-            {videoSrc && <Redo file={file} label="Make the transcript" onStarted={() => setRedoing(true)} />}
+            {videoSrc && <Redo file={videoFile} label="Make the transcript" onStarted={() => setRedoing(true)} />}
           </div>
         ) : (
           <Card className="flex max-h-[75vh] min-h-0 flex-col overflow-hidden lg:sticky lg:top-4 lg:self-start">
@@ -148,7 +150,7 @@ export function VideoPage({ data, file }: { data: SemesterData; file: string }) 
             <div className="border-t border-line px-4 py-2 text-xs text-muted">
               {t.by && <span>Made with {t.by}{t.made ? ` on ${t.made}` : ""}. </span>}
               <a href={transcriptHref} download className="underline hover:text-ink">⬇ Save the transcript</a>
-              {videoSrc && !/panopto/i.test(t.by ?? "") && <Redo file={file} language={t.language} label="Make it again" onStarted={() => setRedoing(true)} />}
+              {videoSrc && !/panopto/i.test(t.by ?? "") && <Redo file={videoFile} language={t.language} label="Make it again" onStarted={() => setRedoing(true)} />}
             </div>
           </Card>
         )}

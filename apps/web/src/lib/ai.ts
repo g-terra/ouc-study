@@ -125,7 +125,7 @@ const prepListeners = new Set<(s: PrepStatus | null) => void>();
 let prepTimer: number | undefined;
 export const refreshPrep = () => fetch("/api/ai/prep").then((r) => (r.ok ? r.json() : null)).catch(() => null)
   .then((j) => { prepNow = j; prepListeners.forEach((l) => l(j)); });
-/** "Notes · Short name" or "Prep · CODE title" for a background job id. */
+/** "Notes · Short name", "Sources · note title" or "Prep · CODE title" for a background job id. */
 export function workLabel(id: string, data?: SemesterData | null): string {
   if (id.startsWith("quiz:")) {
     const [code, week] = id.slice(5).split("/");
@@ -134,6 +134,7 @@ export function workLabel(id: string, data?: SemesterData | null): string {
     return `Quiz · ${c?.short ?? code}${w ? ` ${w.index === 0 ? "General" : w.label}` : ""}`;
   }
   if (id.startsWith("homework:")) { const a = data?.assignments.find((x) => x.id === id.slice(9)); return `Interactive · ${a ? `${a.code} ${a.title}` : id.split("/").pop()}`; }
+  if (id.startsWith("sources:")) { const n = data?.notes.find((x) => `${x.code}/${x.slug}` === id.slice(8)); return `Sources · ${n?.title ?? id.split("/").pop()}`; }
   if (id.startsWith("notes:")) { const c = data?.courses.find((x) => x.code === id.slice(6)); return `Notes · ${c?.short ?? id.slice(6)}`; }
   const a = data?.assignments.find((x) => x.id === id);
   return `Prep · ${a ? `${a.code} ${a.title}` : id.split("/").pop()}`;

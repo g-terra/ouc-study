@@ -44,7 +44,7 @@ import { parseQuiz } from "../../content/src/quiz.ts";
 import { currentSemesterId, loadData, read } from "./context.ts";
 import { runAgentTurn, runChatTurn, type AgentEvent, type RunHandle } from "./stream.ts";
 import { MAX_UPLOAD, addVersion, approve, findConverter, loadReview, markReview, reviewState, type Converter } from "./review.ts";
-import type { Assignment, SemesterData } from "../../content/src/types.ts";
+import type { Assignment, Note, SemesterData } from "../../content/src/types.ts";
 import { setTask } from "../../content/src/plan.ts";
 import { polishFile, readAnswers, readCheck, readHomework, writeCheck } from "../../content/src/homework-store.ts";
 import { mergeCheck, tasksToCheck } from "../../content/src/homework.ts";
@@ -86,7 +86,7 @@ export interface AiApiOptions {
   installWhisper?: () => Promise<{ ok: boolean; message: string }>;   // tests: a fake install
 }
 export type AiApi = ((req: IncomingMessage, res: ServerResponse, next: () => void) => Promise<void>) & {
-  autoPrep(): void; catchUp(): { notes: number; prep: number; quizzes: number }; prepIdle(): boolean; warmUp(): Promise<string | null>;
+  autoPrep(): void; catchUp(): { notes: number; prep: number; quizzes: number; sources: number }; prepIdle(): boolean; warmUp(): Promise<string | null>;
 };
 
 // The background app starts with a minimal PATH; add the usual install places of the agent CLIs
@@ -216,6 +216,12 @@ export function needsHomework(root: string, semId: string, data: Pick<SemesterDa
   return data.assignments.filter((a) => !a.submitted && !a.homework && (a.briefs.length || a.question?.trim())
     && !existsSync(join(root, "semesters", semId, "assignments", a.id, "homework", "tasks.json"))
     && !(tried[`homework:${a.id}`] && now.getTime() - new Date(tried[`homework:${a.id}`]!).getTime() < 12 * 3600_000));
+}
+
+/** Notes made before notes cited their material (no `> [!SOURCE]` line, no "Sources" list), skipping ones tried in the last day. */
+export function needsSources(data: Pick<SemesterData, "notes">, tried: Record<string, string> = {}, now = new Date()): Note[] {
+  return data.notes.filter((n) => !/^>\s*\[!SOURCE\]|^##\s+Sources\s*$/im.test(n.body ?? "")
+    && !(tried[`sources:${n.code}/${n.slug}`] && now.getTime() - new Date(tried[`sources:${n.code}/${n.slug}`]!).getTime() < 24 * 3600_000));
 }
 
 // ---------- quizzes (semesters/<id>/quizzes/<CODE>/<name>.json) ----------
@@ -455,6 +461,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
 
   // ----- automatic prep: one assignment at a time, in the background -----
   const prepState = join(root, ".ouc", "prep-state.json");
+  const readTried = (): Record<string, string> => { try { return JSON.parse(read(prepState, "{}")); } catch { return {}; } };
   type Slot = { id: string; chatId: string; ok?: boolean };
   const transcriber = createTranscriber(root, { ...(opts.whisper && { engine: opts.whisper }), ...(opts.installWhisper && { install: opts.installWhisper }) });
   const prep = { busy: false, again: false, notes: false, force: false, running: [] as Slot[], queue: [] as string[], finished: [] as Slot[], total: 0, done: 0, error: null as string | null };
@@ -467,7 +474,8 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
    * Background work, one AI run at a time: prep packs for assignments without one (on its own when the
    * app starts and after each rebuild) and, when asked (Sync now), notes for every week that has files
    * and no note (one run per course) and quizzes for every class with material and no quiz (one run
-   * per class, unless "autoQuiz": false). An explicit request ignores "autoPrep": false and recent attempts.
+   * per class, unless "autoQuiz": false), then sources for notes made before notes cited them (one run per
+   * note, once a day at most). An explicit request ignores "autoPrep": false and recent attempts.
    */
   async function catchUp({ notes = false, force = false } = {}) {
     if (prep.busy) { prep.again = true; prep.notes ||= notes; prep.force ||= force; return; }
@@ -483,8 +491,7 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
         if (!st.ready) { prep.error = st.reason || "Your AI isn't signed in."; break; }   // try again on the next rebuild
         const semId = currentSemesterId(root);
         if (!semId) break;
-        let tried: Record<string, string> = {};
-        try { tried = JSON.parse(read(prepState, "{}")); } catch { /* start fresh */ }
+        const tried = readTried();
         let data = loadData(root, semId);
         if (wantNotes) {
           // transcripts first for the weeks about to get notes (the notes are made from them)
@@ -503,6 +510,9 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
           // the interactive version of each new assignment (unless "autoHomework": false)
           ...(cfg.autoHomework !== false ? needsHomework(root, semId, data, forced ? {} : tried)
             .map((a) => ({ id: `homework:${a.id}`, body: { action: "make-homework", params: { assignment: a.id } } })) : []),
+          // sources for notes made before notes cited their material (last: the rest matters more)
+          ...(wantNotes ? needsSources(data, tried)
+            .map((n) => ({ id: `sources:${n.code}/${n.slug}`, body: { action: "make-notes", params: { note: `${n.code}/${n.slug}` } } })) : []),
         ];
         prep.queue = jobs.map((j) => j.id);
         prep.total = jobs.length; prep.done = 0; prep.error = null; prep.finished = [];
@@ -804,15 +814,15 @@ export function createAiApi(root: string, opts: AiApiOptions = {}): AiApi {
     catchUp();
     transcriber.run();   // videos and narrated slides without a transcript, one at a time
   };
-  /** Sync now: make the missing notes and prep packs (returns how many it will make). */
+  /** Sync now: make the missing notes and prep packs, and add sources to old notes (returns how many it will make). */
   handler.catchUp = () => {
     const semId = currentSemesterId(root);
-    let todo = { notes: 0, prep: 0, quizzes: 0 };
+    let todo = { notes: 0, prep: 0, quizzes: 0, sources: 0 };
     try {
       if (!semId) throw new Error("no semester");
       const data = loadData(root, semId);
       const cfg = loadConfig(root);
-      todo = { notes: weeksWithoutNotes(data, data.courses).length, prep: needsPrep(root, semId, data).length, quizzes: cfg?.autoQuiz === false ? 0 : quizzesToMake(semId, data).length };
+      todo = { notes: weeksWithoutNotes(data, data.courses).length, prep: needsPrep(root, semId, data).length, quizzes: cfg?.autoQuiz === false ? 0 : quizzesToMake(semId, data).length, sources: needsSources(data, readTried()).length };
     } catch { /* no data yet */ }
     catchUp({ notes: true, force: true });
     return todo;

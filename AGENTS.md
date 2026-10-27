@@ -30,7 +30,7 @@ semesters/<id>/       ← personal, git-ignored
   semester.json       course registry
   _meta/              eclass-meta.json (course structure), submissions.json, live.json, dates.json (exams and other important dates the student adds; older exams.json is read until then), resources.json (study links)
   courses/<course>/NN-<week>/   original eClass files, class videos included; *.transcript.md next to a video or narrated .pptx = its transcript (base for notes)
-  text/               plain-text copies of every PDF/PPTX/DOCX/notebook. **grep these**
+  text/               plain-text copies of every PDF/PPTX/DOCX/notebook (pages marked `--- page N ---`, slides `--- slide N ---`). **grep these**
   assignments/<CODE>/<MM-DD>_<name>/   brief files, my-submission/, README.md (working notes), PREP.md (AI prep pack), review/ (drafts uploaded for review: vN.docx, vN.md text, REVIEW-vN.md, approved PDF), homework/ (interactive version: tasks.json, the student's answers.json, the AI's check.json and polish/ wordings; format: docs/HOMEWORK_FORMAT.md)
   notes/<CODE>/*.md   visual notes (format: docs/NOTE_FORMAT.md)
   quizzes/<CODE>/*.json  scored quizzes on the course's topics (format: docs/QUIZ_FORMAT.md); quizzes/attempts.json = the student's scores

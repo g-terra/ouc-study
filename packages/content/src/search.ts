@@ -161,7 +161,7 @@ export function transcriptParts(md: string): Part[] {
   return out;
 }
 
-/** A text copy made by tools/extract_text.py: "--- slide N ---" sections for slides, form feeds between PDF pages. */
+/** A text copy made by tools/extract_text.py: "--- slide N ---" sections for slides, form feeds between PDF pages (each under a "--- page N ---" line). */
 export function textCopyParts(txt: string, ext: string): Part[] {
   if (ext === "pptx" || /^--- slide \d+ ---/m.test(txt)) {
     // split() keeps the slide numbers: [before, n1, text1, n2, text2, …]
@@ -173,7 +173,9 @@ export function textCopyParts(txt: string, ext: string): Part[] {
     }
     return out;
   }
-  if (txt.includes("\f")) return txt.split("\f").flatMap((p, i) => paragraphs(p).map((x) => ({ ...x, page: i + 1 })));
+  if (txt.includes("\f") || /^--- page \d+ ---$/m.test(txt)) {
+    return txt.split("\f").flatMap((p, i) => paragraphs(p.replace(/^--- page \d+ ---$/m, "")).map((x) => ({ ...x, page: i + 1 })));
+  }
   return paragraphs(txt);
 }
 

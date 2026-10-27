@@ -1,14 +1,29 @@
 /** File paths in Markdown (AI replies, prep packs, notes) → links to the app's pages and the files. */
 
+import { stamp, timeOf } from "./transcript";
+
 const enc = (s: string) => s.split("/").map(encodeURIComponent).join("/");
 const TOP = /^(notes|courses|assignments|text|plans|research|updates|_meta|visuals)\//;
+/** A spot in a file a note cites: "#page=12", "#page=12-14", "#slide=5", "#t=12:03" (a video or transcript). */
+interface Spot { kind: "page" | "slide" | "t"; from: number; to?: number }
+const SPOT = /#(page|slide|t)=(\d+(?::\d{2}){0,2})(?:\s*[-–]\s*(\d+(?::\d{2}){0,2}))?$/;
+function splitSpot(path: string): [string, Spot | null] {
+  const m = path.match(SPOT);
+  if (!m) return [path, null];
+  const kind = m[1] as Spot["kind"];
+  const num = (s?: string) => (s === undefined ? undefined : kind === "t" ? timeOf(s) ?? Number(s) : Number(s));
+  return [path.slice(0, m.index), { kind, from: num(m[2])!, to: num(m[3]) }];
+}
+
 /**
  * Where a path an agent wrote or named opens in the app: a note page, an assignment page, or the file
  * itself (in a new tab). Takes repo-relative or absolute paths, and paths inside the semester folder
- * when `sem` is given ("notes/COS514/x.md"). Null when the app can't open it.
+ * when `sem` is given ("notes/COS514/x.md"). A cited spot at the end opens the PDF at that page, the
+ * slide viewer at that slide, or the video page at that moment. Null when the app can't open it.
  */
 export function fileLink(path: string, sem?: string): { to: string; internal: boolean } | null {
-  let p = path.trim().replace(/^\.\//, "").replace(/[),.;:]+$/, "");
+  const [p0, spot] = splitSpot(path.trim().replace(/[),.;]+$/, ""));
+  let p = p0.replace(/^\.\//, "").replace(/[),.;:]+$/, "");
   const at = p.indexOf("semesters/");
   if (at > 0 && p[at - 1] === "/") p = p.slice(at);   // an absolute path inside the study folder
   else if (sem && TOP.test(p)) p = `semesters/${sem}/${p}`;
@@ -24,8 +39,11 @@ export function fileLink(path: string, sem?: string): { to: string; internal: bo
   if (asg) return { to: `/${encodeURIComponent(s)}/assignments/${encodeURIComponent(asg[1])}/${encodeURIComponent(asg[2])}`, internal: true };
   if (!/\.\w{1,6}$/.test(rest)) return null;   // a folder
   const href = `/files/${s}/${enc(rest)}`;
-  const page = slidesPage(href) ?? videoPage(href);
-  return page ? { to: page, internal: true } : { to: href, internal: false };
+  if (spot?.kind === "t" && /\.transcript\.md$/i.test(rest)) return { to: `/${s}/video/${encodeURIComponent(rest)}#t=${spot.from}`, internal: true };
+  const slides = slidesPage(href), video = videoPage(href);
+  if (slides) return { to: slides + (spot?.kind === "slide" ? `#${spot.from}` : ""), internal: true };
+  if (video) return { to: video + (spot?.kind === "t" ? `#t=${spot.from}` : ""), internal: true };
+  return { to: href + (spot?.kind === "page" && /\.pdf$/i.test(rest) ? `#page=${spot.from}` : ""), internal: false };
 }
 
 /** PowerPoint files open in the app's slide viewer: /files/<sem>/<path>.pptx → /<sem>/slides/<path>. Null for other files. */
@@ -53,10 +71,20 @@ export function transcriptPage(it: { href?: string; transcript?: string; externa
   try { return m ? `/${m[1]}/video/${encodeURIComponent(decodeURIComponent(m[2]))}` : it.transcript ?? ""; } catch { return it.transcript ?? ""; }
 }
 
-/** What a link to a path shows: the file (or folder) name; a note's slug, an assignment's folder, "Week 42 plan". */
+/** "p. 12", "pp. 12–14", "slide 5", "at 12:03": where a citation points. */
+function spotLabel(s: Spot): string {
+  if (s.kind === "t") return `at ${stamp(s.from)}`;
+  const range = s.to !== undefined && s.to !== s.from;
+  const what = s.kind === "page" ? (range ? "pp." : "p.") : range ? "slides" : "slide";
+  return `${what} ${s.from}${range ? `–${s.to}` : ""}`;
+}
+
+/** What a link to a path shows: the file (or folder) name; a note's slug, an assignment's folder, "Week 42 plan"; a citation adds its spot ("Reading.pdf, p. 12"). */
 export function linkLabel(path: string, l = fileLink(path)): string {
-  const parts = path.trim().replace(/[),.;:]+$/, "").replace(/\/+$/, "").split("/");
+  const [bare, spot] = splitSpot(path.trim().replace(/[),.;]+$/, ""));
+  const parts = bare.replace(/[),.;:]+$/, "").replace(/\/+$/, "").split("/");
   const name = parts.pop() || path;
+  if (spot) return spot.kind === "t" ? `${name.replace(/\.transcript\.md$/i, "")} ${spotLabel(spot)}` : `${name}, ${spotLabel(spot)}`;
   if (!l?.internal) return name;
   if (/^(README|PREP)\.md$/.test(name)) return parts.pop() ?? name;
   const wk = name.match(/^\d{4}-W(\d{1,2})\.md$/);
@@ -81,3 +109,6 @@ export function linkPaths(html: string, sem?: string): string {
       return l ? `<a href="${attr(l.to)}"${l.internal ? " data-internal" : ' target="_blank" rel="noreferrer"'} title="${attr(path)}"><code>${attr(name).replace(/</g, "&lt;")}</code></a>` : all;
     });
 }
+
+/** A Panopto viewer link that starts at `sec`. */
+export const panoptoAt = (url: string, sec: number) => { try { const u = new URL(url); u.searchParams.set("start", String(Math.floor(sec))); return u.toString(); } catch { return url; } };

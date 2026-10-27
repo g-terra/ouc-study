@@ -38,3 +38,11 @@ where:
   - ['P(w_i \mid c)', word likelihood under that class]
 note: The evidence term is the same for every class, so it is left out.
 ```
+
+> [!SOURCE]
+> `courses/DEMO101-Demo-Studies/01-Week-1-Getting-started/Demo lecture.pptx#slide=2`, `courses/DEMO101-Demo-Studies/01-Week-1-Getting-started/Video-Welcome-to-the-demo/Welcome.mp4#t=0:30`
+
+## Sources
+
+- `courses/DEMO101-Demo-Studies/01-Week-1-Getting-started/Demo lecture.pptx#slide=1-2`: the demo lecture
+- `courses/DEMO101-Demo-Studies/01-Week-1-Getting-started/Video-Welcome-to-the-demo/Welcome.transcript.md#t=0:30`: what the welcome video says

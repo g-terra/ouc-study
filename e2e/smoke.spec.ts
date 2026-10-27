@@ -370,3 +370,25 @@ test("while the AI works on a message, the chat says it's thinking", async ({ pa
   answer();
   await expect(page.getByText("Hi! How can I help?")).toBeVisible();
 });
+
+test("a note cites where each point comes from, and a citation opens the slide or the moment in the video", async ({ page }) => {
+  await page.goto(`${SEM}/notes/DEMO101/week-01-getting-started`);
+  const slide = page.getByRole("link", { name: "Demo lecture.pptx, slide 2" });
+  await expect(page.getByText("From the material")).toBeVisible();
+  await slide.click();
+  await expect(page).toHaveURL(/\/slides\/.*Demo%20lecture\.pptx#2$/);
+  await expect(page.getByTestId("slide-counter").or(page.getByText("can't be shown here yet"))).toBeVisible({ timeout: 60_000 });
+  if (await page.getByTestId("slide-counter").isVisible()) await expect(page.getByTestId("slide-counter")).toHaveText("Slide 2 / 2");
+  await page.goBack();
+
+  await page.getByRole("link", { name: "Welcome.mp4 at 0:30" }).click();
+  await expect(page).toHaveURL(/\/video\/.*Welcome\.mp4#t=30$/);
+  await expect(page.getByTestId("transcript").getByRole("button", { name: /0:30 Next, open the lecture slides/ })).toHaveAttribute("aria-current", "true");
+  await page.goBack();
+
+  // citing the transcript works too: the video plays beside it, from that moment
+  await page.getByRole("link", { name: "Welcome at 0:30" }).click();
+  await expect(page).toHaveURL(/\/video\/.*Welcome\.transcript\.md#t=30$/);
+  await expect(page.getByTestId("class-video")).toHaveAttribute("src", /Video-Welcome-to-the-demo\/Welcome\.mp4$/);
+  await expect(page.getByTestId("transcript").getByRole("button", { name: /0:30 Next, open the lecture slides/ })).toHaveAttribute("aria-current", "true");
+});

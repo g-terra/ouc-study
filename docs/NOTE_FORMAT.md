@@ -22,11 +22,38 @@ tags: action potential, ion channels, ODEs
 1. `> [!IDEA] Big idea`: the one-paragraph takeaway.
 2. `## Key concepts`: a `cards` block (3–6 cards).
 3. `## How it fits together`: a `mermaid` diagram (flow, cycle or concept map).
-4. Topic sections: use `compare`, `steps`, `formula` and short Markdown.
+4. Topic sections: use `compare`, `steps`, `formula` and short Markdown. End each with a `> [!SOURCE]` line citing where its points come from (see [Sources](#sources)).
 5. `## Key terms`: a `terms` block.
 6. `## Check yourself`: a `flashcards` block (4–6 cards; hints, not assignment answers).
 7. `> [!LINK] Connects to`: links to other weeks and courses. Name course files and other notes by their repo-relative path in `backticks` (e.g. `semesters/2026-Fall/notes/COS512/week-04-transformers.md`); the app turns them into links showing just the file name.
 8. `## Go deeper`: a `links` block.
+9. `## Sources`: a list of every course file the note was made from, each with the spots used.
+
+## Sources
+
+Every point should be traceable to the material. Cite a file by its path (from the semester folder, or the repo) in `backticks`, with the spot at the end:
+
+| Material | Cite | Opens |
+|---|---|---|
+| PDF | `courses/…/Reading.pdf#page=12` (or `#page=12-14`) | the PDF at that page |
+| Slides (.pptx) | `courses/…/Lecture 3.pptx#slide=5` (or `#slide=5-7`) | the app's slide viewer at that slide |
+| Class video | `courses/…/Lecture 3.mp4#t=12:03` | the video page, playing from that moment |
+| A recording that is only a link (Panopto) | `courses/…/Lecture 2.transcript.md#t=12:03` | its transcript at that line, with "Watch on Panopto" from that moment |
+| Other files (.docx, notebooks) | the path alone | the file |
+
+The app shows each citation as the file's name and the spot ("Reading.pdf, p. 12", "Lecture 3 at 12:03").
+Where the numbers come from: PDF pages are the `--- page N ---` lines in the text copies (`<sem>/text/`), slides the `--- slide N ---` lines or a deck transcript's `## Slide N`, times a video transcript's `[mm:ss]` stamps. Never guess a spot: cite the file alone when you can't tell.
+
+```md
+> [!SOURCE]
+> `courses/COS514-…/04-…/Lecture 3.pptx#slide=4-6`, `courses/COS514-…/04-…/Lecture 3.mp4#t=14:20`
+
+## Sources
+
+- `courses/COS514-…/04-…/Lecture 3.pptx#slide=1-22`: the lecture slides
+- `courses/COS514-…/04-…/Lecture 3.mp4#t=0:00`: the recorded class
+- `courses/COS514-…/00-General/Textbook ch2.pdf#page=31-38`: the reading
+```
 
 ## Math
 
@@ -41,7 +68,7 @@ followed by "au". `node packages/ai/validate.mjs <file>` flags it, and `--fix` r
 > Text with **markdown** and $math$.
 ```
 
-Kinds: `IDEA` 💡, `KEY` 🔑, `TIP` ✅, `WARN` ⚠️, `EXAM` 🎯, `ANALOGY` 🧠, `LINK` 🔗.
+Kinds: `IDEA` 💡, `KEY` 🔑, `TIP` ✅, `WARN` ⚠️, `EXAM` 🎯, `ANALOGY` 🧠, `LINK` 🔗, `SOURCE` 📄 (a quiet line, for citations).
 
 ## Visual blocks (fenced, YAML inside)
 

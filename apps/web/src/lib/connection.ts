@@ -21,7 +21,7 @@ export function refreshConnection(fresh = false) {
   return inflight;
 }
 
-export async function syncNow(): Promise<{ ok: boolean; found?: number; error?: string; ai?: { notes: number; prep: number; quizzes?: number } }> {
+export async function syncNow(): Promise<{ ok: boolean; found?: number; error?: string; ai?: { notes: number; prep: number; quizzes?: number; sources?: number } }> {
   set({ ...current, syncing: true, progress: { step: 1 } });
   // follow its steps while it runs (the status answer carries them)
   const poll = window.setInterval(() => {
