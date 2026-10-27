@@ -16,6 +16,7 @@ function repo(): string {
   const root = mkdtempSync(join(tmpdir(), "ouc-guard-"));
   const git = (...a: string[]) => execFileSync("git", a, { cwd: root, stdio: "ignore" });
   git("init", "-q");
+  git("config", "core.autocrlf", "false");   // Windows CI would restore files with \r\n
   writeFileSync(join(root, ".gitignore"), "semesters/\n");
   writeFileSync(join(root, "app.ts"), "export const x = 1;\n");
   writeFileSync(join(root, "mine.ts"), "export const y = 1;\n");
