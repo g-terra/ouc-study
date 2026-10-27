@@ -120,8 +120,8 @@ test("a semester's documents open at the right moment", () => {
   assert.ok(att.some((h) => h.kind === "assignment" && h.to === "/2026-Demo/assignments/DEMO101/10-01_A1"));
 
   const pdf = search(docs, "chunking", data).find((h) => h.kind === "file")!;
-  assert.equal(pdf.to, "/files/2026-Demo/courses/DEMO101-Demo/01-Week-1/Reading.pdf#page=2");
-  assert.equal(pdf.external, true);
+  assert.equal(pdf.to, "/2026-Demo/pdf/courses%2FDEMO101-Demo%2F01-Week-1%2FReading.pdf#page=2", "a PDF opens in the app's viewer at the page");
+  assert.equal(pdf.external, undefined);
   assert.ok(search(docs, "chunking", data).some((h) => h.kind === "assignment"), "working notes are searched");
 
   const note = search(docs, "WORKING memory", data)[0]!;

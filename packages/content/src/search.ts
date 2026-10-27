@@ -23,7 +23,7 @@ export interface SearchDoc {
   weekIndex?: number;
   title: string;
   to: string;             // app path, or a /files/… or eClass address when external
-  external?: boolean;     // opens in a new tab (a PDF, an eClass post)
+  external?: boolean;     // opens in a new tab (a Word file, an eClass post)
   /** how a part's position goes into the link: "#t=65" (video), "#3" (slide), "#page=3" (PDF) */
   at?: "time" | "slide" | "page";
   parts: Part[];
@@ -244,11 +244,13 @@ export function semesterDocs(data: SemesterData, semDir: string): SearchDoc[] {
     const known = items.get(orig);
     const code = known?.code ?? data.courses.find((c) => orig.split("/")[1]?.startsWith(c.code))?.code;
     const slides = /^(pptx|ppsx|ppt|pps|odp)$/.test(ext);
+    // slides and PDFs open in the app's viewers, other files (Word, notebooks) in a new tab
+    const viewer = slides ? "slides" : ext === "pdf" ? "pdf" : undefined;
     docs.push({
       kind: slides ? "slides" : "file", code, weekIndex: known?.weekIndex,
       title: known?.item.title ?? orig.split("/").pop()!.replace(/\.\w+$/, "").replace(/[_-]+/g, " "),
-      to: slides ? `${base}/slides/${enc(orig)}` : `${files}${encPath(orig)}`,
-      ...(!slides && { external: true }),
+      to: viewer ? `${base}/${viewer}/${enc(orig)}` : `${files}${encPath(orig)}`,
+      ...(!viewer && { external: true }),
       ...(slides ? { at: "slide" as const } : ext === "pdf" ? { at: "page" as const } : {}),
       parts: readParts(abs, (s) => textCopyParts(s, ext)),
     });

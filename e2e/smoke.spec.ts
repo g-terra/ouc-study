@@ -181,6 +181,23 @@ test("a course's slides open in the slide viewer", async ({ page }) => {
   await expect(page.getByRole("link", { name: /Download/ }).first()).toHaveAttribute("href", /Demo%20lecture\.pptx$/);
 });
 
+test("a course's PDF opens in the app's PDF viewer, not a new tab", async ({ page }) => {
+  await page.goto(`${SEM}/courses/DEMO101`);
+  const link = page.getByRole("link", { name: /Demo reading/ });
+  if (!(await link.isVisible())) await page.getByRole("button", { name: /Getting started/ }).click();
+  await expect(link).not.toHaveAttribute("target", "_blank");
+  await link.click();
+  await expect(page).toHaveURL(/\/pdf\/.*Demo%20reading\.pdf/);
+  await expect(page.getByRole("heading", { name: "Demo reading" })).toBeVisible();
+  await expect(page.getByTestId("slide-counter")).toHaveText("Page 1 / 3");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByTestId("slide-counter")).toHaveText("Page 2 / 3");
+  await expect(page).toHaveURL(/#page=2$/);
+  await page.getByRole("button", { name: "Next page" }).click();
+  await expect(page.getByTestId("slide-counter")).toHaveText("Page 3 / 3");
+  await expect(page.getByRole("link", { name: /Download/ }).first()).toHaveAttribute("href", /Demo%20reading\.pdf$/);
+});
+
 test("a class video opens on its own page, the transcript beside it: a line jumps there, full screen works", async ({ page }) => {
   await page.goto(`${SEM}/courses/DEMO101`);
   const video = page.getByRole("link", { name: /Welcome to the demo/ });
@@ -379,6 +396,10 @@ test("a note cites where each point comes from, and a citation opens the slide o
   await expect(page).toHaveURL(/\/slides\/.*Demo%20lecture\.pptx#2$/);
   await expect(page.getByTestId("slide-counter").or(page.getByText("can't be shown here yet"))).toBeVisible({ timeout: 60_000 });
   if (await page.getByTestId("slide-counter").isVisible()) await expect(page.getByTestId("slide-counter")).toHaveText("Slide 2 / 2");
+  await page.goBack();
+  await page.getByRole("link", { name: "Demo reading.pdf, p. 2" }).click();
+  await expect(page).toHaveURL(/\/pdf\/.*Demo%20reading\.pdf#page=2$/);
+  await expect(page.getByTestId("slide-counter")).toHaveText("Page 2 / 3");
   await page.goBack();
 
   await page.getByRole("link", { name: "Welcome.mp4 at 0:30" }).click();

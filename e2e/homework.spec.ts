@@ -282,9 +282,13 @@ test("Make PDF saves a PDF with the student's eClass name into the assignment's 
   const link = dialog.getByRole("link", { name: "Open the PDF" });
   await expect(link).toBeVisible({ timeout: 60_000 });
   const href = (await link.getAttribute("href"))!;
-  expect(decodeURIComponent(href)).toMatch(/\/assignments\/DEMO101\/09-28_Assignment-1\/my-submission\/Assignment 1 - Demo Student\.pdf$/);
-  const pdf = await page.request.get(href);
+  // it opens in the app's PDF viewer, not a new tab
+  expect(decodeURIComponent(href)).toMatch(/\/pdf\/assignments\/DEMO101\/09-28_Assignment-1\/my-submission\/Assignment 1 - Demo Student\.pdf$/);
+  await expect(link).not.toHaveAttribute("target", "_blank");
+  const pdf = await page.request.get(`/files/2026-Demo/${decodeURIComponent(href.split("/pdf/")[1]).split("/").map(encodeURIComponent).join("/")}`);
   expect((await pdf.body()).subarray(0, 4).toString()).toBe("%PDF");
+  await link.click();
+  await expect(page.getByTestId("slide-counter")).toHaveText(/^Page 1 \/ \d+$/);
 });
 
 test("without an eClass name, Make PDF asks for the name once", async ({ page }) => {

@@ -10,7 +10,7 @@ import { checkAnswers, dismissJob, dropPolish, makeInteractive, makePdf, polishA
 import { isEmptyAnswer } from "../lib/answer-html";
 import { useAiStatus } from "../lib/ai";
 import { useConnection } from "../lib/connection";
-import { Card, Empty, cx } from "../components/ui";
+import { Card, Empty, FileLink, cx } from "../components/ui";
 import { AnswerView, RichEditor } from "../components/RichEditor";
 import { AskAiButton, Markdown } from "../components/Assistant";
 import { WorkLink } from "../components/MakeQuiz";
@@ -105,7 +105,7 @@ export function HomeworkPage({ data, id }: { data: SemesterData; id: string }) {
         <h1 className="font-serif text-3xl font-semibold leading-tight">{a.title}</h1>
         <p className="mt-1 text-sm text-muted">
           {a.due ? <>Due {fmtFull(at(a.due))}{!a.submitted && ` · ${relative(at(a.due))}`}</> : "No due date"}
-          {brief && <> · <a href={brief.href} target="_blank" rel="noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">open the brief</a></>}
+          {brief && <> · <FileLink href={brief.href} className="underline decoration-line underline-offset-2 hover:text-ink">open the brief</FileLink></>}
         </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -521,7 +521,7 @@ function MakePdfButton({ sem, id, title }: { sem: string; id: string; title: str
             {st.pdf && (
               <div className="mb-4 rounded-xl bg-ok-bg p-3 text-sm text-ok">
                 Saved as <b className="break-all">{decodeURIComponent(st.pdf.split("/").pop() ?? "")}</b>.{" "}
-                <a href={st.pdf} target="_blank" rel="noreferrer" className="font-semibold underline">Open the PDF</a>
+                <FileLink href={st.pdf} className="font-semibold underline">Open the PDF</FileLink>
               </div>
             )}
             {st.error && <div role="alert" className="mb-4 rounded-xl bg-bad-bg p-3 text-sm text-bad">{st.error}</div>}

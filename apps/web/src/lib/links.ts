@@ -17,9 +17,10 @@ function splitSpot(path: string): [string, Spot | null] {
 
 /**
  * Where a path an agent wrote or named opens in the app: a note page, an assignment page, or the file
- * itself (in a new tab). Takes repo-relative or absolute paths, and paths inside the semester folder
- * when `sem` is given ("notes/COS514/x.md"). A cited spot at the end opens the PDF at that page, the
- * slide viewer at that slide, or the video page at that moment. Null when the app can't open it.
+ * itself (PDFs, slides and videos in the app's viewers, anything else in a new tab). Takes repo-relative
+ * or absolute paths, and paths inside the semester folder when `sem` is given ("notes/COS514/x.md"). A
+ * cited spot at the end opens the PDF viewer at that page, the slide viewer at that slide, or the video
+ * page at that moment. Null when the app can't open it.
  */
 export function fileLink(path: string, sem?: string): { to: string; internal: boolean } | null {
   const [p0, spot] = splitSpot(path.trim().replace(/[),.;]+$/, ""));
@@ -40,10 +41,11 @@ export function fileLink(path: string, sem?: string): { to: string; internal: bo
   if (!/\.\w{1,6}$/.test(rest)) return null;   // a folder
   const href = `/files/${s}/${enc(rest)}`;
   if (spot?.kind === "t" && /\.transcript\.md$/i.test(rest)) return { to: `/${s}/video/${encodeURIComponent(rest)}#t=${spot.from}`, internal: true };
-  const slides = slidesPage(href), video = videoPage(href);
+  const slides = slidesPage(href), video = videoPage(href), pdf = pdfPage(href);
+  if (pdf) return { to: pdf + (spot?.kind === "page" ? `#page=${spot.from}` : ""), internal: true };
   if (slides) return { to: slides + (spot?.kind === "slide" ? `#${spot.from}` : ""), internal: true };
   if (video) return { to: video + (spot?.kind === "t" ? `#t=${spot.from}` : ""), internal: true };
-  return { to: href + (spot?.kind === "page" && /\.pdf$/i.test(rest) ? `#page=${spot.from}` : ""), internal: false };
+  return { to: href, internal: false };
 }
 
 /** PowerPoint files open in the app's slide viewer: /files/<sem>/<path>.pptx → /<sem>/slides/<path>. Null for other files. */
@@ -51,6 +53,13 @@ export function slidesPage(href?: string): string | null {
   const m = href?.match(/^\/files\/([^/]+)\/(.+\.(?:pptx|ppsx|ppt|pps|odp))$/i);
   if (!m) return null;
   try { return `/${m[1]}/slides/${encodeURIComponent(decodeURIComponent(m[2]))}`; } catch { return null; }
+}
+
+/** PDFs open in the app's PDF viewer: /files/<sem>/<path>.pdf → /<sem>/pdf/<path>. Null for other files. */
+export function pdfPage(href?: string): string | null {
+  const m = href?.match(/^\/files\/([^/]+)\/(.+\.pdf)$/i);
+  if (!m) return null;
+  try { return `/${m[1]}/pdf/${encodeURIComponent(decodeURIComponent(m[2]))}`; } catch { return null; }
 }
 
 /** Class videos open on the app's video page, with the transcript beside them: /files/<sem>/<path>.mp4 → /<sem>/video/<path>. */
