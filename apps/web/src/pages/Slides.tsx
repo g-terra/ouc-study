@@ -28,7 +28,8 @@ const loadPdfjs = () => (pdfjs ??= Promise.all([import("pdfjs-dist/legacy/build/
 const LECTURE = "ouc-slides-lecture";
 const readLecture = () => { try { return localStorage.getItem(LECTURE) === "1"; } catch { return false; } };
 
-export function SlidesPage({ data, file }: { data: SemesterData; file: string }) {
+/** `bare`: inside a class (src/pages/Class.tsx), which shows the course, week and title itself. */
+export function SlidesPage({ data, file, bare = false }: { data: SemesterData; file: string; bare?: boolean }) {
   const base = `/${enc(data.id)}`;
   const parts = file.split("/");
   const name = parts.at(-1)!.replace(/\.\w+$/, "").replace(/_/g, " ");
@@ -101,11 +102,11 @@ export function SlidesPage({ data, file }: { data: SemesterData; file: string })
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted">
-        {course && <Link to={`${base}/courses/${enc(course.code)}${weekIndex !== undefined ? `#w${weekIndex}` : ""}`} aria-label={`Back to ${course.short}${week ? `, ${week}` : ""}`}><CourseBadge course={course} size="md" /></Link>}
-        {week && <span>{week}</span>}
+        {!bare && course && <Link to={`${base}/courses/${enc(course.code)}${weekIndex !== undefined ? `#w${weekIndex}` : ""}`} aria-label={`Back to ${course.short}${week ? `, ${week}` : ""}`}><CourseBadge course={course} size="md" /></Link>}
+        {!bare && week && <span>{week}</span>}
         {info?.download && <a href={info.download} download className="ml-auto hover:text-ink">⬇ Download the .{file.split(".").pop()}</a>}
       </div>
-      <h1 className="mb-5 font-serif text-3xl font-semibold leading-tight tracking-tight">{name}</h1>
+      {!bare && <h1 className="mb-5 font-serif text-3xl font-semibold leading-tight tracking-tight">{name}</h1>}
 
       {!info ? (
         <Card className="p-10 text-center text-muted" >
