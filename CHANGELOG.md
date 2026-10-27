@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.43.0](https://github.com/g-terra/ouc-study/compare/v0.42.0...v0.43.0) (2026-10-27)
+
+
+### Features
+
+* **web:** start a class that goes through a week's materials step by step ([#204](https://github.com/g-terra/ouc-study/issues/204)) ([cd1a6ca](https://github.com/g-terra/ouc-study/commit/cd1a6ca41ffe510ade5e13463a08117d7bb2b137))
+
 ## [0.42.0](https://github.com/g-terra/ouc-study/compare/v0.41.0...v0.42.0) (2026-10-27)
 
 
