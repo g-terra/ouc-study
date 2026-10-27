@@ -13,7 +13,8 @@ import { pct, useAttempts, useQuizJobs } from "../lib/quiz";
 import { DoneBox, DoneCount } from "../components/Progress";
 import { useProgress } from "../lib/progress";
 import { tracked, weekProgress } from "@ouc/content/progress";
-import { Clapperboard, ClipboardList, FileText, GraduationCap, INLINE, NotebookPen, Star, Trash2, Trophy, Video } from "../components/icons";
+import { classLabel, classPath, classSteps, startStep } from "../lib/class";
+import { Clapperboard, ClipboardList, FileText, GraduationCap, INLINE, NotebookPen, Play, Star, Trash2, Trophy, Video } from "../components/icons";
 
 export function Courses({ data }: { data: SemesterData }) {
   const base = `/${enc(data.id)}`;
@@ -237,6 +238,12 @@ export function WeekRow({ w, isOpen, isNow, color, onToggle, base, code, classes
       {isOpen && (
         <div className="px-4 pb-4 pl-[3.75rem]">
           {w.summary && <p className="mb-3 text-sm text-muted">{w.summary}</p>}
+          {classSteps(w).length > 0 && (
+            <Link to={classPath(data.id, code, w.index, startStep(code, w, progress.done) + 1)}
+              className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-sm font-semibold text-white">
+              <Play aria-hidden className="size-3.5" />{classLabel(doneCount)}
+            </Link>
+          )}
           {classes.map((x) => (
             <div key={x.at} className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
               <span className={cx(x.status === "cancelled" && "line-through")}><Video aria-hidden className={INLINE} /> Live class {fmtDay(at(x.at))}, {fmtTime(at(x.at))}</span>
