@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.0](https://github.com/g-terra/ouc-study/compare/v0.43.0...v0.44.0) (2026-10-27)
+
+
+### Features
+
+* **web:** preview PDFs in the app instead of a new tab ([#205](https://github.com/g-terra/ouc-study/issues/205)) ([710e60a](https://github.com/g-terra/ouc-study/commit/710e60a4290c09154c0387f9a6304f8b9e21cb53))
+
 ## [0.43.0](https://github.com/g-terra/ouc-study/compare/v0.42.0...v0.43.0) (2026-10-27)
 
 
