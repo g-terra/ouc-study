@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.45.0](https://github.com/g-terra/ouc-study/compare/v0.44.1...v0.45.0) (2026-11-03)
+
+
+### Features
+
+* **web:** picture sizes in homework answers and smart picture sizing in the PDF ([#212](https://github.com/g-terra/ouc-study/issues/212)) ([1d031f8](https://github.com/g-terra/ouc-study/commit/1d031f85dfb435a4936fea6ff4c0008ef2bc22d3))
+
 ## [0.44.1](https://github.com/g-terra/ouc-study/compare/v0.44.0...v0.44.1) (2026-10-27)
 
 
