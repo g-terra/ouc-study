@@ -88,7 +88,7 @@ test("an answer that starts with a picture opens as a picture, not as code, afte
   await timeline.getByRole("button", { name: /Favourite part/ }).click();
   await timeline.getByRole("button", { name: /Your demo week/ }).click();
   const box = page.getByRole("textbox", { name: "Your answer" });
-  await expect(box.locator("img")).toHaveCount(1);
+  await expect(box.locator("img[src]")).toHaveCount(1);
   await expect(box).toHaveText("after the picture");
 });
 
@@ -202,13 +202,13 @@ test("a picture can be added to an answer and is still there after a reload", as
   const box = page.getByRole("textbox", { name: "Your answer" });
   await box.click();
   await page.getByLabel("Add a picture").setInputFiles({ name: "photo.png", mimeType: "image/png", buffer: PIXEL });
-  const img = box.locator("img");
+  const img = box.locator("img[src]");
   await expect(img).toHaveCount(1);
   await expect(img).toHaveAttribute("src", /\/files\/2026-Demo\/assignments\/DEMO101\/09-28_Assignment-1\/homework\/images\/[0-9a-f]{16}\.png$/);
   await expect(page.getByTestId("save-state")).toHaveText("Saved");
   await page.reload();
   await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
-  const again = page.getByRole("textbox", { name: "Your answer" }).locator("img");
+  const again = page.getByRole("textbox", { name: "Your answer" }).locator("img[src]");
   await expect(again).toHaveCount(1);
   await expect.poll(() => again.evaluate((el) => (el as unknown as { naturalWidth: number }).naturalWidth)).toBe(1);
 });
@@ -221,9 +221,9 @@ test("a picture in an answer can be made smaller or bigger, and prints at that s
   await box.click();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.press("Backspace");
-  await expect(box.locator("img")).toHaveCount(0);
+  await expect(box.locator("img[src]")).toHaveCount(0);
   await page.getByLabel("Add a picture").setInputFiles({ name: "photo.png", mimeType: "image/png", buffer: PIXEL });
-  const img = box.locator("img");
+  const img = box.locator("img[src]");
   await expect(img).toHaveCount(1);
   const sizes = page.getByRole("group", { name: "Picture size" });
   await img.click();
@@ -234,12 +234,46 @@ test("a picture in an answer can be made smaller or bigger, and prints at that s
   await expect(page.getByTestId("save-state")).toHaveText("Saved");
   await page.reload();
   await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
-  await expect(page.getByRole("textbox", { name: "Your answer" }).locator("img")).toHaveAttribute("data-size", "small");
+  await expect(page.getByRole("textbox", { name: "Your answer" }).locator("img[src]")).toHaveAttribute("data-size", "small");
   await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student");
   const printed = page.locator(".answer-text img[data-size=small]");
   await expect(printed).toHaveCount(1);
   const [w, page_] = await Promise.all([printed.evaluate((el) => el.getBoundingClientRect().width), page.locator(".homework-print .answer-text").first().evaluate((el) => el.getBoundingClientRect().width)]);
   expect(Math.abs(w / page_ - 0.25)).toBeLessThan(0.02);
+});
+
+test("a page break in an answer starts a new page in the PDF, and two pictures can sit side by side", async ({ page }) => {
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  const box = page.getByRole("textbox", { name: "Your answer" });
+  await box.click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type("Before the break");
+  await page.getByRole("button", { name: "Page break" }).click();
+  await expect(box.locator("[data-page-break]")).toHaveCount(1);
+  await page.keyboard.type("After the break");
+  await page.keyboard.press("Enter");
+  await page.getByLabel("Add a picture").setInputFiles([{ name: "a.png", mimeType: "image/png", buffer: PIXEL }, { name: "b.png", mimeType: "image/png", buffer: PIXEL }]);
+  await expect(box.locator("img[src]")).toHaveCount(2);
+  for (const n of [0, 1]) {
+    await box.locator("img[src]").nth(n).click();
+    await page.getByRole("group", { name: "Picture size" }).getByRole("button", { name: "Medium" }).click();
+  }
+  await expect(box.locator("img[data-size=medium]")).toHaveCount(2);
+  await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  await page.reload();
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  await expect(page.getByRole("textbox", { name: "Your answer" }).locator("[data-page-break]")).toHaveCount(1);
+  await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student");
+  await expect(page.locator(".homework-print[data-fitted]")).toHaveCount(1);
+  // the two medium pictures share a line
+  const imgs = page.locator(".answer-text img[data-size=medium]");
+  const [a, b] = await Promise.all([imgs.nth(0).boundingBox(), imgs.nth(1).boundingBox()]);
+  expect(Math.abs(a!.y - b!.y)).toBeLessThan(2);
+  expect(b!.x).toBeGreaterThan(a!.x + a!.width - 1);
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator(".answer-text [data-page-break]")).toHaveCSS("break-after", "page");
 });
 
 test("the PDF sizes pictures to the page: a picture taller than a page is cut down to fit on one", async ({ page }) => {
@@ -317,8 +351,12 @@ test("the print page shows the name, the title, every task in full and the answe
   await expect(page.getByRole("region", { name: "Question 2" })).toHaveCSS("border-top-style", "solid");
   await expect(page.getByText("Which part of the demo week did you like most?")).toBeVisible();
   await expect(page.locator(".katex").first()).toBeVisible();
+  // a question that fits on a page isn't split across two: it moves whole to the next page
+  await expect(page.locator(".homework-print[data-fitted]")).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Question 1" })).toHaveAttribute("data-keep", "1");
   // a long homework's last page is white below the answers too (the page behind the paper is the app's background)
   await page.emulateMedia({ media: "print" });
+  await expect(page.getByRole("region", { name: "Question 1" })).toHaveCSS("break-inside", "avoid");
   await expect(page.locator("html")).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 

@@ -5,7 +5,7 @@ import { useHomework } from "../lib/homework";
 import { mdToHtml } from "../lib/markdown";
 import { AnswerView } from "../components/RichEditor";
 import { cx } from "../components/ui";
-import { fitPictures } from "../lib/print-fit";
+import { fitSections, type Placed } from "../lib/print-fit";
 
 const LETTERS = "ABCDEFGH";
 // the PDF is A4 with 12 mm margins (index.css), and the page is laid out at that width on screen too, so the
@@ -31,7 +31,7 @@ export function HomeworkPrint({ sem, id }: { sem: string; id: string }) {
     if (!ready) return;
     let gone = false;
     const t = setTimeout(async () => {   // after the formulas and pictures are drawn
-      const imgs = [...(paper.current?.querySelectorAll<HTMLImageElement>(".answer-text img") ?? [])];
+      const imgs = [...(paper.current?.querySelectorAll<HTMLImageElement>(".answer-text img[src]") ?? [])];
       await Promise.all([document.fonts?.ready, ...imgs.map((i) => i.decode().catch(() => {}))]);
       if (gone || !paper.current) return;
       fitToPages(paper.current, imgs);
@@ -68,7 +68,7 @@ export function HomeworkPrint({ sem, id }: { sem: string; id: string }) {
           const ans = answers[t.id] ?? {};
           const none = <p className="text-[#6e6a62]">No answer.</p>;
           return (
-            <section key={t.id} aria-label={`Question ${i + 1}`} className={cx("py-5", i > 0 && "border-t border-[#d8d3c8]")}>
+            <section key={t.id} data-question aria-label={`Question ${i + 1}`} className={cx("py-5", i > 0 && "border-t border-[#d8d3c8]")}>
               <div className="mb-3 flex gap-2 font-semibold break-inside-avoid break-after-avoid">
                 <span>{i + 1}.</span>
                 <div className="md min-w-0 flex-1 [&>*:first-child]:mt-0" dangerouslySetInnerHTML={{ __html: mdToHtml(t.question, sem) }} />
@@ -114,15 +114,39 @@ function Explanation({ html }: { html: string }) {
 }
 
 /**
- * Smart picture sizing: a picture that wouldn't fit in the room left on its page shrinks into it (when it stays
- * big enough) instead of jumping to the next page and leaving a gap, and none is taller than a page.
+ * Lays the questions out on A4 pages before printing: a question that fits on a page is kept whole (data-keep), its
+ * pictures shrinking a little when that saves moving it to the next page; a longer one splits, a picture that
+ * wouldn't fit in the room left shrinking into it (when it stays big enough) instead of leaving a gap. No picture
+ * is taller than a page, and pictures side by side shrink together.
  */
 function fitToPages(paper: HTMLElement, imgs: HTMLImageElement[]) {
   const top = paper.getBoundingClientRect().top;
-  const placed = imgs.map((i) => { const r = i.getBoundingClientRect(); return { top: r.top - top, height: r.height, width: r.width }; });
-  fitPictures(placed, PAGE_HEIGHT).forEach((h, n) => {
-    if (h === null) return;
-    imgs[n].style.width = `${(placed[n].width * h) / placed[n].height}px`;
-    imgs[n].style.height = `${h}px`;
+  type Row = Placed & { imgs: { el: HTMLImageElement; width: number; height: number }[] };
+  const els = [...paper.querySelectorAll<HTMLElement>("section[data-question]")];
+  const sections = els.map((sec) => {
+    const box = sec.getBoundingClientRect();
+    const rows: Row[] = [];
+    for (const el of sec.querySelectorAll<HTMLElement>(".answer-text img[src], .answer-text [data-page-break]")) {
+      const r = el.getBoundingClientRect();
+      if (el.tagName !== "IMG") { rows.push({ top: r.bottom - top, height: 0, pageBreak: true, imgs: [] }); continue; }
+      if (!imgs.includes(el as HTMLImageElement)) continue;
+      const last = rows[rows.length - 1];
+      const pic = { el: el as HTMLImageElement, width: r.width, height: r.height };
+      if (last && !last.pageBreak && Math.abs(last.top - (r.top - top)) < 2) { last.imgs.push(pic); last.height = Math.max(last.height, r.height); }
+      else rows.push({ top: r.top - top, height: r.height, imgs: [pic] });
+    }
+    return { top: box.top - top, height: box.height, items: rows };
+  });
+  const { keep, heights } = fitSections(sections, PAGE_HEIGHT);
+  sections.forEach((sec, n) => {
+    if (keep[n]) els[n].dataset.keep = "1";
+    heights[n].forEach((h, k) => {
+      const row = sec.items[k];
+      if (h === null || !row.height) return;
+      for (const p of row.imgs) {
+        p.el.style.width = `${(p.width * h) / row.height}px`;
+        p.el.style.height = `${(p.height * h) / row.height}px`;
+      }
+    });
   });
 }
