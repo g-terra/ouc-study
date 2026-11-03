@@ -213,6 +213,56 @@ test("a picture can be added to an answer and is still there after a reload", as
   await expect.poll(() => again.evaluate((el) => (el as unknown as { naturalWidth: number }).naturalWidth)).toBe(1);
 });
 
+test("a picture in an answer can be made smaller or bigger, and prints at that size", async ({ page }) => {
+  await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  const box = page.getByRole("textbox", { name: "Your answer" });
+  // the demo answers are shared with the other tests: start from an empty answer
+  await box.click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await expect(box.locator("img")).toHaveCount(0);
+  await page.getByLabel("Add a picture").setInputFiles({ name: "photo.png", mimeType: "image/png", buffer: PIXEL });
+  const img = box.locator("img");
+  await expect(img).toHaveCount(1);
+  const sizes = page.getByRole("group", { name: "Picture size" });
+  await img.click();
+  await expect(sizes.getByRole("button", { name: "Own size" })).toHaveAttribute("aria-pressed", "true");
+  await sizes.getByRole("button", { name: "Small" }).click();
+  await expect(img).toHaveAttribute("data-size", "small");
+  await expect(sizes.getByRole("button", { name: "Small" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("save-state")).toHaveText("Saved");
+  await page.reload();
+  await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
+  await expect(page.getByRole("textbox", { name: "Your answer" }).locator("img")).toHaveAttribute("data-size", "small");
+  await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student");
+  const printed = page.locator(".answer-text img[data-size=small]");
+  await expect(printed).toHaveCount(1);
+  const [w, page_] = await Promise.all([printed.evaluate((el) => el.getBoundingClientRect().width), page.locator(".homework-print .answer-text").first().evaluate((el) => el.getBoundingClientRect().width)]);
+  expect(Math.abs(w / page_ - 0.25)).toBeLessThan(0.02);
+});
+
+test("the PDF sizes pictures to the page: a picture taller than a page is cut down to fit on one", async ({ page }) => {
+  const tall = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="40" viewBox="0 0 10 40"><rect width="10" height="40" fill="#888"/></svg>';
+  await page.route("**/files/**/homework/images/tall.svg", (r) => r.fulfill({ contentType: "image/svg+xml", body: tall }));
+  await page.route("**/api/homework?*", async (route) => {
+    const res = await route.fetch();
+    const data = await res.json();
+    data.answers["DEMO101/09-28_Assignment-1"] = { 1: { text: '<p>Before</p><img src="/files/2026-Demo/assignments/DEMO101/09-28_Assignment-1/homework/images/tall.svg" alt="tall" data-size="full"><p>After</p>' } };
+    return route.fulfill({ response: res, json: data });
+  });
+  await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student");
+  await expect(page.locator(".homework-print[data-fitted]")).toHaveCount(1);
+  const img = page.locator(".answer-text img[alt=tall]");
+  // one A4 page inside the 12 mm margins is 273 mm = about 1032 px
+  const h = await img.evaluate((el) => el.getBoundingClientRect().height);
+  expect(h).toBeLessThanOrEqual(1032);
+  expect(h).toBeGreaterThan(300);
+  // it keeps its shape
+  const w = await img.evaluate((el) => el.getBoundingClientRect().width);
+  expect(Math.abs(h / w - 4)).toBeLessThan(0.1);
+});
+
 test("what was typed while the app server couldn't save it comes back after a reload, and is then saved", async ({ page }) => {
   await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
   await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();

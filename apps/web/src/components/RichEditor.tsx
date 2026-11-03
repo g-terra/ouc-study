@@ -10,6 +10,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import katex from "katex";
+import { PICTURE_SIZES } from "../lib/print-fit";
 import { FORMULA_SNIPPETS, insertSnippet, toEditorHtml } from "../lib/answer-html";
 import { AlignCenter, AlignLeft, AlignRight, Code, ImagePlus, List, ListOrdered, SquareCode } from "./icons";
 import { cx } from "./ui";
@@ -39,12 +40,22 @@ const Formula = Node.create({
   },
 });
 
+/** A picture in an answer, with the size the student picked (data-size; none = its own size, up to the full width). */
+const Picture = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      size: { default: null, parseHTML: (el) => el.getAttribute("data-size"), renderHTML: (a) => (a.size ? { "data-size": a.size } : {}) },
+    };
+  },
+});
+
 // code blocks get syntax colours; with no language set, lowlight guesses it
 const lowlight = createLowlight(common);
 
 const EXTENSIONS = [
   StarterKit.configure({ heading: false, codeBlock: false, horizontalRule: false, link: false }),
-  TextStyle, Color, Highlight, Formula, CodeBlockLowlight.configure({ lowlight }), Image.configure({ allowBase64: false }),
+  TextStyle, Color, Highlight, Formula, CodeBlockLowlight.configure({ lowlight }), Picture.configure({ allowBase64: false }),
   TextAlign.configure({ types: ["paragraph"], alignments: ["left", "center", "right"] }),
 ];
 
@@ -119,7 +130,9 @@ function Toolbar({ editor, onFormula, onPictures }: { editor: Editor; onFormula:
     editor,
     selector: ({ editor: e }) => ({
       bold: e.isActive("bold"), italic: e.isActive("italic"), underline: e.isActive("underline"), highlight: e.isActive("highlight"),
-      bullet: e.isActive("bulletList"), ordered: e.isActive("orderedList"), code: e.isActive("code"), align: (["center", "right"] as const).find((a) => e.isActive({ textAlign: a })) ?? "left", codeBlock: e.isActive("codeBlock"), color: (e.getAttributes("textStyle").color as string | undefined) ?? null,
+      bullet: e.isActive("bulletList"), ordered: e.isActive("orderedList"), code: e.isActive("code"), align: (["center", "right"] as const).find((a) => e.isActive({ textAlign: a })) ?? "left", codeBlock: e.isActive("codeBlock"),
+      picture: e.state.selection instanceof NodeSelection && e.state.selection.node.type.name === "image" ? { size: (e.state.selection.node.attrs.size as string | null) ?? null } : null,
+      color: (e.getAttributes("textStyle").color as string | undefined) ?? null,
     }),
   });
   // buttons keep the focus (and the cursor) in the answer
@@ -161,6 +174,17 @@ function Toolbar({ editor, onFormula, onPictures }: { editor: Editor; onFormula:
       )}
       <button type="button" onMouseDown={keep} onClick={onFormula} title="Insert a formula, or change the one selected"
         className="ml-1 h-8 rounded-md bg-surface px-2.5 font-serif font-semibold ring-1 ring-line hover:ring-muted">∑ Formula</button>
+      {on.picture && (
+        // a selected picture's size, kept in the answer and used in the PDF
+        <div role="group" aria-label="Picture size" className="ml-1 flex flex-wrap items-center gap-0.5 rounded-md bg-surface px-1 ring-1 ring-line">
+          <span aria-hidden className="px-1 text-xs font-semibold text-muted">Size</span>
+          {PICTURE_SIZES.map(({ value, label }) => (
+            <button key={label} type="button" aria-pressed={on.picture!.size === value} onMouseDown={keep}
+              onClick={() => editor.chain().focus().updateAttributes("image", { size: value }).run()}
+              className={cx("h-7 rounded px-2 text-xs", on.picture!.size === value ? "bg-ink text-bg" : "hover:bg-surface-2")}>{label}</button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
