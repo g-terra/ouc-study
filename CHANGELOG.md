@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.46.0](https://github.com/g-terra/ouc-study/compare/v0.45.0...v0.46.0) (2026-11-03)
+
+
+### Features
+
+* **web:** page breaks and side-by-side pictures in homework answers, questions kept whole in the pdf ([#214](https://github.com/g-terra/ouc-study/issues/214)) ([12c0716](https://github.com/g-terra/ouc-study/commit/12c07161f6cfcaf16def9d7b9c42c296e947d326))
+
 ## [0.45.0](https://github.com/g-terra/ouc-study/compare/v0.44.1...v0.45.0) (2026-11-03)
 
 
