@@ -12,7 +12,7 @@ import { common, createLowlight } from "lowlight";
 import katex from "katex";
 import { PICTURE_SIZES } from "../lib/print-fit";
 import { FORMULA_SNIPPETS, insertSnippet, toEditorHtml } from "../lib/answer-html";
-import { AlignCenter, AlignLeft, AlignRight, Code, ImagePlus, List, ListOrdered, SquareCode } from "./icons";
+import { AlignCenter, AlignLeft, AlignRight, Code, ImagePlus, List, ListOrdered, ScissorsLineDashed, SquareCode } from "./icons";
 import { cx } from "./ui";
 
 const tex = (latex: string, display = false) => katex.renderToString(latex, { displayMode: display, throwOnError: false, strict: false });
@@ -40,7 +40,10 @@ const Formula = Node.create({
   },
 });
 
-/** A picture in an answer, with the size the student picked (data-size; none = its own size, up to the full width). */
+/**
+ * A picture in an answer, with the size the student picked (data-size; none = its own size, up to the full width).
+ * Pictures sit in the line like words, so two medium ones (or a small and a large) share a line.
+ */
 const Picture = Image.extend({
   addAttributes() {
     return {
@@ -50,12 +53,22 @@ const Picture = Image.extend({
   },
 });
 
+/** Where a new page starts in the PDF: saved as <div data-page-break>, shown in the answer as a dashed line. */
+const PageBreak = Node.create({
+  name: "pageBreak",
+  group: "block",
+  atom: true,
+  selectable: true,
+  parseHTML() { return [{ tag: "div[data-page-break]" }]; },
+  renderHTML() { return ["div", { "data-page-break": "", class: "page-break" }]; },
+});
+
 // code blocks get syntax colours; with no language set, lowlight guesses it
 const lowlight = createLowlight(common);
 
 const EXTENSIONS = [
   StarterKit.configure({ heading: false, codeBlock: false, horizontalRule: false, link: false }),
-  TextStyle, Color, Highlight, Formula, CodeBlockLowlight.configure({ lowlight }), Picture.configure({ allowBase64: false }),
+  TextStyle, Color, Highlight, Formula, CodeBlockLowlight.configure({ lowlight }), Picture.configure({ inline: true, allowBase64: false }), PageBreak,
   TextAlign.configure({ types: ["paragraph"], alignments: ["left", "center", "right"] }),
 ];
 
@@ -165,6 +178,8 @@ function Toolbar({ editor, onFormula, onPictures }: { editor: Editor; onFormula:
       {sep}
       <button type="button" aria-label="Inline code" aria-pressed={on.code} onMouseDown={keep} onClick={() => editor.chain().focus().toggleCode().run()} className={btn(on.code)}><Code aria-hidden className="size-4" /></button>
       <button type="button" aria-label="Code block" aria-pressed={on.codeBlock} onMouseDown={keep} onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={btn(on.codeBlock)}><SquareCode aria-hidden className="size-4" /></button>
+      <button type="button" aria-label="Page break" title="Start a new page here in the PDF" onMouseDown={keep}
+        onClick={() => editor.chain().focus().insertContent([{ type: "pageBreak" }, { type: "paragraph" }]).run()} className={btn(false)}><ScissorsLineDashed aria-hidden className="size-4" /></button>
       {onPictures && (
         <label title="Add a picture (or paste or drop one)" className={cx(btn(false), "cursor-pointer focus-within:ring-2 focus-within:ring-muted")} onMouseDown={keep}>
           <ImagePlus aria-hidden className="size-4" />
@@ -180,7 +195,7 @@ function Toolbar({ editor, onFormula, onPictures }: { editor: Editor; onFormula:
           <span aria-hidden className="px-1 text-xs font-semibold text-muted">Size</span>
           {PICTURE_SIZES.map(({ value, label }) => (
             <button key={label} type="button" aria-pressed={on.picture!.size === value} onMouseDown={keep}
-              onClick={() => editor.chain().focus().updateAttributes("image", { size: value }).run()}
+              onClick={() => { const at = editor.state.selection.from; editor.chain().focus().updateAttributes("image", { size: value }).setNodeSelection(at).run(); }}
               className={cx("h-7 rounded px-2 text-xs", on.picture!.size === value ? "bg-ink text-bg" : "hover:bg-surface-2")}>{label}</button>
           ))}
         </div>
