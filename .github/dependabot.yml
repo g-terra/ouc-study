@@ -6,7 +6,9 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     commit-message:
-      prefix: chore
+      # fix: releases (installs update only to release tags); dev tooling alone stays chore
+      prefix: fix
+      prefix-development: chore
       include: scope
     groups:
       minor-and-patch:

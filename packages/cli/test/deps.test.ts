@@ -24,6 +24,14 @@ test("the installed root Vite matches too", { skip: !existsSync(join(ROOT, "node
   assert.equal(major(json("node_modules/vite/package.json").version), major(json("apps/web/package.json").devDependencies.vite));
 });
 
+// installs move only to release tags (src/update.ts), and release-please releases only on feat/fix,
+// so Dependabot's updates to what the app runs must be fix commits; dev tooling can stay chore
+test("Dependabot's npm updates are releasable fix commits, dev tooling stays chore", () => {
+  const npm = readFileSync(join(ROOT, ".github/dependabot.yml"), "utf8").split(/^  - /m).find((s) => s.startsWith("package-ecosystem: npm")) ?? "";
+  assert.match(npm, /^\s+prefix: fix$/m);
+  assert.match(npm, /^\s+prefix-development: chore$/m);
+});
+
 // ---------- missingDeps: code pulled without `npm ci` (the slide viewer once failed on a missing pdfjs-dist) ----------
 const lockfile = (dir: string, packages: Record<string, object>) => writeFileSync(join(dir, "package-lock.json"), JSON.stringify({ lockfileVersion: 3, packages: { "": {}, ...packages } }));
 const installed = (dir: string, path: string, version: string) => { mkdirSync(join(dir, path), { recursive: true }); writeFileSync(join(dir, path, "package.json"), JSON.stringify({ version })); };
