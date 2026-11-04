@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.46.1](https://github.com/g-terra/ouc-study/compare/v0.46.0...v0.46.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **deps:** release dependabot's updates to the app's dependencies ([#216](https://github.com/g-terra/ouc-study/issues/216)) ([007871e](https://github.com/g-terra/ouc-study/commit/007871e34ed1e9278ad7ac9299f1003ae4818df1))
+
 ## [0.46.0](https://github.com/g-terra/ouc-study/compare/v0.45.0...v0.46.0) (2026-11-03)
 
 
