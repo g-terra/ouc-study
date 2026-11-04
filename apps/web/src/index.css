@@ -173,7 +173,16 @@ body { @apply bg-bg text-ink font-sans antialiased; }
 .answer-text code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; background: var(--surface-2); border-radius: 4px; padding: 0.1em 0.3em; }
 .answer-text pre { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 0.75em 1em; margin: 0.5em 0; overflow-x: auto; }
 .answer-text pre code { background: none; padding: 0; font-size: 0.85em; }
-.answer-text img { max-width: 100%; height: auto; border-radius: 6px; margin: 0.4em 0; }
+/* pictures sit in the line like words: two medium ones (or a small and a large) share a line, with a small gap
+   (img[src]: not the editor's own zero-width helper images) */
+.answer-text img[src] { display: inline-block; vertical-align: top; max-width: 100%; height: auto; border-radius: 6px; margin: 0.4em 0.5em 0.4em 0; }
+.answer-text img[data-size="small"] { width: calc(25% - 0.5em); }
+.answer-text img[data-size="medium"] { width: calc(50% - 0.5em); }
+.answer-text img[data-size="large"] { width: calc(75% - 0.5em); }
+.answer-text img[data-size="full"] { width: 100%; margin-right: 0; }
+.answer-text .page-break { margin: 0.75em 0; border-top: 2px dashed var(--line); text-align: center; line-height: 0; }
+.answer-text .page-break::after { content: "Page break"; display: inline-block; padding: 0 0.5em; background: var(--surface); color: var(--muted); font-size: 0.75em; line-height: 1; transform: translateY(-0.6em); }
+.answer-text .page-break.ProseMirror-selectednode { border-color: var(--accent); }
 .answer-text img.ProseMirror-selectednode { outline: 2px solid var(--accent); }
 /* code colours, from the theme so they read in light and dark */
 .answer-text .hljs-keyword, .answer-text .hljs-built_in, .answer-text .hljs-selector-tag { color: var(--accent); }
@@ -184,7 +193,11 @@ body { @apply bg-bg text-ink font-sans antialiased; }
 
 /* the homework PDF (v2/HomeworkPrint.tsx), printed by Chrome or the print window */
 @media print {
-  @page { margin: 12mm; }
+  @page { size: A4; margin: 12mm; }
   html:has(.homework-print), body:has(.homework-print) { background: white; }
-  .homework-print > div { padding: 0; max-width: none; }
+  .homework-print { padding: 0; }
+  /* a question that fits on a page isn't split (HomeworkPrint marks it after laying out the pages) */
+  .homework-print section[data-keep] { break-inside: avoid; }
+  .homework-print .page-break { break-after: page; border: 0; margin: 0; }
+  .homework-print .page-break::after { content: none; }
 }

@@ -1,12 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { pickedOptions } from "@ouc/content/homework";
 import { Loading, Problem, courseMap, useSemester } from "../lib/data";
 import { useHomework } from "../lib/homework";
 import { mdToHtml } from "../lib/markdown";
 import { AnswerView } from "../components/RichEditor";
 import { cx } from "../components/ui";
+import { fitSections, type Placed } from "../lib/print-fit";
 
 const LETTERS = "ABCDEFGH";
+// the PDF is A4 with 12 mm margins (index.css), and the page is laid out at that width on screen too, so the
+// pictures can be fitted to the pages before printing
+const PAGE_HEIGHT = ((297 - 2 * 12) * 96) / 25.4;
 
 /**
  * The homework as it goes into the PDF (/print/homework/<sem>/<CODE>/<folder>?name=…): the student's name, the course,
@@ -20,12 +24,26 @@ export function HomeworkPrint({ sem, id }: { sem: string; id: string }) {
   const name = params.get("name") ?? "";
   const a = data?.assignments.find((x) => x.id === id);
   const ready = !!a?.homework?.tasks.length && state !== "loading";
+  const paper = useRef<HTMLDivElement>(null);
+  const [fitted, setFitted] = useState(false);
   useEffect(() => { document.title = a ? `${a.title}${name ? ` - ${name}` : ""}` : "Homework"; }, [a, name]);
   useEffect(() => {
-    if (!ready || !params.has("print")) return;
-    const t = setTimeout(() => window.print(), 600);   // after the formulas and pictures are drawn
-    return () => clearTimeout(t);
+    if (!ready) return;
+    let gone = false;
+    const t = setTimeout(async () => {   // after the formulas and pictures are drawn
+      const imgs = [...(paper.current?.querySelectorAll<HTMLImageElement>(".answer-text img[src]") ?? [])];
+      await Promise.all([document.fonts?.ready, ...imgs.map((i) => i.decode().catch(() => {}))]);
+      if (gone || !paper.current) return;
+      fitToPages(paper.current, imgs);
+      setFitted(true);
+    }, 300);
+    return () => { gone = true; clearTimeout(t); };
   }, [ready]);
+  useEffect(() => {
+    if (!fitted || !params.has("print")) return;
+    const t = setTimeout(() => window.print(), 100);
+    return () => clearTimeout(t);
+  }, [fitted]);
   if (data === undefined) return <Loading />;
   if (!data || !a) return <Problem msg="Assignment not found." />;
   if (!a.homework?.tasks.length) return <Problem msg="This assignment has no interactive version." />;
@@ -34,8 +52,8 @@ export function HomeworkPrint({ sem, id }: { sem: string; id: string }) {
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
   return (
-    <div className="homework-print min-h-screen bg-white text-[#1c1b19]" data-ready={ready ? "1" : undefined}>
-      <div className="mx-auto max-w-[46rem] px-10 py-12 font-serif text-[15px] leading-relaxed">
+    <div className="homework-print min-h-screen bg-white px-4 py-12 text-[#1c1b19]" data-ready={ready ? "1" : undefined} data-fitted={fitted ? "1" : undefined}>
+      <div ref={paper} className="mx-auto w-[186mm] max-w-full font-serif text-[15px] leading-relaxed">
         <header className="mb-3 flex flex-wrap items-start justify-between gap-4 border-b-2 border-[#1c1b19] pb-4">
           <div className="min-w-0">
             <div className="text-xs uppercase tracking-[0.1em] text-[#6e6a62]">Open University of Cyprus · {a.code}{course?.title && course.title !== a.code ? ` · ${course.title}` : ""}</div>
@@ -50,8 +68,8 @@ export function HomeworkPrint({ sem, id }: { sem: string; id: string }) {
           const ans = answers[t.id] ?? {};
           const none = <p className="text-[#6e6a62]">No answer.</p>;
           return (
-            <section key={t.id} aria-label={`Question ${i + 1}`} className={cx("py-5 break-inside-avoid-page", i > 0 && "border-t border-[#d8d3c8]")}>
-              <div className="mb-3 flex gap-2 font-semibold">
+            <section key={t.id} data-question aria-label={`Question ${i + 1}`} className={cx("py-5", i > 0 && "border-t border-[#d8d3c8]")}>
+              <div className="mb-3 flex gap-2 font-semibold break-inside-avoid break-after-avoid">
                 <span>{i + 1}.</span>
                 <div className="md min-w-0 flex-1 [&>*:first-child]:mt-0" dangerouslySetInnerHTML={{ __html: mdToHtml(t.question, sem) }} />
               </div>
@@ -93,4 +111,42 @@ export function HomeworkPrint({ sem, id }: { sem: string; id: string }) {
 
 function Explanation({ html }: { html: string }) {
   return <div className="mt-2 border-l-2 border-[#e4e0d6] pl-3"><span className="text-[#6e6a62]">Why: </span><AnswerView html={html} /></div>;
+}
+
+/**
+ * Lays the questions out on A4 pages before printing: a question that fits on a page is kept whole (data-keep), its
+ * pictures shrinking a little when that saves moving it to the next page; a longer one splits, a picture that
+ * wouldn't fit in the room left shrinking into it (when it stays big enough) instead of leaving a gap. No picture
+ * is taller than a page, and pictures side by side shrink together.
+ */
+function fitToPages(paper: HTMLElement, imgs: HTMLImageElement[]) {
+  const top = paper.getBoundingClientRect().top;
+  type Row = Placed & { imgs: { el: HTMLImageElement; width: number; height: number }[] };
+  const els = [...paper.querySelectorAll<HTMLElement>("section[data-question]")];
+  const sections = els.map((sec) => {
+    const box = sec.getBoundingClientRect();
+    const rows: Row[] = [];
+    for (const el of sec.querySelectorAll<HTMLElement>(".answer-text img[src], .answer-text [data-page-break]")) {
+      const r = el.getBoundingClientRect();
+      if (el.tagName !== "IMG") { rows.push({ top: r.bottom - top, height: 0, pageBreak: true, imgs: [] }); continue; }
+      if (!imgs.includes(el as HTMLImageElement)) continue;
+      const last = rows[rows.length - 1];
+      const pic = { el: el as HTMLImageElement, width: r.width, height: r.height };
+      if (last && !last.pageBreak && Math.abs(last.top - (r.top - top)) < 2) { last.imgs.push(pic); last.height = Math.max(last.height, r.height); }
+      else rows.push({ top: r.top - top, height: r.height, imgs: [pic] });
+    }
+    return { top: box.top - top, height: box.height, items: rows };
+  });
+  const { keep, heights } = fitSections(sections, PAGE_HEIGHT);
+  sections.forEach((sec, n) => {
+    if (keep[n]) els[n].dataset.keep = "1";
+    heights[n].forEach((h, k) => {
+      const row = sec.items[k];
+      if (h === null || !row.height) return;
+      for (const p of row.imgs) {
+        p.el.style.width = `${(p.width * h) / row.height}px`;
+        p.el.style.height = `${(p.height * h) / row.height}px`;
+      }
+    });
+  });
 }
