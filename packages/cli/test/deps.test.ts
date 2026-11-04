@@ -24,6 +24,33 @@ test("the installed root Vite matches too", { skip: !existsSync(join(ROOT, "node
   assert.equal(major(json("node_modules/vite/package.json").version), major(json("apps/web/package.json").devDependencies.vite));
 });
 
+// Dependabot's #211 raised lucide-react to ^1.66.0 in apps/web but left 1.61.0 in the lockfile, and npm ci
+// installed it without a word: every package a workspace asks for with ^x.y.z must be locked at a version it accepts
+test("the lockfile has a version each workspace's ^ranges accept", () => {
+  const lock = json("package-lock.json").packages as Record<string, { version?: string; link?: boolean }>;
+  const nums = (v: string) => v.replace(/^[^\d]*/, "").split(/[.+-]/).slice(0, 3).map(Number);
+  const accepts = (range: string, v: string) => {
+    const [want, have] = [nums(range), nums(v)];
+    const fixed = want[0] > 0 ? 1 : want[1] > 0 ? 2 : 3; // ^1.2.3 keeps the major, ^0.2.3 the minor, ^0.0.3 all
+    for (let i = 0; i < 3; i++) {
+      if (i < fixed && have[i] !== want[i]) return false;
+      if (i >= fixed && have[i] !== want[i]) return have[i] > want[i];
+    }
+    return true;
+  };
+  const wrong: string[] = [];
+  for (const [ws, e] of Object.entries(lock)) {
+    if (ws.includes("node_modules/") || e.link) continue;
+    const pkg = json(join(ws, "package.json"));
+    for (const [name, range] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies }) as [string, string][]) {
+      if (!/^\^\d/.test(range)) continue;
+      const v = (lock[join(ws, "node_modules", name)] ?? lock[`node_modules/${name}`])?.version;
+      if (v && !accepts(range, v)) wrong.push(`${ws || "."}: ${name} ${range} locked at ${v}`);
+    }
+  }
+  assert.deepEqual(wrong, [], "run npm install to bring package-lock.json in line");
+});
+
 // installs move only to release tags (src/update.ts), and release-please releases only on feat/fix,
 // so Dependabot's updates to what the app runs must be fix commits; dev tooling can stay chore
 test("Dependabot's npm updates are releasable fix commits, dev tooling stays chore", () => {
