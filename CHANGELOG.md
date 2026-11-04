@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.46.2](https://github.com/g-terra/ouc-study/compare/v0.46.1...v0.46.2) (2026-11-04)
+
+
+### Bug Fixes
+
+* **deps:** install the lucide-react 1.66.0 that the app asks for ([#219](https://github.com/g-terra/ouc-study/issues/219)) ([c0d124c](https://github.com/g-terra/ouc-study/commit/c0d124c57033af64896a9174043671a27883d00b))
+
 ## [0.46.1](https://github.com/g-terra/ouc-study/compare/v0.46.0...v0.46.1) (2026-11-04)
 
 
