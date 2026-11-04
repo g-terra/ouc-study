@@ -44,7 +44,7 @@ test("the lockfile has a version each workspace's ^ranges accept", () => {
     const pkg = json(join(ws, "package.json"));
     for (const [name, range] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies }) as [string, string][]) {
       if (!/^\^\d/.test(range)) continue;
-      const v = (lock[join(ws, "node_modules", name)] ?? lock[`node_modules/${name}`])?.version;
+      const v = (lock[`${ws ? `${ws}/` : ""}node_modules/${name}`] ?? lock[`node_modules/${name}`])?.version; // lock keys use / on Windows too
       if (v && !accepts(range, v)) wrong.push(`${ws || "."}: ${name} ${range} locked at ${v}`);
     }
   }
