@@ -1,7 +1,7 @@
 // The files `ouc install` writes for the background app and the daily sync (tested on any OS).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { appPlist, hiddenLauncher, paths, syncPlist, syncTaskXml, winPaths } from "../src/background.ts";
+import { appPlist, hiddenLauncher, paths, syncPlist, syncTaskXml, waitUntil, winPaths } from "../src/background.ts";
 
 test("macOS: LaunchAgents keep the app alive and run the sync at the chosen time", () => {
   const app = appPlist({ node: "/opt/homebrew/bin/node", root: "/Users/st/OUC Study", port: "5173", logs: "/Users/st/Library/Logs/OUC-Study" });
@@ -35,4 +35,13 @@ test("logs and launchers go to the usual per-user places", () => {
   const w = winPaths({ home: "/h", env: { LOCALAPPDATA: "/h/Local", APPDATA: "/h/Roaming" } });
   assert.ok(w.startup.endsWith("Microsoft/Windows/Start Menu/Programs/Startup/OUC Study.vbs") || w.startup.endsWith("Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OUC Study.vbs"));
   assert.ok(w.logs.includes("OUC-Study"));
+});
+
+test("waitUntil: polls until the condition holds, or gives up after the time limit", () => {
+  let n = 0;
+  assert.equal(waitUntil(() => ++n >= 3, 2000, 10), true);
+  assert.equal(n, 3);
+  const t = Date.now();
+  assert.equal(waitUntil(() => false, 100, 20), false);
+  assert.ok(Date.now() - t >= 100);
 });

@@ -149,6 +149,7 @@ The key is saved in `.eclass-token`, readable only by you and never committed. *
 | `ouc setup` | add courses, start a new semester, or replace your key |
 | `ouc backup` | back up your study data now; `ouc backup setup` signs in to GitHub, `ouc backup restore` gets it back on a new computer, `ouc backup status` shows the last one (see [Backups](#backups)) |
 | `ouc status` | is the app running, is the daily sync scheduled, when was the last sync |
+| `ouc port 5174` | move the app to another port (remembered; the background service follows) |
 | `ouc start` · `ouc stop` · `ouc restart` | control the background app |
 | `ouc update` | update to the latest release (`ouc restart` does this too; `--check` only looks, `--main` follows main instead of releases) |
 | `ouc logs` · `ouc logs sync` | follow the logs (macOS `~/Library/Logs/OUC-Study/`, Windows `%LOCALAPPDATA%\OUC-Study\Logs\`) |
@@ -308,5 +309,5 @@ Bug reports, ideas and pull requests are welcome, including ones made with an AI
 | A file failed to download | `ouc pull` retries; failures are listed in `semesters/<id>/_meta/pull-report.json` |
 | Week dates are off for a course | edit `dating.first` for that course in `semesters/<id>/semester.json` |
 | Log shows "Operation not permitted" | System Settings → Privacy & Security → Full Disk Access → add your `node` (`which node`) → `ouc restart` |
-| Port 5173 already in use | another copy is running (e.g. `npm run dev`). Close it, or `ouc stop` |
+| Port 5173 already in use | another copy is running (e.g. `npm run dev`). Close it, or `ouc stop`. Another app needs 5173? Move OUC Study: `ouc port 5174` (it's remembered) |
 | Notes or data look stale | `npm run content` (the running app also rebuilds automatically) |

@@ -14,6 +14,16 @@ export const APP_LABEL = "cy.ouc.study.app";
 export const SYNC_LABEL = "cy.ouc.study.eclass-sync";
 export const WIN_TASK = "OUC Study eClass sync";
 
+/** Polls cond (blocking) every stepMs until it holds or ms have passed; says whether it held. */
+export function waitUntil(cond: () => boolean, ms: number, stepMs = 200): boolean {
+  const end = Date.now() + ms;
+  for (;;) {
+    if (cond()) return true;
+    if (Date.now() >= end) return false;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, stepMs);
+  }
+}
+
 const xml = (s: unknown) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 // ---------- macOS ----------
@@ -136,6 +146,8 @@ export function service({ root, node, port, syncTime, platform = process.platfor
       install() {
         write();
         for (const l of [APP_LABEL, SYNC_LABEL]) lc("bootout", `gui/${uid}/${l}`);
+        // bootout returns before a running app has quit; bootstrapping before that fails ("Input/output error")
+        waitUntil(() => !loaded(APP_LABEL) && !loaded(SYNC_LABEL), 10_000);
         const ok = spawnSync("launchctl", ["bootstrap", `gui/${uid}`, p.appPlist], { stdio: "inherit" }).status === 0;
         return spawnSync("launchctl", ["bootstrap", `gui/${uid}`, p.syncPlist], { stdio: "inherit" }).status === 0 && ok;
       },
