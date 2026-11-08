@@ -6,7 +6,8 @@ import { accessSync, appendFileSync, chmodSync, closeSync, constants, existsSync
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { service } from "./background.ts";
+import { macPaths, service } from "./background.ts";
+import { afterPortChange, readPort, savePort } from "./port.ts";
 import { applyUpdate, checkForUpdate } from "./update.ts";
 import { installDeps, missingDeps, npmRunner } from "./deps.ts";
 
@@ -14,7 +15,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const OS = process.platform;
 const MAC = OS === "darwin";
 const WIN = OS === "win32";
-const PORT = process.env.OUC_PORT ?? "5173";
+const PORT = readPort({ root: ROOT });
 const URL_ = `http://localhost:${PORT}`;
 const SYNC_TIME = process.env.OUC_SYNC_TIME ?? "07:30";
 const SELF = join(ROOT, "bin/ouc");
@@ -172,6 +173,7 @@ const HELP = () => `${paint("1", "ouc: OUC Study app & eClass sync")}
   ouc backup       back up your study data now to a private GitHub repo (setup: sign in; restore:
                    get it back on a new computer; status: the last backup)
   ouc status       is it running? when was the last sync?
+  ouc port [n]     the app's port (now ${PORT}); with a number, move the app there and remember it
   ouc logs [sync]  follow the app (or sync) log
   ouc notes [course] [week]   AI notes for a week (default: latest without notes)
   ouc plan         AI plan for this week      ouc quiz [course] [week]   quiz yourself
@@ -252,6 +254,24 @@ switch (cmd) {
     const meta = newestMeta();
     if (meta && readFileSync(meta, "utf8").includes('"source": "api"')) node([join(ROOT, "packages/eclass-sync/pull.mjs"), "--quiet"]);
     buildData();
+    break;
+  }
+  case "port": {
+    if (!args[0]) { console.log(`${PORT}  (${URL_}; change it with: ouc port <number>)`); break; }
+    let port: string;
+    try { port = savePort(ROOT, args[0]); } catch (e) { err((e as Error).message); process.exitCode = 1; break; }
+    if (process.env.OUC_PORT && process.env.OUC_PORT !== port) warn(`OUC_PORT=${process.env.OUC_PORT} is set in this terminal and wins over the saved port here.`);
+    ok(`Saved: the app uses port ${port}`);
+    const running = svc.running();
+    const step = afterPortChange({ platform: OS, autostart: MAC ? existsSync(macPaths().appPlist) : svc.installed(), running });
+    const next = service({ root: ROOT, node: NODE, port, syncTime: SYNC_TIME });
+    if (step.reinstall && !next.install()) { err("Couldn't update the background service (ouc install)."); process.exitCode = 1; break; }
+    if (step.restart) { svc.stop(); await sleep(1000); next.start(); }
+    if (!step.reinstall && !step.restart) { console.log(`  The app uses it from its next start (ouc start).`); break; }
+    const url = `http://localhost:${port}`;
+    let isUp = false;
+    for (let i = 0; i < 30 && !isUp; i++) { await sleep(1000); try { isUp = (await fetch(`http://127.0.0.1:${port}`, { signal: AbortSignal.timeout(2000) })).ok; } catch {} }
+    isUp ? ok(`App running: ${url}`) : warn("Still starting… see: ouc logs");
     break;
   }
   case "status": {
