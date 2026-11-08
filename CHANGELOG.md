@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.47.0](https://github.com/g-terra/ouc-study/compare/v0.46.2...v0.47.0) (2026-11-08)
+
+
+### Features
+
+* **web:** read scanned double-page PDFs one book page at a time ([#222](https://github.com/g-terra/ouc-study/issues/222)) ([849140d](https://github.com/g-terra/ouc-study/commit/849140ddab98a1b025df1afd304e481f6a57a795))
+
 ## [0.46.2](https://github.com/g-terra/ouc-study/compare/v0.46.1...v0.46.2) (2026-11-04)
 
 
