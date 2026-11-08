@@ -10,9 +10,10 @@ import type { SemesterData } from "@ouc/content/types";
 import { Link, enc } from "../lib/router";
 import { Card, CourseBadge, cx } from "../components/ui";
 import { parseTranscript, type Transcript } from "../lib/transcript";
-import { FileText, INLINE, Maximize, Presentation, Volume2 } from "../components/icons";
+import { Columns2, FileText, INLINE, Maximize, Presentation, Volume2 } from "../components/icons";
 import { markDone } from "../lib/progress";
 import { findItem } from "@ouc/content/progress";
+import { couldBeSpread, isWide, looksScanned, pageLook, readSplitChoice, readingPageOf, readingPages, splitKey, writeSplitChoice, type PageLook, type ReadingPage, type Size } from "../lib/spreads";
 
 type Info =
   | { ok: true; pdf: string; download: string; slides: { n: number; audio: string[] }[] }
@@ -28,6 +29,23 @@ const loadPdfjs = () => (pdfjs ??= Promise.all([import("pdfjs-dist/legacy/build/
 const LECTURE = "ouc-slides-lecture";
 /** The page a link asks for: "#3" (slides) or "#page=3" (PDFs, as browsers write it). */
 const pageFromHash = (hash: string) => Number(hash.match(/^#(?:page=)?(\d+)$/)?.[1]) || 1;
+
+/** Where pdf.js finds its image decoders (scans are often CCITT or JBIG2), fonts and character maps; served by vite.config.ts. */
+const PDFJS = { wasmUrl: "/pdfjs/wasm/", standardFontDataUrl: "/pdfjs/standard_fonts/", cMapUrl: "/pdfjs/cmaps/", iccUrl: "/pdfjs/iccs/" };
+/** How many wide pages are looked at to tell a scanned book from slides. */
+const SAMPLE = 2;
+
+/** Every page's size, and whether the PDF looks like a scanned book with two pages on each wide page. */
+async function lookAt(doc: PDFDocumentProxy, OPS: Parameters<typeof pageLook>[2]): Promise<{ sizes: Size[]; scanned: boolean }> {
+  const pages = await Promise.all(Array.from({ length: doc.numPages }, (_, i) => doc.getPage(i + 1)));
+  const sizes = pages.map((p) => { const v = p.getViewport({ scale: 1 }); return { width: v.width, height: v.height }; });
+  const sample: PageLook[] = await Promise.all(pages.filter((_, i) => isWide(sizes[i])).slice(0, SAMPLE).map(async (p) => {
+    const [ops, text] = await Promise.all([p.getOperatorList(), p.getTextContent()]);
+    const textChars = text.items.reduce((n, it) => n + ("str" in it ? it.str.trim().length : 0), 0);
+    return pageLook(sizes[p.pageNumber - 1], ops, OPS, textChars);
+  }));
+  return { sizes, scanned: looksScanned(sample) };
+}
 
 const readLecture = () => { try { return localStorage.getItem(LECTURE) === "1"; } catch { return false; } };
 
@@ -46,7 +64,13 @@ export function SlidesPage({ data, file, bare = false }: { data: SemesterData; f
 
   const [info, setInfo] = useState<Info>();
   const [doc, setDoc] = useState<PDFDocumentProxy>();
+  // a PDF's page sizes, and whether it looks like a scanned book (wide pages = two book pages side by side)
+  const [look, setLook] = useState<{ sizes: Size[]; scanned: boolean }>();
+  // the reading page shown, from 1 (a split scan has two per wide PDF page)
   const [page, setPage] = useState(1);
+  const key = splitKey(data.id, file);
+  const savedSplit = () => { try { return readSplitChoice(localStorage, key); } catch { return undefined; } };
+  const [splitChoice, setSplitChoice] = useState(savedSplit);
   const [lecture, setLectureState] = useState(readLecture);
   // a PDF's portrait page fits the window, or the width to read small print
   const [fitWidth, setFitWidth] = useState(false);
@@ -54,7 +78,8 @@ export function SlidesPage({ data, file, bare = false }: { data: SemesterData; f
 
   useEffect(() => {
     let live = true, task: { destroy(): Promise<void> } | undefined;
-    setInfo(undefined); setDoc(undefined); setPage(pageFromHash(location.hash));
+    setInfo(undefined); setDoc(undefined); setLook(undefined); setSplitChoice(savedSplit());
+    const start = pageFromHash(location.hash);
     const got: Promise<Info> = isPdf ? Promise.resolve({ ok: true, pdf: href, download: href, slides: [] })
       : fetch(`/api/slides/info?file=${enc(`${data.id}/${file}`)}`).then((r) => r.json());
     got
@@ -63,17 +88,35 @@ export function SlidesPage({ data, file, bare = false }: { data: SemesterData; f
         setInfo(i);
         if (!i.ok) return;
         const lib = await loadPdfjs();
-        const t = (task = lib.getDocument({ url: i.pdf }));
+        const t = (task = lib.getDocument({ url: i.pdf, ...PDFJS }));
         const d = await t.promise;
-        if (live) setDoc(d);
+        // slides are never split; a PDF's pages are measured first, so a link to a page opens the right half
+        // a page pdf.js can't read leaves the PDF unsplit, still readable
+        const l = isPdf ? await lookAt(d, lib.OPS).catch(() => ({ sizes: [], scanned: false })) : { sizes: [], scanned: false };
+        if (!live) return;
+        const split = isPdf && (savedSplit() ?? l.scanned);
+        setLook(l); setDoc(d);
+        setPage(isPdf ? readingPageOf(readingPages(l.sizes, split), start) : start);
       })
       .catch((e) => live && setInfo({ ok: false, error: `Couldn't open the ${isPdf ? "PDF" : "slides"}: ${e.message ?? e}`, ...(isPdf && { download: href }) }));
     return () => { live = false; task?.destroy(); };
-  }, [data.id, file, isPdf, href]);
+  }, [data.id, file, isPdf, href, key]);
 
-  const pages = doc?.numPages ?? 0;
+  const split = splitChoice ?? look?.scanned ?? false;
+  const reading: ReadingPage[] = look?.sizes.length ? readingPages(look.sizes, split) : Array.from({ length: doc?.numPages ?? 0 }, (_, i) => ({ page: i + 1 }));
+  const pages = reading.length;
+  const shown = reading[page - 1] ?? { page };
+  // offered on PDFs with pages shaped like a double page (or that split on their own), not on 16:9 slides
+  const canSplit = isPdf && !!look && (look.scanned || look.sizes.some(couldBeSpread));
+  const toggleSplit = () => {
+    const on = !split;
+    setSplitChoice(on);
+    try { writeSplitChoice(localStorage, key, on); } catch { /* private mode */ }
+    if (look) setPage(readingPageOf(readingPages(look.sizes, on), shown.page));
+  };
   const go = (n: number) => { if (pages) setPage(Math.max(1, Math.min(pages, n))); };
-  useEffect(() => { if (pages) history.replaceState(history.state, "", isPdf ? `#page=${page}` : `#${page}`); }, [page, pages, isPdf]);
+  // the address keeps the PDF's own page number, so links and notes' sources stay right
+  useEffect(() => { if (pages) history.replaceState(history.state, "", isPdf ? `#page=${shown.page}` : `#${page}`); }, [page, pages, isPdf, shown.page]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest?.("input, textarea, select, [contenteditable]")) return;
@@ -134,19 +177,21 @@ export function SlidesPage({ data, file, bare = false }: { data: SemesterData; f
       ) : (
         <>
           <div ref={stage} className={cx("overflow-hidden rounded-2xl border border-line [&:fullscreen]:flex [&:fullscreen]:items-center [&:fullscreen]:rounded-none", isPdf ? "bg-surface-2 py-3 [&:fullscreen]:bg-black/90" : "bg-black/90")}>
-            {doc ? <SlideCanvas doc={doc} page={page} label={`${Noun} ${page}`} fitPage={isPdf && !fitWidth} onClick={(fwd) => go(page + (fwd ? 1 : -1))} /> : <div className="aspect-video" />}
+            {doc ? <SlideCanvas doc={doc} page={shown.page} half={shown.half} label={`${Noun} ${page}`} fitPage={isPdf && !fitWidth} onClick={(fwd) => go(page + (fwd ? 1 : -1))} /> : <div className="aspect-video" />}
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button onClick={() => go(page - 1)} disabled={page <= 1} className="rounded-full border border-line px-3 py-1 text-sm disabled:opacity-40" aria-label={`Previous ${noun}`}>‹ Prev</button>
             <span className="min-w-24 text-center text-sm tabular-nums" data-testid="slide-counter">{Noun} {page} / {pages || "…"}</span>
             <button onClick={() => go(page + 1)} disabled={!pages || page >= pages} className="rounded-full border border-line px-3 py-1 text-sm disabled:opacity-40" aria-label={`Next ${noun}`}>Next ›</button>
+            {shown.half && <span className="text-xs text-muted">{shown.half} half of PDF page {shown.page}</span>}
             {withAudio > 0 && (
               <label className="ml-2 flex items-center gap-1.5 text-sm" title="Plays each slide's narration and moves on when it ends">
                 <input type="checkbox" checked={lecture} onChange={(e) => setLecture(e.target.checked)} /> Play as a lecture
               </label>
             )}
-            {isPdf && <button onClick={() => setFitWidth(!fitWidth)} aria-pressed={fitWidth} className="ml-auto rounded-full border border-line px-3 py-1 text-sm">{fitWidth ? "Fit page" : "Fit width"}</button>}
+            {canSplit && <button onClick={toggleSplit} aria-pressed={split} title="Show each half of a wide scanned page as its own page" className={cx("ml-auto inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-sm", split && "bg-surface-2 font-semibold")}><Columns2 aria-hidden className="size-3.5" />Split pages</button>}
+            {isPdf && <button onClick={() => setFitWidth(!fitWidth)} aria-pressed={fitWidth} className={cx(!canSplit && "ml-auto", "rounded-full border border-line px-3 py-1 text-sm")}>{fitWidth ? "Fit page" : "Fit width"}</button>}
             <button onClick={() => (document.fullscreenElement ? document.exitFullscreen() : stage.current?.requestFullscreen())} className={cx("inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-sm", !isPdf && "ml-auto")}><Maximize aria-hidden className="size-3.5" />Full screen</button>
           </div>
 
@@ -180,8 +225,9 @@ export function SlidesPage({ data, file, bare = false }: { data: SemesterData; f
 /**
  * One PDF page, drawn to fit the width (and the height in full screen; with `fitPage`, the window's height
  * too, so a portrait page and the buttons under it show whole). Click the right/left part for next/previous.
+ * `half`: only that half of the page (one book page of a scanned double page).
  */
-function SlideCanvas({ doc, page, label, fitPage, onClick }: { doc: PDFDocumentProxy; page: number; label: string; fitPage: boolean; onClick: (forward: boolean) => void }) {
+function SlideCanvas({ doc, page, half, label, fitPage, onClick }: { doc: PDFDocumentProxy; page: number; half?: "left" | "right"; label: string; fitPage: boolean; onClick: (forward: boolean) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState(0);
   useEffect(() => {
@@ -197,20 +243,23 @@ function SlideCanvas({ doc, page, label, fitPage, onClick }: { doc: PDFDocumentP
       const el = canvas.current, box = el?.parentElement;
       if (!live || !el || !box) return;
       const v = p.getViewport({ scale: 1 });
+      const part = half ? 2 : 1;
       const full = document.fullscreenElement;
-      const scale = Math.min(box.clientWidth / v.width, full ? full.clientHeight / v.height : fitPage ? Math.max(300, window.innerHeight - 300) / v.height : Infinity);
+      const scale = Math.min(box.clientWidth / (v.width / part), full ? full.clientHeight / v.height : fitPage ? Math.max(300, window.innerHeight - 300) / v.height : Infinity);
       const dpr = window.devicePixelRatio || 1;
-      const vp = p.getViewport({ scale: scale * dpr });
-      el.width = vp.width; el.height = vp.height;
-      el.style.width = `${vp.width / dpr}px`; el.style.height = `${vp.height / dpr}px`;
+      // the right half is the page drawn shifted left by half its width
+      const wide = v.width * scale * dpr;
+      const vp = p.getViewport({ scale: scale * dpr, offsetX: half === "right" ? -wide / 2 : 0 });
+      el.width = Math.round(vp.width / part); el.height = vp.height;
+      el.style.width = `${el.width / dpr}px`; el.style.height = `${vp.height / dpr}px`;
       task = p.render({ canvas: el, viewport: vp });
       task.promise.catch(() => { /* replaced by the next slide */ });
     });
     return () => { live = false; task?.cancel(); };
-  }, [doc, page, size, fitPage]);
+  }, [doc, page, half, size, fitPage]);
   return (
     <div className="flex w-full justify-center" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); onClick(e.clientX - r.left > r.width / 3); }}>
-      <canvas ref={canvas} className="block cursor-pointer bg-white" aria-label={label} />
+      <canvas ref={canvas} role="img" className="block cursor-pointer bg-white" aria-label={label} />
     </div>
   );
 }

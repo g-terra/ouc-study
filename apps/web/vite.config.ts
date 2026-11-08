@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node
 import { extname, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 // @ts-ignore: plain JS module shared with the `ouc` command line
 import { createAiApi } from "../../packages/ai/src/api.ts";
 import { addAttempt, readAttempts, removeCourseQuizzes, removeQuiz, resetAttempts } from "../../packages/content/src/quiz-store.ts";
@@ -416,6 +417,19 @@ function semesterFiles(): Plugin {
   };
 }
 
+/** pdf.js's own files at /pdfjs/<folder>/<file>: image decoders (scans are often CCITT or JBIG2), fonts and character maps. */
+function pdfjsFiles(): Plugin {
+  const root = resolve(createRequire(import.meta.url).resolve("pdfjs-dist/package.json"), "..");
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    const m = req.url?.split("?")[0].match(/^\/pdfjs\/(wasm|standard_fonts|cmaps|iccs)\/([\w.-]+)$/);
+    if (!m) return next();
+    const abs = resolve(root, m[1], m[2]);
+    if (!existsSync(abs)) { res.statusCode = 404; return res.end("File not found"); }
+    sendFile(req, res, abs, extname(abs) === ".wasm" ? "application/wasm" : "application/octet-stream");
+  };
+  return { name: "pdfjs-files", configureServer: (s) => { s.middlewares.use(handler); }, configurePreviewServer: (s) => { s.middlewares.use(handler); } };
+}
+
 /** /api/slides/*: PowerPoint files as a PDF plus their narration, for the slide viewer (packages/ai/src/slides.ts). */
 function slidesApi(): Plugin {
   const handler = createSlidesApi({ semesters: SEMESTERS, cache: resolve(HERE, "../../.ouc/slides") });
@@ -423,7 +437,7 @@ function slidesApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), semesterFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), backupApi(), quizApi(), progressApi(), homeworkApi(), datesApi(), searchApi()],
+  plugins: [react(), tailwindcss(), semesterFiles(), pdfjsFiles(), slidesApi(), eclassApi(), aiApi(), updateApi(), backupApi(), quizApi(), progressApi(), homeworkApi(), datesApi(), searchApi()],
   server: { port: 5173 },
   ...(process.env.OUC_PUBLIC ? { publicDir: resolve(process.env.OUC_PUBLIC) } : {}),
 });
