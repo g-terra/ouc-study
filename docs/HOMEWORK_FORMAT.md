@@ -7,6 +7,7 @@ An assignment's **interactive version** lives next to it, in `semesters/<semeste
 - `polish/<task id>.html`: the AI's more academic wording of one answer (**Make it more academic** under the answer, the `polish-answer` skill), the same ideas in the student's voice. The app shows it next to the answer: **Use this wording** replaces the answer and tags it `"aiEdited": true` (shown as "AI-edited wording"), **Keep mine** drops it.
 - `check.json`: the AI's check of the answers (**Check my answers**, or the `check-homework` skill): a verdict and a note per task. See [check.json](#checkjson).
 - **Make PDF** prints the tasks and answers to `my-submission/<title> - <name>.pdf` (the print page is `/print/homework/<semester>/<CODE>/<folder>?name=…`).
+- `layout.json`: the parts the student moved to a new page in the PDF's page preview (**Check the pages**, `/print/homework/…?name=…&pages=1`), written by the app (`/api/homework/layout`): `{ "breaks": ["1:2", "3:0"] }`, each `<task id>:<n>` where n counts the parts of that question in the PDF (0 = the question itself, then each paragraph, list item, option or statement in order). Gone when there are none.
 
 ## tasks.json
 

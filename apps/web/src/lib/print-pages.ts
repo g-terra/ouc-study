@@ -9,21 +9,23 @@
 export interface BreakPoint { top: number; manual?: boolean; keep?: number }
 
 /**
- * The points that start a new page (indices, the first page's start left out). A part (from its point to the next,
+ * Where the pages start: `starts`, the points that start a new page (indices, the first page's start left out),
+ * and how many `pages` there are. A part (from its point to the next,
  * or to `end`) that doesn't fit in the room left starts the next page; so does a question kept whole that doesn't
  * fit, and a part the student moved. A part taller than a page runs over the pages it needs.
  */
-export function paginate(points: BreakPoint[], end: number, pageHeight: number): number[] {
+export function paginate(points: BreakPoint[], end: number, pageHeight: number): { starts: number[]; pages: number } {
   const starts: number[] = [];
-  let pageTop = 0;
+  let pageTop = 0, pages = 1;
   points.forEach((p, i) => {
     const next = points[i + 1]?.top ?? end;
     const keep = p.keep !== undefined && p.keep - p.top <= pageHeight && p.keep - pageTop > pageHeight;
     if (p.top > pageTop && (p.manual || keep || next - pageTop > pageHeight)) {
       starts.push(i);
       pageTop = p.top;
+      pages++;
     }
-    while (next - pageTop > pageHeight) pageTop += pageHeight;
+    while (next - pageTop > pageHeight) { pageTop += pageHeight; pages++; }
   });
-  return starts;
+  return { starts, pages };
 }

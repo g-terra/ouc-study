@@ -385,7 +385,84 @@ test("without an eClass name, Make PDF asks for the name once", async ({ page })
   await page.getByRole("button", { name: "Make PDF" }).click();
   const dialog = page.getByRole("dialog", { name: "Make the PDF" });
   await dialog.getByRole("textbox", { name: "Name on the PDF" }).fill("Demo Student");
-  await expect(dialog.getByRole("link", { name: "Preview" })).toHaveAttribute("href", /name=Demo%20Student/);
+  await expect(dialog.getByRole("link", { name: "Check the pages" })).toHaveAttribute("href", /name=Demo%20Student&pages=1/);
+});
+
+const HW = { sem: "2026-Demo", assignment: "DEMO101/09-28_Assignment-1" };
+/** Short answers that fit on one page, whatever the tests before left, and no page breaks moved. */
+async function shortAnswers(page: import("@playwright/test").Page) {
+  const patches = [{ task: "1", text: "<p>First thought</p><p>Second thought</p>" }, { task: "2", choice: null, why: "" }, { task: "3", text: "" },
+    { task: "4", choices: null, why: "" }, { task: "5", tf: { 0: { value: null, why: "" }, 1: { value: null, why: "" } } }];
+  for (const p of patches) expect((await page.request.post("/api/homework", { data: { ...HW, ...p } })).ok()).toBe(true);
+  expect((await page.request.post("/api/homework/layout", { data: { ...HW, breaks: [] } })).ok()).toBe(true);
+}
+
+test("the page preview shows the PDF's pages, and a part moved to the next page starts one there, in the PDF too", async ({ page }) => {
+  await shortAnswers(page);
+  const preview = "/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student&pages=1";
+  await page.goto(preview);
+  await expect(page.locator(".homework-print[data-fitted]")).toHaveCount(1);
+  await expect(page.getByTestId("page-count")).toHaveText("1 page");
+  await expect(page.getByTestId("sheet")).toHaveCount(1);
+
+  // click a paragraph and move it to the next page
+  await page.getByRole("region", { name: "Question 1" }).getByText("Second thought").click();
+  await page.getByRole("button", { name: "Move to next page" }).click();
+  await expect(page.getByTestId("page-count")).toHaveText("2 pages");
+  await expect(page.getByTestId("sheet")).toHaveCount(2);
+  const sheet2 = await page.getByTestId("sheet").nth(1).boundingBox();
+  const moved = await page.getByRole("region", { name: "Question 1" }).getByText("Second thought").boundingBox();
+  expect(moved!.y).toBeGreaterThan(sheet2!.y);
+  expect(moved!.y).toBeLessThan(sheet2!.y + 100);
+  // what comes after it follows it onto page 2
+  expect((await page.getByRole("region", { name: "Question 2" }).boundingBox())!.y).toBeGreaterThan(sheet2!.y);
+
+  // it's saved: after a reload, and in the page the PDF is printed from
+  await page.reload();
+  await expect(page.getByTestId("page-count")).toHaveText("2 pages");
+  await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student");
+  await expect(page.locator(".homework-print[data-fitted]")).toHaveCount(1);
+  await expect(page.getByTestId("sheet")).toHaveCount(0);
+  await page.emulateMedia({ media: "print" });
+  await expect(page.getByRole("region", { name: "Question 1" }).getByText("Second thought")).toHaveCSS("break-before", "page");
+  const res = await page.request.post("/api/homework/pdf", { data: { ...HW, title: "Assignment 1", name: "Demo Student" } });
+  expect(res.ok()).toBe(true);
+  const pdf = (await (await page.request.get((await res.json()).pdf)).body()).toString("latin1");
+  expect(pdf.match(/\/Type\s*\/Page\b/g)?.length).toBe(2);
+
+  // and it can be brought back
+  await page.emulateMedia({ media: "screen" });
+  await page.goto(preview);
+  await expect(page.locator(".homework-print[data-fitted]")).toHaveCount(1);
+  await page.getByRole("region", { name: "Question 1" }).getByText("Second thought").click();
+  await page.getByRole("button", { name: "Bring it back" }).click();
+  await expect(page.getByTestId("page-count")).toHaveText("1 page");
+  await page.reload();
+  await expect(page.getByTestId("page-count")).toHaveText("1 page");
+});
+
+test("in the page preview, every moved part goes back with Undo all, and Make PDF saves the PDF from there", async ({ page }) => {
+  await shortAnswers(page);
+  await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student&pages=1");
+  await expect(page.locator(".homework-print[data-fitted]")).toHaveCount(1);
+  for (const q of ["Question 2", "Question 4"]) {
+    await page.getByRole("region", { name: q }).getByText(/\?/).first().click();
+    await page.getByRole("button", { name: "Move to next page" }).click();
+  }
+  await expect(page.getByTestId("page-count")).toHaveText("3 pages");
+  await page.getByRole("button", { name: "Undo all" }).click();
+  await expect(page.getByTestId("page-count")).toHaveText("1 page");
+  await expect(page.getByRole("button", { name: "Undo all" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Make PDF" }).click();
+  await expect(page.getByRole("link", { name: "Open the PDF" })).toBeVisible({ timeout: 60_000 });
+});
+
+test("the page preview fits a phone without the page scrolling sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student&pages=1");
+  await expect(page.locator(".homework-print[data-fitted]")).toHaveCount(1);
+  await expect(page.getByTestId("page-count")).toBeVisible();
+  expect(await page.locator("html").evaluate((el) => el.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
 test("the homework page fits a phone", async ({ page }) => {

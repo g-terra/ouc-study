@@ -1,7 +1,9 @@
 // The homework PDF's pages: where each page starts, worked out in the app so the preview and the PDF agree.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { paginate } from "../src/lib/print-pages.ts";
+import { paginate as layout } from "../src/lib/print-pages.ts";
+
+const paginate = (...a: Parameters<typeof layout>) => layout(...a).starts;
 
 const PAGE = 1000;
 
@@ -42,4 +44,11 @@ test("a part taller than a page runs over several pages, and what follows goes o
   assert.deepEqual(paginate([{ top: 0 }, { top: 2300 }], 2600, PAGE), []);
   // a big part after a small one starts a page of its own, then runs over
   assert.deepEqual(paginate([{ top: 0 }, { top: 100 }, { top: 2600 }], 2700, PAGE), [1]);
+});
+
+test("the page count includes the pages a part runs over", () => {
+  assert.equal(layout([{ top: 0 }, { top: 300 }], 900, PAGE).pages, 1);
+  assert.equal(layout([{ top: 0 }, { top: 600, manual: true }], 900, PAGE).pages, 2);
+  assert.equal(layout([{ top: 0 }, { top: 100 }, { top: 2600 }], 2700, PAGE).pages, 4);   // page 1, then 100..2600 over three
+  assert.equal(layout([], 0, PAGE).pages, 1);
 });
