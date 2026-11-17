@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.48.0](https://github.com/g-terra/ouc-study/compare/v0.47.0...v0.48.0) (2026-11-17)
+
+
+### Features
+
+* **web:** page preview before the homework PDF, with parts moved to the next page ([#227](https://github.com/g-terra/ouc-study/issues/227)) ([e7a5784](https://github.com/g-terra/ouc-study/commit/e7a5784c1755aca48ea43c6c35c05ff8a7085dfb))
+
 ## [0.47.0](https://github.com/g-terra/ouc-study/compare/v0.46.2...v0.47.0) (2026-11-08)
 
 
