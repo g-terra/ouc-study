@@ -4,6 +4,7 @@
 //   assignments/<CODE>/<folder>/homework/images/       pictures added to answers, named by their content
 //   assignments/<CODE>/<folder>/homework/check.json    the AI's check of the answers (Check my answers)
 //   assignments/<CODE>/<folder>/homework/polish/<task id>.html  the AI's more academic wording of an answer, until kept or dropped
+//   assignments/<CODE>/<folder>/homework/layout.json   { breaks: ["<task id>:<n>"] } the parts moved to a new page in the PDF's page preview
 // The app saves answers through POST /api/homework (apps/web/vite.config.ts).
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -116,6 +117,43 @@ export function saveTaskType(semDir: string, body: unknown): Homework {
   writeFileSync(`${f}.tmp`, `${JSON.stringify(next, null, 1)}\n`);
   renameSync(`${f}.tmp`, f);
   return parseHomework(next).homework!;
+}
+
+/** Where the student started new pages in the PDF's page preview: "<task id>:<n>", the n-th part of that question. */
+export interface HomeworkLayout { breaks: string[] }
+
+const BREAK = /^([\w.-]{1,20}):(\d{1,4})$/;
+
+export function readLayout(semDir: string, assignment: string): HomeworkLayout {
+  const f = join(homeworkDir(semDir, assignment), "layout.json");
+  try {
+    const j = JSON.parse(readFileSync(f, "utf8"));
+    return { breaks: Array.isArray(j?.breaks) ? j.breaks.filter((b: unknown) => typeof b === "string" && BREAK.test(b)) : [] };
+  } catch { return { breaks: [] }; }
+}
+
+/** Every assignment's page breaks in the semester, by assignment id. */
+export function allLayouts(semDir: string): Record<string, HomeworkLayout> {
+  return Object.fromEntries(withFile(semDir, "layout.json").map((id) => [id, readLayout(semDir, id)]).filter(([, l]) => (l as HomeworkLayout).breaks.length));
+}
+
+/** Saves an assignment's page breaks ({ assignment, breaks }); no breaks removes the file. Returns them as saved. */
+export function saveLayout(semDir: string, body: unknown): HomeworkLayout {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const assignment = String(b.assignment ?? "");
+  const dir = homeworkDir(semDir, assignment);
+  const hw = readHomework(semDir, assignment)?.homework;
+  if (!hw) throw Object.assign(new Error("This assignment has no interactive version."), { code: 404 });
+  const ids = new Set(hw.tasks.map((t) => t.id));
+  const raw = b.breaks;
+  if (!Array.isArray(raw) || raw.length > 1000 || raw.some((x) => typeof x !== "string" || !ids.has(BREAK.exec(x)?.[1] ?? ""))) throw new Error("Bad page breaks.");
+  const order = (x: string) => { const [, t, n] = BREAK.exec(x)!; return [hw.tasks.findIndex((k) => k.id === t), Number(n)]; };
+  const breaks = [...new Set(raw as string[])].sort((x, y) => { const [a, m] = order(x), [c, n] = order(y); return a - c || m - n; });
+  const f = join(dir, "layout.json");
+  if (!breaks.length) { rmSync(f, { force: true }); return { breaks }; }
+  writeFileSync(`${f}.tmp`, `${JSON.stringify({ breaks }, null, 1)}\n`);
+  renameSync(`${f}.tmp`, f);
+  return { breaks };
 }
 
 export const MAX_IMAGE = 10 * 1024 * 1024;

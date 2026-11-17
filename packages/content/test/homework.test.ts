@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyAnswer, checkCounts, mergeCheck, tasksToCheck, homeworkProgress, parseAnswers, parseCheck, parseHomework, pickedOptions, retypeTask, taskLabel } from "../src/homework.ts";
-import { allAnswers, allChecks, allPolish, discardPolish, homeworkDir, saveTaskType, polishFile, readAnswers, readHomework, readPolish, saveAnswer, saveImage } from "../src/homework-store.ts";
+import { allAnswers, allChecks, allLayouts, allPolish, discardPolish, homeworkDir, saveTaskType, polishFile, readAnswers, readHomework, readLayout, readPolish, saveAnswer, saveImage, saveLayout } from "../src/homework-store.ts";
 
 const TASKS = {
   title: "Assignment 3",
@@ -89,6 +89,30 @@ test("answers can't be saved outside an assignment with tasks", () => {
   assert.throws(() => saveAnswer(dir, { assignment: "../../x", task: "1", text: "x" }), /Bad assignment/);
   assert.throws(() => saveAnswer(dir, { assignment: "AAA/..", task: "1", text: "x" }), /Bad assignment/);
   assert.throws(() => saveAnswer(dir, { assignment: "AAA/missing", task: "1", text: "x" }), /no interactive version/);
+});
+
+test("the page breaks moved in the PDF's page preview are saved next to the answers", () => {
+  const dir = semester();
+  assert.deepEqual(readLayout(dir, "AAA/10-26_Assignment-3"), { breaks: [] });
+  assert.deepEqual(saveLayout(dir, { assignment: "AAA/10-26_Assignment-3", breaks: ["3:2", "1:0", "3:2"] }), { breaks: ["1:0", "3:2"] });
+  assert.deepEqual(readLayout(dir, "AAA/10-26_Assignment-3"), { breaks: ["1:0", "3:2"] });
+  assert.deepEqual(allLayouts(dir), { "AAA/10-26_Assignment-3": { breaks: ["1:0", "3:2"] } });
+  // none left: the file goes, and the semester has no layouts
+  saveLayout(dir, { assignment: "AAA/10-26_Assignment-3", breaks: [] });
+  assert.equal(existsSync(join(homeworkDir(dir, "AAA/10-26_Assignment-3"), "layout.json")), false);
+  assert.deepEqual(allLayouts(dir), {});
+});
+
+test("page breaks are only saved for real tasks, in the right shape", () => {
+  const dir = semester();
+  assert.throws(() => saveLayout(dir, { assignment: "AAA/missing", breaks: [] }), /no interactive version/);
+  assert.throws(() => saveLayout(dir, { assignment: "AAA/10-26_Assignment-3", breaks: "1:0" }), /Bad page breaks/);
+  assert.throws(() => saveLayout(dir, { assignment: "AAA/10-26_Assignment-3", breaks: ["../x:1"] }), /Bad page breaks/);
+  assert.throws(() => saveLayout(dir, { assignment: "AAA/10-26_Assignment-3", breaks: ["9:1"] }), /Bad page breaks/);
+  assert.throws(() => saveLayout(dir, { assignment: "AAA/10-26_Assignment-3", breaks: Array.from({ length: 1001 }, (_, i) => `1:${i}`) }), /Bad page breaks/);
+  // a broken file reads as no breaks
+  writeFileSync(join(homeworkDir(dir, "AAA/10-26_Assignment-3"), "layout.json"), "{oops");
+  assert.deepEqual(readLayout(dir, "AAA/10-26_Assignment-3"), { breaks: [] });
 });
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("made-up picture")]);
