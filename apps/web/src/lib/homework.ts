@@ -10,19 +10,22 @@ import { onDataRefresh, refreshData } from "./data";
 
 /** The AI's more academic wordings waiting to be kept or turned down: assignment → task id → { text (HTML), made }. */
 export type Polish = Record<string, Record<string, { text: string; made: string }>>;
-export interface HomeworkState { state: "loading" | "ok" | "unavailable"; answers: Record<string, HomeworkAnswers>; checks: Record<string, HomeworkCheck>; polish: Polish }
+/** The parts moved to a new page in the PDF's page preview, by assignment: "<task id>:<n>". */
+export type Layouts = Record<string, { breaks: string[] }>;
+export interface HomeworkState { state: "loading" | "ok" | "unavailable"; answers: Record<string, HomeworkAnswers>; checks: Record<string, HomeworkCheck>; polish: Polish; layouts: Layouts }
 
 const store = new Map<string, HomeworkState>();
 const listeners = new Set<() => void>();
-const set = (sem: string, answers: Record<string, HomeworkAnswers>, state: HomeworkState["state"] = "ok", checks = store.get(sem)?.checks ?? {}, polish = store.get(sem)?.polish ?? {}) => {
-  store.set(sem, { state, answers, checks, polish });
+const set = (sem: string, answers: Record<string, HomeworkAnswers>, state: HomeworkState["state"] = "ok", checks = store.get(sem)?.checks ?? {}, polish = store.get(sem)?.polish ?? {},
+  layouts = store.get(sem)?.layouts ?? {}) => {
+  store.set(sem, { state, answers, checks, polish, layouts });
   listeners.forEach((l) => l());
 };
 const loading = new Map<string, Promise<void>>();
 function load(sem: string) {
   if (!loading.has(sem)) loading.set(sem, fetch(`/api/homework?sem=${encodeURIComponent(sem)}`, { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-    .then((j) => set(sem, j.answers ?? {}, "ok", j.checks ?? {}, j.polish ?? {}))
+    .then((j) => set(sem, j.answers ?? {}, "ok", j.checks ?? {}, j.polish ?? {}, j.layouts ?? {}))
     .catch(() => set(sem, {}, "unavailable"))   // a static build has no app server
     .finally(() => loading.delete(sem)));
   return loading.get(sem)!;
@@ -39,7 +42,7 @@ export function useHomework(sem: string): HomeworkState {
     if (!store.has(sem)) load(sem);
     return () => { listeners.delete(l); };
   }, [sem]);
-  return store.get(sem) ?? { state: "loading", answers: {}, checks: {}, polish: {} };
+  return store.get(sem) ?? { state: "loading", answers: {}, checks: {}, polish: {}, layouts: {} };
 }
 
 export type AnswerPatch = { task: string; text?: string; choice?: number | null; choices?: number[] | null; tf?: Record<string, { value?: boolean | null; why?: string }>; why?: string; done?: boolean; aiEdited?: boolean };
@@ -52,7 +55,7 @@ let saves = 0;
 export async function saveAnswer(sem: string, assignment: string, tasks: HomeworkTask[], patch: AnswerPatch): Promise<void> {
   const key = `${sem}|${assignment}`, n = ++saves;
   latest.set(key, n);
-  const cur: HomeworkState = store.get(sem) ?? { state: "ok", answers: {}, checks: {}, polish: {} };
+  const cur: HomeworkState = store.get(sem) ?? { state: "ok", answers: {}, checks: {}, polish: {}, layouts: {} };
   const before = cur.answers[assignment] ?? {};
   set(sem, { ...cur.answers, [assignment]: applyAnswer(tasks, before, patch) }, cur.state);
   const res = await fetch("/api/homework", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sem, assignment, ...patch }) }).catch(() => null);
@@ -61,6 +64,20 @@ export async function saveAnswer(sem: string, assignment: string, tasks: Homewor
   const newest = latest.get(key) === n;
   if (res?.ok && j?.answers) { if (newest) set(sem, { ...now.answers, [assignment]: j.answers }, now.state); return; }
   if (newest) set(sem, { ...now.answers, [assignment]: before }, now.state);
+  throw new Error(j?.error ?? "Couldn't save. Is the app still running?");
+}
+
+/** Saves the parts moved to a new page in the PDF's page preview. They show at once; if they can't be saved, the saved ones come back and this rejects. */
+export async function saveBreaks(sem: string, assignment: string, breaks: string[]): Promise<void> {
+  const cur = store.get(sem);
+  if (!cur) return;
+  const before = cur.layouts[assignment];
+  const put = (l?: { breaks: string[] }) => { const now = store.get(sem)!; set(sem, now.answers, now.state, now.checks, now.polish, { ...now.layouts, [assignment]: l ?? { breaks: [] } }); };
+  put({ breaks });
+  const res = await fetch("/api/homework/layout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sem, assignment, breaks }) }).catch(() => null);
+  const j = await res?.json().catch(() => null);
+  if (res?.ok && j?.layout) return;
+  put(before);
   throw new Error(j?.error ?? "Couldn't save. Is the app still running?");
 }
 
@@ -82,7 +99,7 @@ export async function makePdf(sem: string, assignment: string, title: string, na
 }
 
 /** The print page of a homework (what goes into the PDF). */
-export const printHref = (sem: string, assignment: string, name: string) =>
+export const printHref = (sem: string, assignment: string, name: string): string =>
   `/print/homework/${[sem, ...assignment.split("/")].map(encodeURIComponent).join("/")}?name=${encodeURIComponent(name)}`;
 
 // ---------- homework in the background, with no chat (/api/ai/homework-check, /api/ai/homework-make) ----------

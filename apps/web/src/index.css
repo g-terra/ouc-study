@@ -191,6 +191,12 @@ body { @apply bg-bg text-ink font-sans antialiased; }
 .answer-text .hljs-comment { color: var(--muted); font-style: italic; }
 .answer-text .hljs-title, .answer-text .hljs-function .hljs-title { color: var(--warn); }
 
+/* the PDF's page preview: the part under the pointer, and the one picked to move */
+.homework-print[data-pages] [data-part-key] { cursor: pointer; scroll-margin-top: 10rem; }
+.homework-print[data-pages] [data-part-key]:hover:not(:has([data-part-key]:hover)) { outline: 1px dashed #9a958b; outline-offset: 3px; }
+.homework-print[data-pages] [data-part-key][data-chosen] { outline: 2px solid var(--accent) !important; outline-offset: 3px; }
+.homework-print[data-pages] [data-part-key]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
 /* the homework PDF (v2/HomeworkPrint.tsx), printed by Chrome or the print window */
 @media print {
   @page { size: A4; margin: 12mm; }

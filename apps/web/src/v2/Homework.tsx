@@ -511,7 +511,7 @@ function MakePdfButton({ sem, id, title }: { sem: string; id: string; title: str
           <div role="dialog" aria-modal="true" aria-label="Make the PDF" className="relative w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-xl">
             <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="absolute right-3 top-3 grid size-9 place-items-center rounded-full text-muted hover:bg-surface-2"><X aria-hidden className="size-4" /></button>
             <h2 className="mb-1 font-serif text-2xl font-semibold">Make the PDF</h2>
-            <p className="mb-4 text-sm text-muted">Every task in full with your answers, your name and the assignment's title. It's saved in this assignment's my-submission folder, ready to upload on eClass.</p>
+            <p className="mb-4 text-sm text-muted">Every task in full with your answers, your name and the assignment's title. It's saved in this assignment's my-submission folder, ready to upload on eClass. Check the pages to move a part to the next page.</p>
             {known ? <p className="mb-4 text-sm">Name on the PDF: <b>{known}</b> <span className="text-muted">(from eClass)</span></p> : (
               <label className="mb-4 grid gap-1 text-sm">
                 <span className="font-semibold">Name on the PDF</span>
@@ -526,7 +526,7 @@ function MakePdfButton({ sem, id, title }: { sem: string; id: string; title: str
             )}
             {st.error && <div role="alert" className="mb-4 rounded-xl bg-bad-bg p-3 text-sm text-bad">{st.error}</div>}
             <div className="flex justify-end gap-2">
-              <a href={printHref(sem, id, name.trim())} target="_blank" rel="noreferrer" className="grid min-h-11 place-items-center rounded-full border border-line px-4 text-sm">Preview</a>
+              <Link to={`${printHref(sem, id, name.trim())}&pages=1`} className="grid min-h-11 place-items-center rounded-full border border-line px-4 text-sm">Check the pages</Link>
               <button type="button" onClick={go} disabled={st.busy} className="min-h-11 rounded-full bg-ink px-5 font-semibold text-bg disabled:opacity-60">
                 {st.busy ? "Making the PDF…" : st.pdf ? "Make it again" : "Make PDF"}
               </button>
