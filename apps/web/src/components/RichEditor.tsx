@@ -7,11 +7,12 @@ import { Color, TextStyle } from "@tiptap/extension-text-style";
 import Highlight from "@tiptap/extension-highlight";
 import Image from "@tiptap/extension-image";
 import TextAlign from "@tiptap/extension-text-align";
+import { TableKit } from "@tiptap/extension-table";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import katex from "katex";
 import { PICTURE_SIZES } from "../lib/print-fit";
-import { FORMULA_SNIPPETS, insertSnippet, toEditorHtml } from "../lib/answer-html";
+import { FORMULA_SNIPPETS, answerTables, insertSnippet, toEditorHtml } from "../lib/answer-html";
 import { AlignCenter, AlignLeft, AlignRight, Code, ImagePlus, List, ListOrdered, ScissorsLineDashed, SquareCode } from "./icons";
 import { cx } from "./ui";
 
@@ -69,12 +70,14 @@ const lowlight = createLowlight(common);
 const EXTENSIONS = [
   StarterKit.configure({ heading: false, codeBlock: false, horizontalRule: false, link: false }),
   TextStyle, Color, Highlight, Formula, CodeBlockLowlight.configure({ lowlight }), Picture.configure({ inline: true, allowBase64: false }), PageBreak,
-  TextAlign.configure({ types: ["paragraph"], alignments: ["left", "center", "right"] }),
+  TextAlign.configure({ types: ["paragraph", "tableCell", "tableHeader"], alignments: ["left", "center", "right"] }),
 ];
+// shown, not edited: markdown tables typed in an answer are drawn as tables (lib/answer-html.ts answerTables)
+const VIEW_EXTENSIONS = [...EXTENSIONS, TableKit.configure({ table: { resizable: false } })];
 
-/** An answer shown as the editor shows it (formulas drawn, code coloured), but not editable: for the print page. */
+/** An answer shown as the editor shows it (formulas drawn, code coloured, markdown tables as tables), but not editable: for the print page. */
 export function AnswerView({ html, className }: { html?: string; className?: string }) {
-  const editor = useEditor({ extensions: EXTENSIONS, content: toEditorHtml(html), editable: false, editorProps: { attributes: { class: cx("answer-text", className) } } });
+  const editor = useEditor({ extensions: VIEW_EXTENSIONS, content: answerTables(toEditorHtml(html)), editable: false, editorProps: { attributes: { class: cx("answer-text", className) } } });
   return <EditorContent editor={editor} />;
 }
 
