@@ -50,3 +50,107 @@ export function insertSnippet(value: string, start: number, end: number, tex: st
   const caret = start + (box < 0 ? piece.length : box + 1 + sel.length);
   return { value: value.slice(0, start) + piece + value.slice(end), caret };
 }
+
+// a table's separator row: | --- | :-: | --: |
+const SEPARATOR = /^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?$/;
+const VOID = new Set(["br", "img", "hr", "wbr", "input"]);
+type Block = { p: false; html: string } | { p: true; open: string; lines: string[] };
+type Line = { block: number; html: string };
+
+const plain = (s: string) => s.replace(/<[^>]*>/g, "").replace(/&nbsp;| /g, " ").trim();
+const isRow = (s: string) => s.trim().startsWith("|");
+
+/** A row's cells: split at the pipes outside tags (a formula's LaTeX can hold pipes and >) and not escaped as \|. */
+function cells(row: string): string[] {
+  const out: string[] = [];
+  let cur = "", tag = false, quoted = false;
+  for (let i = 0; i < row.length; i++) {
+    const c = row[i]!;
+    if (c === "<" && !tag) tag = true;
+    else if (c === '"' && tag) quoted = !quoted;
+    else if (c === ">" && tag && !quoted) tag = false;
+    if (c === "\\" && row[i + 1] === "|" && !tag) { cur += "|"; i++; continue; }
+    if (c === "|" && !tag) { out.push(cur); cur = ""; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  const t = row.trim();
+  if (t.startsWith("|")) out.shift();
+  if (t.endsWith("|") && out.at(-1)!.trim() === "") out.pop();
+  return out.map((s) => s.replace(/^(\s|&nbsp;)+|(\s|&nbsp;)+$/g, ""));
+}
+
+/** The answer's top-level blocks: paragraphs split into their lines (at <br>), anything else (lists, code…) as it is. */
+function blocks(html: string): Block[] {
+  const out: Block[] = [];
+  const tags = /<(\/?)([a-zA-Z][\w-]*)[^>]*>/g;
+  let depth = 0, from = 0, m: RegExpExecArray | null;
+  while ((m = tags.exec(html))) {
+    const name = m[2]!.toLowerCase();
+    if (VOID.has(name) || m[0].endsWith("/>")) continue;
+    if (!m[1] && depth === 0 && name === "p") {
+      const end = html.indexOf("</p>", tags.lastIndex);
+      if (end < 0) break;
+      if (m.index > from) out.push({ p: false, html: html.slice(from, m.index) });
+      out.push({ p: true, open: m[0], lines: html.slice(tags.lastIndex, end).split(/<br\s*\/?>/i) });
+      from = tags.lastIndex = end + 4;
+      continue;
+    }
+    depth += m[1] ? -1 : 1;
+  }
+  if (from < html.length) out.push({ p: false, html: html.slice(from) });
+  return out;
+}
+
+/**
+ * Markdown tables typed in an answer (a row per paragraph or per line: "| a | b |", then "|---|---|", then the rows)
+ * as HTML tables, for the PDF. The cells keep their bold, formulas and so on. Anything else is left as it was.
+ */
+export function answerTables(html: string): string {
+  if (!html.includes("|")) return html;
+  const bs = blocks(html);
+  const lines: Line[] = bs.flatMap((b, i) => (b.p ? b.lines.map((l) => ({ block: i, html: l })) : []));
+  const tables = new Map<number, { end: number; html: string }>();   // first line → table
+  for (let i = 0; i + 1 < lines.length; i++) {
+    const head = lines[i]!.html, sep = plain(lines[i + 1]!.html);
+    if (!isRow(head) || !SEPARATOR.test(sep)) continue;
+    const heads = cells(head), aligns = cells(sep).map((s) => s.trim());
+    if (heads.length !== aligns.length) continue;
+    const style = aligns.map((a) => {
+      const al = a.startsWith(":") && a.endsWith(":") ? "center" : a.endsWith(":") ? "right" : a.startsWith(":") ? "left" : "";
+      return al ? ` style="text-align: ${al}"` : "";
+    });
+    const row = (cs: string[], tag: string) => `<tr>${heads.map((_, k) => `<${tag}${style[k]}>${cs[k] ?? ""}</${tag}>`).join("")}</tr>`;
+    let end = i + 2;
+    const body: string[] = [];
+    while (end < lines.length && isRow(lines[end]!.html)) body.push(row(cells(lines[end++]!.html), "td"));
+    tables.set(i, { end, html: `<table><thead>${row(heads, "th")}</thead>${body.length ? `<tbody>${body.join("")}</tbody>` : ""}</table>` });
+    i = end - 1;
+  }
+  if (!tables.size) return html;
+  const touched = new Set<number>();
+  for (const [start, t] of tables) for (let k = start; k < t.end; k++) touched.add(lines[k]!.block);
+  // the paragraphs a table took lines from are rebuilt around it; the rest are kept as they were
+  let out = "", piece: string[] = [], pieceBlock = -1;
+  const flush = () => {
+    while (piece.length && !plain(piece[0]!) && !/<img|data-latex/.test(piece[0]!)) piece.shift();
+    while (piece.length && !plain(piece.at(-1)!) && !/<img|data-latex/.test(piece.at(-1)!)) piece.pop();
+    if (piece.length) out += `${(bs[pieceBlock] as { open: string }).open}${piece.join("<br>")}</p>`;
+    piece = [];
+  };
+  let li = 0, skip = 0;   // lines up to `skip` are in a table already written
+  bs.forEach((b, bi) => {
+    if (!b.p) { out += b.html; return; }
+    const first = li;
+    li += b.lines.length;
+    if (!touched.has(bi)) { out += `${b.open}${b.lines.join("<br>")}</p>`; return; }
+    for (let k = Math.max(first, skip); k < li; k++) {
+      const t = tables.get(k);
+      if (t) { flush(); out += t.html; skip = t.end; k = skip - 1; continue; }
+      if (pieceBlock !== bi) { flush(); pieceBlock = bi; }
+      piece.push(lines[k]!.html);
+    }
+    flush();
+  });
+  return out;
+}

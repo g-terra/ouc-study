@@ -180,6 +180,12 @@ body { @apply bg-bg text-ink font-sans antialiased; }
 .answer-text img[data-size="medium"] { width: calc(50% - 0.5em); }
 .answer-text img[data-size="large"] { width: calc(75% - 0.5em); }
 .answer-text img[data-size="full"] { width: 100%; margin-right: 0; }
+.answer-text table { border-collapse: collapse; margin: 0.5em 0; font-size: 0.9em; }
+.answer-text th, .answer-text td { border: 1px solid var(--line); padding: 0.25em 0.6em; vertical-align: top; text-align: left; }
+.answer-text th { background: var(--surface-2); font-weight: 600; }
+.answer-text th p, .answer-text td p { margin: 0; }
+.homework-print .answer-text th, .homework-print .answer-text td { border-color: #cfcabf; }
+.homework-print .answer-text th { background: #f3f1ec; }
 .answer-text .page-break { margin: 0.75em 0; border-top: 2px dashed var(--line); text-align: center; line-height: 0; }
 .answer-text .page-break::after { content: "Page break"; display: inline-block; padding: 0 0.5em; background: var(--surface); color: var(--muted); font-size: 0.75em; line-height: 1; transform: translateY(-0.6em); }
 .answer-text .page-break.ProseMirror-selectednode { border-color: var(--accent); }

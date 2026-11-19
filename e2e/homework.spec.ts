@@ -196,6 +196,24 @@ test("a paragraph can be centred, and stays centred after a reload and in the PD
   await expect(page.locator(".answer-text p", { hasText: "The result" })).toHaveCSS("text-align", "center");
 });
 
+test("a markdown table typed in an answer prints as a table", async ({ page }) => {
+  const html = "<p>Costs:</p><p>| Node | Cost |</p><p>|---|--:|</p><p>| A | <strong>1</strong> |</p><p>| B | 12 |</p><p>Then B.</p>";
+  await page.route("**/api/homework?*", async (route) => {
+    const res = await route.fetch();
+    const data = await res.json();
+    data.answers["DEMO101/09-28_Assignment-1"] = { 1: { text: html } };
+    return route.fulfill({ response: res, json: data });
+  });
+  await page.goto("/print/homework/2026-Demo/DEMO101/09-28_Assignment-1?name=Demo%20Student");
+  const table = page.locator(".answer-text table");
+  await expect(table.getByRole("columnheader")).toHaveText(["Node", "Cost"]);
+  await expect(table.getByRole("row")).toHaveCount(3);
+  await expect(table.getByRole("cell", { name: "1" }).locator("strong")).toHaveText("1");
+  await expect(table.getByRole("cell", { name: "12" })).toHaveCSS("text-align", "right");
+  await expect(page.locator(".answer-text")).not.toContainText("|");
+  await expect(page.locator(".answer-text p", { hasText: "Then B." })).toBeVisible();
+});
+
 test("a picture can be added to an answer and is still there after a reload", async ({ page }) => {
   await page.goto(`${SEM}/homework/DEMO101/09-28_Assignment-1`);
   await page.getByRole("navigation", { name: "Tasks" }).getByRole("button", { name: /Your demo week/ }).click();
