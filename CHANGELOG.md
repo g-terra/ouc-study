@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.49.0](https://github.com/g-terra/ouc-study/compare/v0.48.0...v0.49.0) (2026-11-19)
+
+
+### Features
+
+* **web:** draw markdown tables typed in homework answers as tables in the PDF ([#229](https://github.com/g-terra/ouc-study/issues/229)) ([693cabf](https://github.com/g-terra/ouc-study/commit/693cabfac2f2b060cc80ccdab0a3ea296e6d8798))
+
 ## [0.48.0](https://github.com/g-terra/ouc-study/compare/v0.47.0...v0.48.0) (2026-11-17)
 
 
