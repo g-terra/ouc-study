@@ -15,9 +15,9 @@ const split = (to: string) => {
   return i < 0 ? { p: to, h: "" } : { p: to.slice(0, i), h: to.slice(i) };
 };
 
-/** A classic app path → the same page in v2. Files, the API and outside links are left alone. */
+/** A classic app path → the same page in v2. Files, the API, the print pages and outside links are left alone. */
 export function toV2(to: string): string {
-  if (!to.startsWith("/") || to.startsWith("//") || isV2(to) || /^\/(files|api|data)\//.test(to)) return to;
+  if (!to.startsWith("/") || to.startsWith("//") || isV2(to) || /^\/(files|api|data|print)\//.test(to)) return to;
   const { p, h } = split(to);
   const [sem, section, ...rest] = p.split("/").filter(Boolean);
   if (!sem) return V2 + h;

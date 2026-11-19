@@ -46,7 +46,7 @@ export const useRouter = () => useContext(RouterCtx);
 
 export function matchPath(pattern: string, path: string): Params | null {
   const p = pattern.split("/").filter(Boolean);
-  const s = path.split("#")[0].split("/").filter(Boolean);
+  const s = path.split(/[?#]/)[0].split("/").filter(Boolean);   // a query (?name=…) is the page's, not the route's
   if (p.length !== s.length) return null;
   const params: Params = {};
   for (let i = 0; i < p.length; i++) {
