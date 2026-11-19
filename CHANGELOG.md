@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.49.1](https://github.com/g-terra/ouc-study/compare/v0.49.0...v0.49.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **web:** open the page preview from "Check the pages" instead of a not-found page ([#232](https://github.com/g-terra/ouc-study/issues/232)) ([990105d](https://github.com/g-terra/ouc-study/commit/990105d2af6ee7741bf69f776a30bce2a3fde794))
+
 ## [0.49.0](https://github.com/g-terra/ouc-study/compare/v0.48.0...v0.49.0) (2026-11-19)
 
 
