@@ -49,3 +49,8 @@ test("the nav highlights the place a page belongs to", () => {
   assert.equal(v2Section("/v2/2026-Fall/notifications#x"), "notifications");
   assert.equal(v2Section("/v2/2026-Fall/settings"), "settings");
 });
+
+test("the homework print page has no v2 version, so its links stay as they are", () => {
+  const print = "/print/homework/2026-Fall/COS511/09-28_A?name=Demo%20Student&pages=1";
+  assert.equal(toV2(print), print);
+});

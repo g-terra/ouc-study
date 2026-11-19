@@ -404,6 +404,10 @@ test("without an eClass name, Make PDF asks for the name once", async ({ page })
   const dialog = page.getByRole("dialog", { name: "Make the PDF" });
   await dialog.getByRole("textbox", { name: "Name on the PDF" }).fill("Demo Student");
   await expect(dialog.getByRole("link", { name: "Check the pages" })).toHaveAttribute("href", /name=Demo%20Student&pages=1/);
+  // it opens the page preview, not a "not found" page under /v2
+  await dialog.getByRole("link", { name: "Check the pages" }).click();
+  await expect(page).toHaveURL(/\/print\/homework\/2026-Demo\/DEMO101\/09-28_Assignment-1\?name=Demo%20Student&pages=1$/);
+  await expect(page.getByRole("region", { name: "Question 1" })).toBeVisible();
 });
 
 const HW = { sem: "2026-Demo", assignment: "DEMO101/09-28_Assignment-1" };
