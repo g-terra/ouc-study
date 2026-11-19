@@ -12,6 +12,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as ui from "./tui.ts";
+import { readPort } from "./port.ts";
 import { createClient, readToken, slug, strip, TOKEN_RE, isoDay, SITE, type MoodleClient, type MoodleCourse, type MoodleSection, type SiteInfo } from "../../eclass-sync/src/moodle.ts";
 import { pull, reportMarkdown, type PullReport } from "../../eclass-sync/src/pull.ts";
 import { chooseAssistant, installSkills } from "./ai.ts";
@@ -347,7 +348,7 @@ async function main() {
   if (BACKGROUND && (await confirm("Start the app automatically when you log in (and sync eClass every morning)?", true))) {
     const sp = ui.spinner("Installing the background service…");
     const r = await sh(...OUC("install"));
-    r.code === 0 ? sp.succeed("Runs in the background at http://localhost:5173") : sp.warn(`Background service: ${r.log.trim().split("\n").pop()}`);
+    r.code === 0 ? sp.succeed(`Runs in the background at http://localhost:${readPort({ root: ROOT })}`) : sp.warn(`Background service: ${r.log.trim().split("\n").pop()}`);
     const tcc = r.log.includes("Full Disk Access");
     if (tcc) ui.warn("macOS blocks background access to this folder: see the Full Disk Access tip with `ouc status`.");
     for (const l of r.log.split("\n").filter((x) => /Command installed/.test(x))) ui.ok(strip(l.replace(/\x1b\[[0-9;]*m/g, "").replace(/^✓\s*/, "")));
@@ -361,7 +362,7 @@ async function main() {
   ui.box([
     `${c.green("✓")} ${c.bold("All set.")} ${c.gray(`${cfg.courses.length} course${cfg.courses.length === 1 ? "" : "s"} in semesters/${semId}/`)}`,
     "",
-    `${c.cyan("ouc open")}     open the study app ${c.gray("(http://localhost:5173)")}`,
+    `${c.cyan("ouc open")}     open the study app ${c.gray(`(http://localhost:${readPort({ root: ROOT })})`)}`,
     `${c.cyan("ouc sync")}     check eClass now: grades, feedback, new files`,
     `${c.cyan("ouc status")}   is it running? when was the last sync?`,
     `${c.cyan("ouc help")}     everything else`,

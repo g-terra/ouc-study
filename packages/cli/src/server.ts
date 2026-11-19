@@ -1,7 +1,7 @@
 /**
  * Background app server, started at login by the `ouc` LaunchAgent on macOS or the Startup-folder
  * launcher on Windows (or `ouc start`).
- *  1. builds the app data from semesters/   2. runs the Vite server on http://localhost:5173
+ *  1. builds the app data from semesters/   2. runs the Vite server on http://localhost:5173 (or the port from port.ts)
  *  3. runs the eClass sync every few hours while it's up (if a key exists), then the backup when it's set up.
  * No npm needed at runtime: everything is launched with this same Node binary.
  */
@@ -10,10 +10,11 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { installDeps, missingDeps, npmRunner } from "./deps.ts";
+import { readPort } from "./port.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const NODE = process.execPath;
-const PORT = process.env.OUC_PORT ?? "5173";
+const PORT = readPort({ root: ROOT });
 const SYNC_EVERY_H = Number(process.env.OUC_SYNC_HOURS ?? 4);
 const stamp = () => new Date().toISOString().replace("T", " ").slice(0, 19);
 const say = (m: string) => console.log(`[${stamp()}] ${m}`);
